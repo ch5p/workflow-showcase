@@ -2,11 +2,14 @@
 
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { randomUUID } = require("node:crypto");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createExportController } = require("./exporter.cjs");
 const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
+const { cleanupSiblingStagingFiles, writeTextAtomically } = require("./durable-file.cjs");
+const { ensureDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
 const {
   inspectInputFile,
   prepareXmlCandidate,
@@ -44,6 +47,8 @@ if(TEST_JOB_ROOT){
   app.setPath("sessionData",path.join(testStateRoot,"session-data"));
   app.disableHardwareAcceleration();
 }
+const SINGLE_INSTANCE_LOCK = app.requestSingleInstanceLock();
+if(!SINGLE_INSTANCE_LOCK) app.quit();
 const SOURCE_ROOT = path.join(JOB_ROOT, "source");
 const REFERENCES_ROOT = path.join(JOB_ROOT, "references");
 const OUTPUT_ROOT = path.join(JOB_ROOT, "output");
@@ -71,9 +76,11 @@ let recoveryRequired = false;
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 function ensureJobFolders(){
-  for(const directory of [JOB_ROOT, SOURCE_ROOT, REFERENCES_ROOT, OUTPUT_ROOT, LOG_ROOT]){
-    fs.mkdirSync(directory, { recursive: true });
-  }
+  ensureDirectoryNoLink(JOB_ROOT, "Current Job");
+  ensureDirectoryNoLink(SOURCE_ROOT, "Current Job source");
+  ensureDirectoryNoLink(REFERENCES_ROOT, "Current Job references");
+  ensureDirectoryNoLink(OUTPUT_ROOT, "Current Job output");
+  ensureDirectoryNoLink(LOG_ROOT, "Current Job logs");
 }
 
 function logEvent(event, detail = {}){
@@ -115,15 +122,7 @@ function isPlainObject(value){
 }
 
 function validateStoredRelativePath(relativePath, ownedRoot, label){
-  if(typeof relativePath !== "string" || !relativePath || path.isAbsolute(relativePath)){
-    throw new Error(label + " relativePath is invalid");
-  }
-  const resolvedRoot = path.resolve(ownedRoot);
-  const resolvedPath = path.resolve(JOB_ROOT, relativePath);
-  const relative = path.relative(resolvedRoot, resolvedPath);
-  if(!relative || relative.startsWith("..") || path.isAbsolute(relative)){
-    throw new Error(label + " relativePath escapes its owned root");
-  }
+  return resolveOwnedRelativeFile({ jobRoot: JOB_ROOT, ownedRoot, relativePath, label });
 }
 
 function validateJobShape(job){
@@ -206,9 +205,25 @@ function writeJob(job){
     revision: (Number.isSafeInteger(job?.revision) && job.revision >= 0 ? job.revision : 0) + 1,
     updatedAt: new Date().toISOString(),
   };
-  const temporary = JOB_PATH + ".tmp";
-  fs.writeFileSync(temporary, JSON.stringify(next, null, 2), "utf8");
-  fs.renameSync(temporary, JOB_PATH);
+  validateJobShape(next);
+  try{
+    writeTextAtomically(JOB_PATH, JSON.stringify(next, null, 2), { label: "Current Job" });
+  }catch(error){
+    try{logEvent("job_write_failed", {
+      code: error.code || "WRITE_FAILED",
+      staged: error.stagedPath ? path.basename(error.stagedPath) : null,
+    })}catch{}
+    const failure = new Error("Current Job을 안전하게 저장하지 못했습니다. 기존 Job은 유지되며 앱 로그를 확인하세요.");
+    failure.code = "JOB_WRITE_FAILED";
+    failure.cause = error;
+    throw failure;
+  }
+  try{
+    const removed = cleanupSiblingStagingFiles(JOB_PATH);
+    if(removed) logEvent("job_write_staging_cleaned", { count: removed });
+  }catch(error){
+    try{logEvent("job_write_cleanup_deferred", { code: error.code || "CLEANUP_FAILED" })}catch{}
+  }
   return next;
 }
 
@@ -469,7 +484,12 @@ function prepareVideoImport(event, sourcePath, inputMethod){
     inputMethod,
     size: preparation.inputSize,
   });
-  return { token: entry.token, name: entry.name, extension: entry.extension };
+  return {
+    token: entry.token,
+    name: entry.name,
+    extension: entry.extension,
+    candidateUrl: pathToFileURL(preparation.candidatePath).href,
+  };
 }
 
 function preparedVideoEntry(event, token){
@@ -499,9 +519,14 @@ function normalizeReferenceLabels(references){
   });
 }
 
-function publicFile(relativePath){
+function publicFile(relativePath, ownedRoot, label){
   if(!relativePath) return null;
-  const absolutePath = path.join(JOB_ROOT, relativePath);
+  const absolutePath = resolveOwnedRelativeFile({
+    jobRoot: JOB_ROOT,
+    ownedRoot,
+    relativePath,
+    label,
+  });
   return { relativePath, url: pathToFileURL(absolutePath).href, absolutePath };
 }
 
@@ -510,11 +535,11 @@ function hydrateJob(job){
     ...job,
     projectTitle: normalizeProjectTitle(job.projectTitle),
     callout: normalizeCallout(job.callout),
-    xml: job.xml ? { ...job.xml, ...publicFile(job.xml.relativePath) } : null,
-    video: job.video ? { ...job.video, ...publicFile(job.video.relativePath) } : null,
+    xml: job.xml ? { ...job.xml, ...publicFile(job.xml.relativePath, SOURCE_ROOT, "xml") } : null,
+    video: job.video ? { ...job.video, ...publicFile(job.video.relativePath, SOURCE_ROOT, "video") } : null,
     references: normalizeReferenceLabels(job.references).map(reference => ({
       ...reference,
-      ...publicFile(reference.relativePath),
+      ...publicFile(reference.relativePath, REFERENCES_ROOT, "reference"),
     })),
     paths: {
       jobRoot: JOB_ROOT,
@@ -640,6 +665,21 @@ function createWindow(){
   if(SMOKE_TEST){
     window.webContents.once("did-finish-load", async () => {
       try{
+        const secondary = spawnSync(process.execPath, [APP_ROOT, "--smoke-test"], {
+          cwd: APP_ROOT,
+          env: process.env,
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 10000,
+        });
+        if(secondary.error || secondary.status !== 0 || !String(secondary.stdout || "").includes("SINGLE_INSTANCE_REJECTED")){
+          throw new Error("Single-instance smoke failed: " + JSON.stringify({
+            status: secondary.status,
+            error: secondary.error?.message || null,
+            stdout: String(secondary.stdout || "").slice(-500),
+            stderr: String(secondary.stderr || "").slice(-500),
+          }));
+        }
         await new Promise(resolve => setTimeout(resolve, 1200));
         const smokeXmlPath = process.env.PORTABLE_SMOKE_XML;
         if(smokeXmlPath && fs.existsSync(smokeXmlPath)){
@@ -671,6 +711,33 @@ function createWindow(){
         if(process.env.PORTABLE_SMOKE_XML && (!result.shotItems || result.editStatus==="0 EDITS")){
           throw new Error("XML did not reach the parent SHOT rail: " + JSON.stringify(result));
         }
+        const smokeVideoPath = process.env.PORTABLE_SMOKE_VIDEO;
+        const smokeInvalidVideoPath = process.env.PORTABLE_SMOKE_INVALID_VIDEO;
+        if(smokeVideoPath && smokeInvalidVideoPath){
+          const videoPreflight = await window.webContents.executeJavaScript(`(async()=>{
+            const api=window.portableApi;
+            const preview=document.getElementById("renderPreview").contentWindow.portablePreview;
+            const before=await api.getJob();
+            const good=await api.prepareDroppedVideo(${JSON.stringify(smokeVideoPath)});
+            const metadata=await preview.preflightVideo(good.candidateUrl,10000);
+            await api.discardPreparedVideo(good.token,"smoke-preflight-passed");
+            const bad=await api.prepareDroppedVideo(${JSON.stringify(smokeInvalidVideoPath)});
+            let rejected=false;
+            try{await preview.preflightVideo(bad.candidateUrl,5000)}catch(error){rejected=true}
+            await api.discardPreparedVideo(bad.token,"smoke-preflight-failed");
+            const after=await api.getJob();
+            return {
+              valid:metadata.readyState>=2&&metadata.width>0&&metadata.height>0,
+              invalidRejected:rejected,
+              jobUnchanged:before.jobId===after.jobId&&before.revision===after.revision,
+            };
+          })()`);
+          if(!videoPreflight.valid || !videoPreflight.invalidRejected || !videoPreflight.jobUnchanged){
+            throw new Error("Video preflight smoke failed: "+JSON.stringify(videoPreflight));
+          }
+          result.videoPreflight=videoPreflight;
+        }
+        result.singleInstance=true;
         const job = loadJob();
         if(job.xml?.relativePath && job.video?.relativePath){
           const playback = await window.webContents.executeJavaScript(`(async()=>{
@@ -748,8 +815,26 @@ function createWindow(){
   }
 }
 
-app.whenReady().then(() => {
-  ensureJobFolders();
+if(SINGLE_INSTANCE_LOCK){
+  app.on("second-instance", () => {
+    logEvent("second_instance_rejected");
+    const primaryWindow = BrowserWindow.getAllWindows().find(window => !window.getParentWindow());
+    if(!primaryWindow || primaryWindow.isDestroyed()) return;
+    if(primaryWindow.isMinimized()) primaryWindow.restore();
+    primaryWindow.show();
+    primaryWindow.focus();
+  });
+  app.whenReady().then(() => {
+  try{
+    ensureJobFolders();
+  }catch(error){
+    dialog.showErrorBox(
+      "Current Job path is unsafe",
+      "current-job 내부에 안전하지 않은 링크 또는 폴더가 있어 앱을 중단했습니다. 원본을 보존하고 폴더 구성을 확인하세요.",
+    );
+    app.quit();
+    return;
+  }
   let recovery = null;
   try{
     recovery = recoverXmlTransactions({
@@ -822,7 +907,10 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if(BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-});
+  });
+}else{
+  console.log("SINGLE_INSTANCE_REJECTED");
+}
 
 app.on("window-all-closed", () => {
   if(process.platform !== "darwin") app.quit();
@@ -830,6 +918,17 @@ app.on("window-all-closed", () => {
 
 ipcMain.handle("job:get", () => hydrateJob(loadJob()));
 ipcMain.handle("app:get-render-spec", () => publicRenderSpec(loadJob().output));
+ipcMain.handle("app:reload-current-job", event => {
+  if(exportController.isRunning()) throw new Error("Finish or cancel Export before reloading the Current Job.");
+  const ownerId = event.sender.id;
+  discardPreparedXmlForOwner(ownerId);
+  discardPreparedVideoForOwner(ownerId);
+  logEvent("current_job_reload_requested");
+  setImmediate(() => {
+    if(!event.sender.isDestroyed()) event.sender.reloadIgnoringCache();
+  });
+  return true;
+});
 
 ipcMain.handle("job:save", (_event, payload) => {
   requireRuntimeReady("job_save");
@@ -1165,12 +1264,23 @@ ipcMain.handle("job:delete-reference", (_event, payload) => {
   let fileDeleted = false;
   let warning = null;
   try{
-    const absolutePath = path.resolve(JOB_ROOT, reference.relativePath || "");
-    const relativeToReferences = path.relative(path.resolve(REFERENCES_ROOT), absolutePath);
-    const insideReferences = relativeToReferences && !relativeToReferences.startsWith("..") && !path.isAbsolute(relativeToReferences);
-    if(!insideReferences) throw new Error("Reference path is outside current-job/references");
-    if(fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
-    fileDeleted = true;
+    const absolutePath = resolveOwnedRelativeFile({
+      jobRoot: JOB_ROOT,
+      ownedRoot: REFERENCES_ROOT,
+      relativePath: reference.relativePath,
+      label: "reference",
+    });
+    if(fs.existsSync(absolutePath)){
+      resolveOwnedRelativeFile({
+        jobRoot: JOB_ROOT,
+        ownedRoot: REFERENCES_ROOT,
+        relativePath: reference.relativePath,
+        label: "reference",
+        mustExist: true,
+      });
+      fs.unlinkSync(absolutePath);
+      fileDeleted = true;
+    }
   }catch(error){
     warning = error.message;
     logEvent("reference_file_delete_failed", { id: referenceId, message: warning });
@@ -1182,8 +1292,20 @@ ipcMain.handle("job:delete-reference", (_event, payload) => {
 ipcMain.handle("job:read-xml", () => {
   const job = loadJob();
   if(!job.xml?.relativePath) return null;
-  const xmlPath = path.join(JOB_ROOT, job.xml.relativePath);
+  const xmlPath = resolveOwnedRelativeFile({
+    jobRoot: JOB_ROOT,
+    ownedRoot: SOURCE_ROOT,
+    relativePath: job.xml.relativePath,
+    label: "xml",
+  });
   if(!fs.existsSync(xmlPath)) return null;
+  resolveOwnedRelativeFile({
+    jobRoot: JOB_ROOT,
+    ownedRoot: SOURCE_ROOT,
+    relativePath: job.xml.relativePath,
+    label: "xml",
+    mustExist: true,
+  });
   return fs.readFileSync(xmlPath, "utf8");
 });
 
@@ -1210,4 +1332,7 @@ ipcMain.handle("export:close-dialog", () => {
   if(exportWindow && !exportWindow.isDestroyed()) exportWindow.close();
   return true;
 });
-ipcMain.handle("export:open-output", () => shell.openPath(OUTPUT_ROOT));
+ipcMain.handle("export:open-output", () => {
+  ensureJobFolders();
+  return shell.openPath(OUTPUT_ROOT);
+});

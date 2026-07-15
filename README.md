@@ -42,8 +42,13 @@ Premiere Pro에서 내보낸 legacy Final Cut Pro 7 XML (xmeml)과 완성본 영
 
 LOAD XML에는 두 목적이 있습니다.
 
+- 앱은 한 번에 한 프로세스만 Current Job을 열며, 두 번째 실행은 기존 창으로 돌아갑니다.
+- 일반 `job.json` 저장도 고유 staging 파일을 fsync한 뒤 Windows 파일 잠금을 재시도합니다. 교체가 끝내 실패하면 기존 Job과 완성 staging을 모두 보존합니다.
+- `current-job` 내부 symlink/junction은 외부 파일 읽기·삭제·출력 이탈을 막기 위해 허용하지 않습니다.
 - UPDATE XML: 기존 영상, 레퍼런스, GLOBAL/SHOT 매핑, 제목과 출력 설정을 유지하고 타임라인만 갱신합니다.
 - NEW JOB: 사용자가 명시적으로 선택했을 때만 source, video, references, mappings, title, callout을 초기화합니다.
+- 영상은 Electron이 metadata와 첫 프레임을 실제로 읽은 뒤에만 Current Job에 반영합니다.
+- 렌더 완료 후 최종 파일명 교체가 실패하면 완성된 `.part.mp4`를 삭제하지 않습니다.
 
 Job은 current-job 아래에 저장됩니다. 앱 폴더 전체를 복사하면 내부 상대경로를 이용해 다른 위치에서도 다시 열 수 있습니다. current-job의 사용자 데이터는 Git에서 제외됩니다.
 

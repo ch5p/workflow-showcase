@@ -13,7 +13,7 @@
     <div id="videoZone">
       <video id="mainVideo" playsinline></video>
       <video id="thumbnailVideo" muted preload="metadata" playsinline aria-hidden="true"></video>
-      <div id="videoHint">완성본 영상 파일(mp4)을 여기에 드래그&드랍</div>
+      <div id="videoHint">XML 또는 완성본 영상을 여기에 놓으세요</div>
       <div id="videoCallout" data-position="left" data-style="line" aria-hidden="true">
         <span class="videoCalloutRule"></span>
         <span class="videoCalloutCopy">
@@ -71,7 +71,8 @@
       <p>앱 바깥 화면의 <code>LOAD XML</code> 드롭존에서 legacy xmeml을 불러오고,
       기존 작업을 유지할 때는 <code>UPDATE XML</code>, 새로 시작할 때만 <code>NEW JOB</code>을 선택한다.
       이어 <code>LOAD VIDEO</code>에 같은 시퀀스의 완성본 영상을 불러온다.</p>
-      <p>레퍼런스와 SHOT 매핑은 <code>EDIT PANEL</code>에서 설정하고, 결과 파일은 <code>OUTPUT</code>에서 H.264로 내보낸다.</p>
+      <p>레퍼런스와 SHOT 매핑은 <code>EDIT PANEL</code>에서 설정하고, <code>EXPORT H.264</code>로 내보낸다.
+      <code>OUTPUT</code>은 완성된 파일이 있는 폴더를 연다.</p>
       <h2>단축키</h2>
       <p class="keys">Space 재생/일시정지 · R 리셋 · D 디버그 · H 도움말</p>
       <h2>영상과 XML의 역할</h2>
@@ -1027,9 +1028,25 @@ window.addEventListener("dragleave",e=>{e.preventDefault();dragDepth--;if(dragDe
 window.addEventListener("dragover",e=>e.preventDefault());
 window.addEventListener("drop",e=>{
   e.preventDefault(); dragDepth=0; $("dropHint").classList.remove("on");
-  const f=e.dataTransfer.files[0];
-  if(f) loadFile(f);
+  const files=e.dataTransfer.files;
+  if(files[0]) Promise.resolve(routeDroppedFiles(files)).catch(error=>alert("파일 불러오기 실패: "+error.message));
 });
+function routeDroppedFiles(files){
+  const file=files[0];
+  if(!file)return false;
+  const name=file.name.toLowerCase();
+  if(window.parent!==window){
+    const shell=window.parent.portableMvp;
+    if(!shell)throw new Error("앱이 아직 준비되지 않았습니다.");
+    if(name.endsWith(".xml"))return shell.loadDroppedXml(files);
+    if([".mp4",".mov",".m4v"].some(extension=>name.endsWith(extension))){
+      return shell.loadDroppedVideo(files);
+    }
+    throw new Error("XML, MP4, MOV 또는 M4V 파일만 사용할 수 있습니다.");
+  }
+  loadFile(file);
+  return true;
+}
 function setVideoSource(src,openFull=false){
   mainVideo.src=src;
   thumbnailVideo.src=src;
@@ -1039,6 +1056,45 @@ function setVideoSource(src,openFull=false){
   $("thumbnailStatus").className="";
   $("thumbnailStatus").textContent="THUMBS LOADING";
   if(openFull&&!fullMode){ fullMode=true; applyMode(); }
+}
+function preflightVideoSource(src,timeoutMs=15000){
+  if(typeof src!=="string"||!src)throw new Error("영상 후보 URL이 없습니다.");
+  const probe=document.createElement("video");
+  probe.muted=true;
+  probe.preload="auto";
+  probe.playsInline=true;
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    let timer=0;
+    const cleanup=async(error=null,metadata=null)=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timer);
+      probe.removeEventListener("loadeddata",onReady);
+      probe.removeEventListener("error",onError);
+      await unloadVideoElement(probe);
+      if(error)reject(error);else resolve(metadata);
+    };
+    const onReady=()=>{
+      const metadata={
+        duration:probe.duration,
+        readyState:probe.readyState,
+        width:probe.videoWidth,
+        height:probe.videoHeight,
+      };
+      if(metadata.readyState<2||!Number.isFinite(metadata.duration)||metadata.duration<=0||metadata.width<=0||metadata.height<=0){
+        cleanup(new Error("영상 메타데이터 또는 첫 프레임을 읽지 못했습니다."));
+        return;
+      }
+      cleanup(null,metadata);
+    };
+    const onError=()=>cleanup(new Error("이 영상은 현재 Electron에서 재생할 수 없습니다. (media "+(probe.error?.code||"error")+")"));
+    probe.addEventListener("loadeddata",onReady);
+    probe.addEventListener("error",onError);
+    timer=setTimeout(()=>cleanup(new Error("영상 사전검증 시간이 초과되었습니다.")),Math.max(1000,Number(timeoutMs)||15000));
+    probe.src=src;
+    probe.load();
+  });
 }
 function unloadVideoElement(video){
   return new Promise(resolve=>{
@@ -1160,6 +1216,7 @@ window.portablePreview={
     return inspected;
   },
   setVideo(url){ setVideoSource(url,true); },
+  preflightVideo(url,timeoutMs){ return preflightVideoSource(url,timeoutMs); },
   clearVideo(){ return clearVideoSource(); },
   releaseMedia,
   async waitForVideoReady(timeoutMs=60000){
@@ -1168,10 +1225,11 @@ window.portablePreview={
       if(performance.now()-started>timeoutMs)throw new Error("영상 준비 시간 초과");
       await new Promise(resolve=>setTimeout(resolve,50));
     }
-    while(!/THUMBS READY|THUMBS ERROR/.test($("thumbnailStatus").textContent)){
+    while(!/THUMBS READY|THUMBS (?:VIDEO )?ERROR/.test($("thumbnailStatus").textContent)){
       if(performance.now()-started>timeoutMs)throw new Error("타임라인 썸네일 준비 시간 초과");
       await new Promise(resolve=>setTimeout(resolve,50));
     }
+    if(/ERROR/.test($("thumbnailStatus").textContent))throw new Error("타임라인 썸네일을 만들지 못했습니다.");
     return {duration:mainVideo.duration,readyState:mainVideo.readyState};
   },
   seekFrame(frame){

@@ -19,3 +19,5 @@ https://github.com/ch5p/character-workflow-portable/security/advisories/new
 ## Scope notes
 
 이 앱은 로컬 파일을 current-job으로 복사하고 FFmpeg를 실행합니다. path boundary 우회, 임의 파일 읽기·삭제, IPC 검증 우회, Export process orphan은 보안 이슈로 취급합니다.
+
+`current-job`과 그 하위 `source`, `references`, `output`, `logs`에는 symlink 또는 junction을 두지 마세요. 앱은 저장된 상대경로를 사용할 때 lexical boundary와 실제 경로를 모두 검사하고 링크가 발견되면 작업을 중단합니다.

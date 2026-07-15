@@ -5,6 +5,8 @@ const path = require("node:path");
 const { once } = require("node:events");
 const { spawn, spawnSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
+const { fsyncExistingFile, replaceByRenameWithRetry } = require("./durable-file.cjs");
+const { assertDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
 const { resolveRenderSpec } = require("./render-spec.cjs");
 
 function sleep(milliseconds){
@@ -16,6 +18,24 @@ function timestampName(){
   const pad = number => String(number).padStart(2, "0");
   return [value.getFullYear(), pad(value.getMonth() + 1), pad(value.getDate())].join("") + "_" +
     [pad(value.getHours()), pad(value.getMinutes()), pad(value.getSeconds())].join("");
+}
+
+function availableExportPaths(outputRoot){
+  const baseName = "character_workflow_export_" + timestampName();
+  for(let index = 0; index < 1000; index += 1){
+    const suffix = index ? "_" + String(index + 1).padStart(2, "0") : "";
+    const outputPath = path.join(outputRoot, baseName + suffix + ".mp4");
+    const temporaryPath = path.join(outputRoot, baseName + suffix + ".part.mp4");
+    if(!fs.existsSync(outputPath) && !fs.existsSync(temporaryPath)){
+      return { outputPath, temporaryPath };
+    }
+  }
+  throw new Error("새 Export 파일명을 할당하지 못했습니다.");
+}
+
+function finalizeCompletedExport(temporaryPath, outputPath){
+  fsyncExistingFile(temporaryPath);
+  return replaceByRenameWithRetry(temporaryPath, outputPath, { label: "Completed Export" });
 }
 
 function resolveFfmpeg(appRoot){
@@ -57,13 +77,31 @@ function encoderArguments(encoder, bitrateMbps){
 
 function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, logEvent }){
   let active = null;
+  const sourceRoot = path.join(jobRoot, "source");
+  const referencesRoot = path.join(jobRoot, "references");
 
   function emit(sender, payload){
     if(!sender?.isDestroyed()) sender.send("export:progress", payload);
   }
 
-  function jobFile(relativePath){
-    return path.join(jobRoot, relativePath || "");
+  function sourceFile(relativePath, label, mustExist = true){
+    return resolveOwnedRelativeFile({
+      jobRoot,
+      ownedRoot: sourceRoot,
+      relativePath,
+      label,
+      mustExist,
+    });
+  }
+
+  function referenceFile(relativePath){
+    return resolveOwnedRelativeFile({
+      jobRoot,
+      ownedRoot: referencesRoot,
+      relativePath,
+      label: "Export reference",
+      mustExist: true,
+    });
   }
 
   function referenceState(job, parsed){
@@ -71,7 +109,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       references: (job.references || []).map(reference => ({
         id: reference.id,
         type: reference.type,
-        src: pathToFileURL(jobFile(reference.relativePath)).href,
+        src: pathToFileURL(referenceFile(reference.relativePath)).href,
         label: reference.label,
       })),
       globalReferenceIds: job.globalReferenceIds || [],
@@ -88,8 +126,8 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     const spec = resolveRenderSpec(job.output);
     const fps = spec.fps;
     const bitrateMbps = spec.bitrateMbps;
-    const xmlPath = jobFile(job.xml.relativePath);
-    const videoPath = jobFile(job.video.relativePath);
+    const xmlPath = sourceFile(job.xml.relativePath, "Export XML");
+    const videoPath = sourceFile(job.video.relativePath, "Export video");
     const xmlText = fs.readFileSync(xmlPath, "utf8");
     const renderWindow = new BrowserWindow({
       width: spec.width,
@@ -206,13 +244,13 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
 
   async function start(sender, job){
     if(active) throw new Error("이미 익스포트가 진행 중입니다.");
-    if(!job.xml?.relativePath || !fs.existsSync(jobFile(job.xml.relativePath))) throw new Error("XML이 없습니다.");
-    if(!job.video?.relativePath || !fs.existsSync(jobFile(job.video.relativePath))) throw new Error("영상이 없습니다.");
-    fs.mkdirSync(outputRoot, { recursive: true });
+    if(!job.xml?.relativePath) throw new Error("XML이 없습니다.");
+    if(!job.video?.relativePath) throw new Error("영상이 없습니다.");
+    sourceFile(job.xml.relativePath, "Export XML");
+    sourceFile(job.video.relativePath, "Export video");
+    assertDirectoryNoLink(outputRoot, "Current Job output");
     const ffmpegPath = resolveFfmpeg(appRoot);
-    const baseName = "character_workflow_export_" + timestampName();
-    const outputPath = path.join(outputRoot, baseName + ".mp4");
-    const temporaryPath = path.join(outputRoot, baseName + ".part.mp4");
+    const { outputPath, temporaryPath } = availableExportPaths(outputRoot);
     active = { cancelled: false, ffmpeg: null, renderWindow: null };
     const spec = resolveRenderSpec(job.output);
     const preferredEncoder = canUseNvenc(ffmpegPath,spec) ? "h264_nvenc" : "libx264";
@@ -225,6 +263,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       bitrateMbps: spec.bitrateMbps,
       output: path.basename(outputPath),
     });
+    let encodingCompleted = false;
     try{
       let encoder = preferredEncoder;
       let result;
@@ -239,7 +278,23 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
         logEvent("export_encoder_fallback", { message: error.message });
         result = await captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath });
       }
-      fs.renameSync(temporaryPath, outputPath);
+      encodingCompleted = true;
+      try{
+        finalizeCompletedExport(temporaryPath, outputPath);
+      }catch(error){
+        const partPreserved = fs.existsSync(temporaryPath);
+        logEvent("export_finalize_failed", {
+          code: error.code || "FINALIZE_FAILED",
+          part: partPreserved ? path.basename(temporaryPath) : null,
+        });
+        const failure = new Error(partPreserved
+          ? "렌더는 완료됐지만 최종 파일명으로 바꾸지 못했습니다. 완성된 .part.mp4 파일은 보존했습니다."
+          : "렌더는 완료됐지만 최종 파일 검증에 실패했습니다. output 폴더와 앱 로그를 확인하세요.");
+        failure.code = "EXPORT_FINALIZE_DEFERRED";
+        failure.cause = error;
+        if(partPreserved) failure.partPath = temporaryPath;
+        throw failure;
+      }
       emit(sender, { state: "complete", progress: 1, encoder, outputPath });
       logEvent("export_completed", {
         encoder,
@@ -249,14 +304,17 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       });
       return { ok: true, encoder, outputPath, ...result };
     }catch(error){
-      if(fs.existsSync(temporaryPath)) fs.rmSync(temporaryPath, { force: true });
+      if(!encodingCompleted && fs.existsSync(temporaryPath)) fs.rmSync(temporaryPath, { force: true });
       if(active?.cancelled || error.message === "EXPORT_CANCELLED"){
         emit(sender, { state: "cancelled", progress: 0 });
         logEvent("export_cancelled");
         return { ok: false, cancelled: true };
       }
       emit(sender, { state: "error", progress: 0, message: error.message });
-      logEvent("export_failed", { message: error.message });
+      logEvent("export_failed", {
+        message: error.message,
+        partPreserved: encodingCompleted && fs.existsSync(temporaryPath) ? path.basename(temporaryPath) : null,
+      });
       throw error;
     }finally{
       active = null;
@@ -274,4 +332,4 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
   return { start, cancel, isRunning: () => Boolean(active) };
 }
 
-module.exports = { createExportController };
+module.exports = { availableExportPaths, createExportController, finalizeCompletedExport };

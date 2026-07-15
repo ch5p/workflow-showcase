@@ -16,10 +16,15 @@ SHOT 클릭·방향키 탐색은 실제 영상 `currentTime`과 타임라인을 
 
 Windows의 `EPERM`/`EACCES`/`EBUSY`에 대비해 XML/video transaction의 manifest, Job backup, Job install·restore는 rename을 재시도하고, 계속 실패하면 `copy → fsync → SHA-256 검증` 뒤 staging을 정리합니다. 유효한 `manifest.json`은 모든 `.tmp`보다 항상 우선하며, 잠긴 고정 `.tmp`는 고유 staging 파일로 우회합니다. Rollback이 실제로 끝난 뒤에만 고유 staging에 완료 marker를 fsync하고 검증 교체한 뒤 `state: rolled_back`를 기록하므로 빈 backup 폴더를 완료 증거로 추측하지 않습니다. marker 기록 전에 중단돼도 manifest inventory와 남은 backup을 기준으로 candidate 제거를 안전하게 재실행합니다. 완료된 transaction의 임시 파일 정리만 잠긴 경우에는 저장·Export를 차단하지 않고 다음 시작 때 정리를 다시 시도합니다. 실제 실패 Job을 source 2개, reference 11개, 기존 `job.json`의 파일별 SHA-256까지 동일하게 rollback한 상태입니다.
 
+beta.2 후보는 single-instance lock, 일반 `job.json`의 UUID staging·fsync·rename 재시도, no-follow 저장 경로 검사, Electron 영상 decode 사전검증을 추가했습니다. Current Job identity가 외부에서 바뀌면 이전 화면의 stale patch를 새 Job에 재적용하지 않고 저장을 차단하며, 헤더의 `Reload Current Job` 아이콘으로만 다시 읽습니다. Export 인코딩 완료 뒤 최종 rename이 실패하면 완성 `.part.mp4`를 보존합니다. 격리 runtime safety 검사와 실제 데스크톱 smoke에서 정상/손상 영상 preflight, Job 불변, 두 번째 인스턴스 차단을 확인했습니다. 현 세션의 `smoke:export` 재실행은 실행 승인 한도로 보류되어 사용자 Export QA가 필요합니다.
+
 ## Red Zone
 
 - `src/core/xmeml-parser.js`, `primary-timeline.js`, `shot-model.js`, `reference-mapping.js`와 `src/output-preview.html`의 `build`, 재생 시계는 기존 출력 계약입니다. 레이아웃 작업에서 core를 수정하거나 parser를 다시 작성하지 않습니다.
 - `current-job/job.json`의 `version`, `jobId`, `revision`, `relativePath`, `globalReferenceIds`, `shotMappings`, `timelineShots`, `orphanedShotMappings` key를 임의 변경하지 않습니다.
+- 한 Current Job에는 한 Electron 프로세스만 접근합니다. `requestSingleInstanceLock()`을 제거하거나 test `userData` 설정 이전으로 옮기지 않습니다.
+- 일반 Job 저장은 `durable-file.cjs`의 고유 staging·fsync·rename 재시도를 사용합니다. 교체 실패 시 완성 staging과 기존 `job.json`을 지우지 않습니다.
+- `current-job`, `source`, `references`, `output`, `logs`의 symlink/junction은 금지합니다. 파일 URL 생성·XML read·reference delete·Export input/output 직전에 `owned-path.cjs` 검사를 우회하지 않습니다.
 - `projectTitle`은 최대 40자의 선택 필드입니다. 필드가 없을 때만 `UNTITLED PROJECT`로 복원하며 빈 문자열은 유효한 사용자 선택입니다. 편집 패널의 `PROJECT TITLE`이 유일한 편집 위치이며 Export 팝업은 저장된 값을 확인만 합니다.
 - `callout`은 선택 필드이며 `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`을 저장합니다. 없으면 기존 LINE/LEFT 기본값으로 복원합니다. TOOL TAG 기능은 출력 가독성 문제로 제거했습니다.
 - `projectTitle`과 `callout.subtitle` 자동 저장은 입력 중인 DOM 값을 다시 쓰지 않습니다. 포커스를 벗어날 때만 공백을 정리해야 하며, debounce 저장이 사용자의 띄어쓰기를 지우는 회귀를 만들면 안 됩니다.
@@ -30,12 +35,15 @@ Windows의 `EPERM`/`EACCES`/`EBUSY`에 대비해 XML/video transaction의 manife
 - `LOAD XML`의 안전 기본값은 UPDATE입니다. UPDATE는 `source/timeline.xml`과 타임라인 metadata만 교체하고 `source/video.*`, `references/`, GLOBAL, 제목, 콜아웃, `ui`, `output`을 건드리지 않습니다. 기존 SHOT 번호만으로 매핑하지 않으며 exact 익명 source identity를 우선하고 unique name/range 증거가 있을 때만 fallback합니다. 다중 후보는 추측하지 않고 orphan으로 남깁니다.
 - NEW JOB은 사용자가 두 번째 선택지를 명시한 경우에만 실행하는 파괴적 경계입니다. source/reference 삭제 전에 후보 검증과 선택을 끝내야 하며, 성공 시에도 기존 Export 파일·로그·`ui`·`output` 설정은 보존합니다.
 - XML/video picker와 drop은 별도 저장 구현을 만들지 않고 같은 제한 IPC와 Main import helper를 사용합니다. drop 파일은 `webUtils.getPathForFile`로 받은 경로만 전달하며 renderer가 사용자 파일을 직접 영구 저장하지 않습니다.
+- video candidate는 visible preview나 기존 Job을 바꾸기 전에 detached Electron video probe가 metadata와 첫 프레임을 읽어야 합니다. preflight 실패 candidate는 폐기하고 기존 video·Job·revision을 유지합니다.
+- 외부에서 Current Job identity가 바뀐 stale save는 새 Job에 자동 재시도하지 않습니다. 저장을 차단한 뒤 명시적 reload만 허용합니다.
 - 새 Job마다 새 `jobId`를 발급하고 모든 mutation은 자신이 읽은 `jobId + revision`을 포함합니다. UPDATE처럼 같은 Job 안에서 revision만 바뀌는 경우에도 늦은 debounce 저장을 거부해야 합니다.
 - transaction 복구에서 유효한 `manifest.json`이 기준입니다. `.tmp`의 `updatedAt`이 더 늦어 보여도 primary를 덮어 해석하지 않습니다. primary가 없거나 손상된 경우에만 유효한 staging 후보 중 최신 기록을 사용합니다.
 - transaction 정리는 staging 파일을 먼저, backup/candidate를 다음, primary manifest를 마지막에 지웁니다. 정리 실패 중에도 rollback 기준이 남아야 하며 이 순서를 바꾸지 않습니다. 기존 `job.json`과 backup 해시가 같으면 파일 교체를 생략합니다.
 - `rollback-complete.json`은 backup 폴더가 비었다는 추측을 대체하는 완료 증거입니다. transaction ID와 종류가 일치하는 유효 final 또는 durable staged marker만 이미 끝난 rollback으로 인정하고, 잘리거나 불일치한 marker는 무시합니다. marker가 없으면 이전 timeline/video가 원래 없었던 경우에도 설치된 candidate를 제거하며, 재시도 때는 `moved` inventory와 backup 잔존 여부로 복원된 이전 파일을 다시 지우지 않습니다.
 - `backup/job.json`은 manifest에 `hadJob: true`가 durable하게 기록된 경우에만 복원합니다. `hadJob: null`은 Job backup 생성 중이며 live Job mutation 전이라는 뜻이므로 final backup이 존재해도 신뢰하지 않고 현재 `job.json`을 보존합니다. 정상 `.partial`과 잘린 final이 함께 남는 crash-window를 회귀 테스트로 고정합니다.
 - `exporter.cjs`의 raw BGRA 1:1 캡처, 60fps, bt709, AAC stream copy 계약을 깨지 않습니다. PNG/JPEG 중간 프레임 방식으로 되돌리지 않습니다.
+- FFmpeg가 성공한 뒤 final rename/fsync가 실패한 경우 완성 `.part.mp4`를 보존합니다. 인코딩 실패·취소 전의 불완전 part만 정리합니다.
 - `render-spec.cjs`가 classic width/height/fps/bitrate의 단일 소스입니다. `src/layouts/classic/*`은 presentation surface이며 runtime preset, Job layout ID, 화면비 선택 UI를 beta에 추가하지 않습니다.
 - `npm run smoke`와 `smoke:export`는 `scripts/run-smoke.cjs`가 만든 앱 외부 임시 Job root와 전용 Electron userData에서만 실행합니다. `PORTABLE_TEST_JOB_ROOT` 없이 smoke flag를 직접 실행하거나 앱 내부/current-job을 test root로 지정하면 Main이 즉시 거부해야 합니다.
 - 시작 시 WAITING placeholder 없이 빈 레퍼런스 영역으로 두고, 재생 0.15초부터 GLOBAL 카드를 0.15초 간격으로 이어 붙입니다. 이후 REPLACE/INHERIT는 이전 카드를 유지한 0.35초 크로스페이드로 공백 없이 교체합니다. ADD는 기존 카드를 유지하고 추가 카드만 0.15초 간격으로 표시합니다.
@@ -61,8 +69,10 @@ Windows의 `EPERM`/`EACCES`/`EBUSY`에 대비해 XML/video transaction의 manife
 4. Electron smoke는 `scripts/run-smoke.cjs`가 OS 임시 폴더에 만든 전용 Job/userData에서 실행해 API와 프리뷰 브리지를 검사합니다. 정상 종료 후 임시 폴더는 0개여야 합니다.
 5. `job_read_failed`가 있으면 앱이 원본을 보존하고 기동을 차단합니다. 손상 파일을 별도 보관한 뒤 수동 복구하거나 명시적으로 새 Job을 구성합니다.
 6. `job_*_commit_cleanup_deferred` 또는 `job_*_recovery_cleanup_deferred`만 있으면 교체 결과는 확정됐고 임시 transaction 정리만 미뤄진 상태입니다. 앱을 종료해 파일 잠금을 해제한 뒤 다시 시작하면 정리를 재시도하며, 이 상태만으로 Job을 삭제하지 않습니다.
+7. `job_write_failed`가 있으면 기존 `job.json`과 `.job.json.<uuid>.tmp`를 모두 보존하고 앱을 종료합니다. 파일 잠금을 해제한 뒤 다시 실행하며 staging을 임의로 `job.json`에 덮어쓰지 않습니다.
+8. `STORED_PATH_UNSAFE` 또는 `Current Job path is unsafe`가 나오면 `current-job` 하위의 symlink/junction을 제거하고 실제 폴더와 파일 복사본으로 복구합니다.
 
-주요 이벤트: `app_started`, `job_xml_prepared`, `job_xml_mode_selected`, `job_xml_commit_started`, `job_xml_commit_committed`, `job_xml_commit_rollback_*`, `job_xml_recovery_*`, `job_xml_update_started`, `job_xml_update_committed`, `job_reset_started`, `job_reset_committed`, `video_import_prepared`, `job_video_commit_*`, `job_video_recovery_*`, `video_imported`, `references_imported`, `job_saved`, `job_mutation_rejected_stale`, `renderer_ready`, `renderer_error`, `export_started`, `export_completed`, `export_failed`, `export_cancelled`.
+주요 이벤트: `app_started`, `second_instance_rejected`, `current_job_reload_requested`, `job_write_failed`, `job_write_cleanup_deferred`, `job_xml_prepared`, `job_xml_mode_selected`, `job_xml_commit_started`, `job_xml_commit_committed`, `job_xml_commit_rollback_*`, `job_xml_recovery_*`, `job_xml_update_started`, `job_xml_update_committed`, `job_reset_started`, `job_reset_committed`, `video_import_prepared`, `video_import_preflight_passed`, `video_import_preflight_failed`, `job_video_commit_*`, `job_video_recovery_*`, `video_imported`, `references_imported`, `job_saved`, `job_mutation_rejected_stale`, `renderer_ready`, `renderer_error`, `export_started`, `export_finalize_failed`, `export_completed`, `export_failed`, `export_cancelled`.
 
 레퍼런스 전환 공백이나 깜빡임은 `positionReferenceDock`, `fadeOutgoingReferences`, `immediatePortableIds`, `.referenceDockItem.leaving` 순서로 확인합니다. 뒤로 이동하거나 리셋할 때 첫 GLOBAL의 0.15초 등장 상태가 복원되는지도 함께 확인합니다.
 LEAD-IN이 어긋나면 `job.json`의 대상 SHOT에 `leadInSeconds: 1`이 저장됐는지 확인하고, `portableReferenceShotAtFrame`, `portableShotReferenceStartFrame` 계산을 순서대로 확인합니다.
@@ -73,9 +83,9 @@ EDIT PANEL이 내부 조작 중 닫히면 `previewShell`의 `pointerdown` 대상
 
 XML 갱신 문제가 생기면 먼저 `job_xml_mode_selected`의 mode와 `jobId`, `revision`을 확인합니다. UPDATE에서는 `timelineShots`, `shotMappings`, `orphanedShotMappings`와 `renderer_xml_update_applied`의 `preserved/newShots/orphaned/ambiguous/reattached`를 대조하고, video/reference 파일 hash가 그대로인지 확인합니다. NEW JOB에서는 source/reference 초기화와 `output`·`logs` 보존을 확인합니다. rollback 실패 이벤트가 있으면 같은 XML을 다시 불러오지 말고 앱 프로세스를 모두 종료합니다. `.job-import-*`와 유효한 primary manifest를 삭제하거나 `.tmp`로 덮지 않은 채 앱을 다시 시작해 `job_xml_recovery_rolled_back`을 확인하고, source/reference 수·경로와 `job.json` SHA-256을 이전 inventory와 대조합니다.
 
-영상 교체 문제가 생기면 `video_import_prepared`, `job_video_commit_started`, `job_video_commit_committed` 또는 `job_video_commit_rollback_*` 순서로 확인합니다. 교체 전 renderer가 media handle을 해제하며, 실패 시 이전 video와 `job.json`이 함께 복구되어야 합니다.
+영상 교체 문제가 생기면 `video_import_prepared`, `video_import_preflight_passed` 또는 `video_import_preflight_failed`, `job_video_commit_started`, `job_video_commit_committed` 또는 `job_video_commit_rollback_*` 순서로 확인합니다. preflight 실패에는 commit 이벤트가 없어야 하고 기존 video·Job revision이 그대로여야 합니다. 교체 전 renderer가 media handle을 해제하며, commit 실패 시 이전 video와 `job.json`이 함께 복구되어야 합니다.
 
-익스포트 문제는 `export_started`, `export_encoder_fallback`, `export_completed`, `export_failed`, `export_cancelled` 순서와 `.part.mp4` 잔존 여부를 먼저 확인합니다.
+익스포트 문제는 `export_started`, `export_encoder_fallback`, `export_finalize_failed`, `export_completed`, `export_failed`, `export_cancelled` 순서와 `.part.mp4` 잔존 여부를 먼저 확인합니다. `export_finalize_failed` 뒤의 part는 완성 파일이므로 삭제하지 말고 앱 종료 후 `.mp4`로 이름을 바꿔 복구합니다.
 Export 팝업이 열리지 않으면 `export_dialog_opened` 이벤트와 `export-preload.cjs` 로드 여부를 확인합니다. 진행률이 멈추면 팝업을 반복 실행하지 말고 마지막 `export:progress` 상태와 FFmpeg 로그를 확인합니다.
 
 ## Next

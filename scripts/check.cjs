@@ -1,6 +1,7 @@
 "use strict";
 
 const fs=require("node:fs");
+const crypto=require("node:crypto");
 const path=require("node:path");
 const vm=require("node:vm");
 const {spawnSync}=require("node:child_process");
@@ -8,10 +9,10 @@ const {spawnSync}=require("node:child_process");
 const root=path.resolve(__dirname,"..");
 const required=[
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs","LICENSE","README.md","CUSTOMIZING.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
-  "job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
+  "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
   "src/core/xmeml-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
-  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
   "current-job/source","current-job/references","current-job/output","current-job/logs",
@@ -25,9 +26,9 @@ for(const relative of required){
 }
 for(const relative of [
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs",
-  "job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
+  "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
   "src/core/xmeml-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
-  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/mvp-app.js","src/export-dialog.js",
 ]){
   const result=spawnSync(process.execPath,["--check",path.join(root,relative)],{encoding:"utf8"});
@@ -40,7 +41,7 @@ for(const relative of ["src/index.html","src/output-preview.html","src/export-di
   scripts.forEach((source,index)=>new vm.Script(source,{filename:relative+"#inline-"+(index+1)}));
 }
 const preview=fs.readFileSync(path.join(root,"src/output-preview.html"),"utf8");
-for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./core/primary-timeline.js","./core/shot-model.js","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","id=\"videoCallout\"","function updateVideoCallout","setCalloutConfig",">EDIT WORKFLOW<"]){
+for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./core/primary-timeline.js","./core/shot-model.js","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","preflightVideo","routeDroppedFiles","id=\"videoCallout\"","function updateVideoCallout","setCalloutConfig",">EDIT WORKFLOW<"]){
   if(!preview.includes(marker))throw new Error("Parser bridge marker missing: "+marker);
 }
 if(/<style(?:\s|>)/i.test(preview))throw new Error("Classic preview CSS returned to inline HTML");
@@ -49,40 +50,43 @@ if(!editor.includes('id="overlayProjectTitle"'))throw new Error("Project title e
 if(!editor.includes('id="calloutSettings"'))throw new Error("Callout settings missing");
 if(editor.includes("calloutTool"))throw new Error("Removed callout tool tags returned");
 if(!editor.includes('id="resetPreviewTop"'))throw new Error("Preview reset control missing");
+if(!editor.includes('id="reloadCurrentJob"')||!editor.includes('>TO START</button>'))throw new Error("Current Job reload or TO START control missing");
 if(editor.includes('id="addFilesTop"'))throw new Error("Removed top add-files control returned");
 if(/id="overlay(?:LoadXml|Play|Reset)"/.test(editor))throw new Error("Removed overlay transport control returned");
 for(const marker of ['class="command inputDropZone"','class="command inputDropZone video"',"./core/reference-mapping.js","loadDroppedXml","loadDroppedVideo","function replaceShots(nextShots,mappings={},emitChange=true)"]){
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }
 const main=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
-for(const marker of ["PORTABLE_TEST_JOB_ROOT","app:get-render-spec","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","job_save_rejected_stale","job_xml_update_committed","job_reset_committed"]){
+for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","app:get-render-spec","app:reload-current-job","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed"]){
   if(!main.includes(marker))throw new Error("Current Job lifecycle marker missing: "+marker);
 }
 const renderer=fs.readFileSync(path.join(root,"src/mvp-app.js"),"utf8");
-for(const marker of ["expectedJobId","expectedRevision","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","loadDroppedVideo"]){
+for(const marker of ["expectedJobId","expectedRevision","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
   if(!renderer.includes(marker))throw new Error("Renderer lifecycle marker missing: "+marker);
 }
 const currentJobPath=path.join(root,"current-job","job.json");
-const currentJobBefore=fs.existsSync(currentJobPath)?fs.readFileSync(currentJobPath):null;
+function hashIfPresent(filePath){
+  return fs.existsSync(filePath)?crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex"):null;
+}
+const currentJobBefore=hashIfPresent(currentJobPath);
 for(const [script,successMarker] of [
   ["check-core-modules.cjs","CORE_MODULES_CHECK_OK"],
   ["check-job-lifecycle.cjs","JOB_LIFECYCLE_CHECK_OK"],
   ["check-video-lifecycle.cjs","VIDEO_LIFECYCLE_CHECK_OK"],
   ["check-timeline-reconcile.cjs","TIMELINE_RECONCILE_OK"],
+  ["check-runtime-safety.cjs","RUNTIME_SAFETY_CHECK_OK"],
 ]){
   const lifecycleCheck=spawnSync(process.execPath,[path.join(root,"scripts",script)],{encoding:"utf8"});
   if(lifecycleCheck.status!==0)throw new Error(script+" failed\n"+lifecycleCheck.stdout+"\n"+lifecycleCheck.stderr);
   if(!lifecycleCheck.stdout.includes(successMarker))throw new Error(script+" did not report success");
 }
-const currentJobAfter=fs.existsSync(currentJobPath)?fs.readFileSync(currentJobPath):null;
-const currentJobUnchanged=currentJobBefore===null
-  ? currentJobAfter===null
-  : Buffer.isBuffer(currentJobAfter)&&currentJobBefore.equals(currentJobAfter);
+const currentJobAfter=hashIfPresent(currentJobPath);
+const currentJobUnchanged=currentJobBefore===currentJobAfter;
 if(!currentJobUnchanged){
   throw new Error("Job lifecycle check touched current-job/job.json");
 }
 const packageJson=JSON.parse(fs.readFileSync(path.join(root,"package.json"),"utf8"));
-if(packageJson.version!=="0.1.0-beta.1"||packageJson.license!=="MIT")throw new Error("Public beta package metadata is incomplete");
+if(packageJson.version!=="0.1.0-beta.2"||packageJson.license!=="MIT")throw new Error("Public beta package metadata is incomplete");
 if(packageJson.devDependencies?.electron!=="43.1.1")throw new Error("Electron must stay pinned to the tested version");
 if(!String(packageJson.scripts?.smoke||"").includes("run-smoke.cjs"))throw new Error("Smoke is not routed through the isolated runner");
 const license=fs.readFileSync(path.join(root,"LICENSE"),"utf8");
@@ -101,7 +105,7 @@ const sourceNotes=fs.readFileSync(path.join(root,"fixtures","premiere-export-kit
 for(const marker of ["Premiere Pro 2026","26.2.2","Build 3","Passed","MIT License"]){
   if(!sourceNotes.includes(marker))throw new Error("Fixture provenance marker missing: "+marker);
 }
-for(const relative of ["main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","src/index.html","src/mvp-app.js","src/export-dialog.html","src/export-dialog.js"]){
+for(const relative of ["main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","src/index.html","src/mvp-app.js","src/export-dialog.html","src/export-dialog.js"]){
   const content=fs.readFileSync(path.join(root,relative),"utf8");
   if(/[A-Za-z]:[\\/]+Users[\\/]+/i.test(content))throw new Error("Non-portable absolute path: "+relative);
 }
