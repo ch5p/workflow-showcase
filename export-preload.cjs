@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("exportDialogApi", {
   getSummary: () => ipcRenderer.invoke("export:get-summary"),
-  startExport: projectTitle => ipcRenderer.invoke("export:start", { projectTitle }),
+  startExport: (projectTitle, expectedJobId, expectedRevision) => ipcRenderer.invoke("export:start", { projectTitle, expectedJobId, expectedRevision }),
   cancelExport: () => ipcRenderer.invoke("export:cancel"),
   closeDialog: () => ipcRenderer.invoke("export:close-dialog"),
   openOutput: () => ipcRenderer.invoke("export:open-output"),

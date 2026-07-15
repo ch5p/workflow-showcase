@@ -47,6 +47,16 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
   font-family:var(--mono);font-size:9px;letter-spacing:.2px}
 .command:hover{border-color:#98a29d;background:var(--surface-2)}
 .command.primary{border-color:var(--accent);background:var(--accent);color:#fff}
+.inputDropZone{height:34px;min-width:70px;padding:3px 9px;display:grid;grid-template-rows:1fr 1fr;place-items:center;
+  border-style:dashed;line-height:1;transition:border-color .15s,background .15s,box-shadow .15s,opacity .15s}
+.inputDropZone.video{min-width:102px}
+.inputDropZone strong{font-size:9px;letter-spacing:.45px}
+.inputDropZone span{color:var(--muted);font-size:7px;letter-spacing:.2px;white-space:nowrap}
+.inputDropZone.dragOver{border-style:solid;border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 2px rgba(34,168,120,.15)}
+.inputDropZone.dragOver span{color:#147b58}
+.inputDropZone.dropInvalid{border-style:solid;border-color:var(--danger);background:#faedf0;box-shadow:0 0 0 2px rgba(189,78,98,.12)}
+.inputDropZone.dropInvalid span{color:var(--danger)}
+.inputDropZone.importing{border-style:solid;border-color:#8e9993;background:var(--surface-2);cursor:progress;opacity:.7}
 .workspace{min-height:0;display:grid;grid-template-columns:minmax(0,1fr)}
 .leftRail,.inspector{min-height:0;background:var(--surface);overflow:hidden}
 .leftRail{border-right:1px solid var(--line);display:grid;grid-template-rows:auto 188px minmax(0,1fr)}
@@ -330,8 +340,12 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       <span id="shotCountStatus">0 SHOTS</span>
     </div>
     <div class="topActions">
-      <button class="command" id="loadXml">LOAD XML</button>
-      <button class="command" id="loadVideo">LOAD VIDEO</button>
+      <button class="command inputDropZone" id="loadXml" type="button" aria-label="Load timeline XML. Click to choose or drop one .xml file." aria-busy="false" title="Click to choose or drop one .xml file">
+        <strong>XML</strong><span>CLICK · DROP</span>
+      </button>
+      <button class="command inputDropZone video" id="loadVideo" type="button" aria-label="Load source video. Click to choose or drop one MP4, MOV, or M4V file." aria-busy="false" title="Click to choose or drop one MP4, MOV, or M4V file">
+        <strong>VIDEO</strong><span>MP4 · MOV · M4V</span>
+      </button>
       <button class="command" id="resetPreviewTop">RESET</button>
       <button class="command editPanelToggle" id="editPanelButton">EDIT PANEL</button>
       <button class="command" id="previewButton">OUTPUT</button>
@@ -515,7 +529,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 </div>
 
 <input id="fileInput" type="file" accept="image/*,video/*" multiple hidden>
-<div class="toast" id="toast">UPDATED</div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">UPDATED</div>
 
 <script>
 "use strict";
@@ -559,13 +573,21 @@ function setAssetSelection(id){
   selectedAsset=id;
   document.querySelectorAll(".asset").forEach(el=>el.classList.toggle("selected",el.dataset.id===id));
 }
+function releaseMediaElements(root){
+  root?.querySelectorAll("video,img").forEach(media=>{
+    if(media.tagName==="VIDEO")media.pause();
+    media.removeAttribute("src");
+    if(media.tagName==="VIDEO")media.load();
+  });
+}
 function hideReferencePreview(owner=null){
   if(owner&&hoverPreviewOwner!==owner)return;
   hoverPreviewOwner=null;
   const preview=$("referenceHoverPreview");
   preview.classList.remove("visible");
   preview.setAttribute("aria-hidden","true");
-  preview.querySelector("video")?.pause();
+  releaseMediaElements($("referenceHoverMedia"));
+  $("referenceHoverMedia").replaceChildren();
 }
 function showReferencePreview(owner,id){
   const asset=assets.get(id);if(!asset)return;
@@ -632,6 +654,7 @@ function createAssetButton(asset){
 }
 function renderGlobalReferences(){
   [$('globalRefs'),$('overlayGlobalDrop')].forEach(root=>{
+    releaseMediaElements(root);
     root.replaceChildren();
     const labelCounts={image:0,video:0};
     globalReferenceIds.forEach(id=>{
@@ -659,6 +682,9 @@ function normalizeAssetLabels(nextAssets){
   });
 }
 function replaceAssets(nextAssets,nextGlobalIds=[]){
+  hideReferencePreview();
+  [$("assetGrid"),$("overlayAssetGrid"),$("globalRefs"),$("overlayGlobalDrop"),$("assignedList"),$("overlayAssignedList")]
+    .forEach(releaseMediaElements);
   assets.clear();
   normalizeAssetLabels(nextAssets).forEach(asset=>assets.set(asset.id,{...asset,src:asset.url||asset.src}));
   globalReferenceIds=nextGlobalIds.filter(id=>assets.has(id));
@@ -673,14 +699,14 @@ function replaceAssets(nextAssets,nextGlobalIds=[]){
   renderGlobalReferences();
   renderAssigned();
 }
-function replaceShots(nextShots,mappings={}){
+function replaceShots(nextShots,mappings={},emitChange=true){
   shots.splice(0,shots.length,...nextShots.map(shot=>{
     const mapping=mappings[String(shot.id)]||{};
     return {...shot,mode:mapping.mode||"INHERIT",refs:[...(mapping.refs||[])],leadInSeconds:Number(mapping.leadInSeconds)===1?1:0};
   }));
   selectedShots.clear();
   if(shots[0])selectedShots.add(shots[0].id);
-  refreshSelection();
+  refreshSelection(emitChange);
 }
 function applyShotMappings(mappings={}){
   shots.forEach(shot=>{
@@ -734,11 +760,16 @@ function renderShotRail(){
       else selectOnlyShot(shot.id);
       seekPreview(shot);
     });
-    item.addEventListener("dragover",event=>{event.preventDefault();item.classList.add("dropTarget")});
+    item.addEventListener("dragover",event=>{
+      if(!event.dataTransfer.types.includes("text/reference-id"))return;
+      event.preventDefault();event.dataTransfer.dropEffect="copy";item.classList.add("dropTarget");
+    });
     item.addEventListener("dragleave",()=>item.classList.remove("dropTarget"));
     item.addEventListener("drop",event=>{
-      event.preventDefault();item.classList.remove("dropTarget");
-      assignReference([shot.id],event.dataTransfer.getData("text/reference-id")||selectedAsset);
+      const referenceId=event.dataTransfer.getData("text/reference-id");
+      if(!referenceId)return;
+      event.preventDefault();event.stopPropagation();item.classList.remove("dropTarget");
+      assignReference([shot.id],referenceId);
     });
     root.appendChild(item);
   });
@@ -797,6 +828,7 @@ function renderAssigned(){
   const selected=shots.filter(shot=>selectedShots.has(shot.id));
   const common=selected.length?selected[0].refs.filter(id=>selected.every(shot=>shot.refs.includes(id))):[];
   [$("assignedList"),$("overlayAssignedList")].filter(Boolean).forEach(root=>{
+    releaseMediaElements(root);
     root.replaceChildren();
     if(!common.length){
       const empty=document.createElement("div");
@@ -908,9 +940,14 @@ function moveShotSelection(delta){
   const next=shots[Math.max(0,Math.min(shots.length-1,currentIndex+delta))];
   selectOnlyShot(next.id);seekPreview(next);
 }
+function isShortcutControl(target){
+  return target instanceof HTMLElement&&(
+    target.isContentEditable||Boolean(target.closest("button,[role=button],input,textarea,select,a[href]"))
+  );
+}
 document.addEventListener("keydown",event=>{
   const target=event.target;
-  if(target instanceof HTMLElement&&(target.matches("input,textarea,select")||target.isContentEditable))return;
+  if(isShortcutControl(target))return;
   if(event.code==="Space"||event.key===" "){
     event.preventDefault();event.stopPropagation();
     try{$("renderPreview").contentWindow.portablePreview?.playPause()}catch(error){}
@@ -923,12 +960,11 @@ document.addEventListener("keydown",event=>{
 });
 document.addEventListener("keyup",event=>{
   const target=event.target;
-  if(target instanceof HTMLElement&&(target.matches("input,textarea,select")||target.isContentEditable))return;
+  if(isShortcutControl(target))return;
   if(event.code==="Space"||event.key===" "){
     event.preventDefault();event.stopPropagation();
   }
 },true);
-document.addEventListener("click",event=>event.target.closest("button")?.blur());
 $("applySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
 $("resetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
 $("overlayApplySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
@@ -966,11 +1002,16 @@ $("resetPreviewTop").addEventListener("click",()=>{
 });
 $("fileInput").addEventListener("change",event=>addLocalFiles(event.target.files));
 const globalDrop=$("globalDrop");
-globalDrop.addEventListener("dragover",event=>{event.preventDefault();globalDrop.classList.add("dragOver")});
+globalDrop.addEventListener("dragover",event=>{
+  if(!event.dataTransfer.types.includes("text/reference-id"))return;
+  event.preventDefault();event.dataTransfer.dropEffect="copy";globalDrop.classList.add("dragOver");
+});
 globalDrop.addEventListener("dragleave",()=>globalDrop.classList.remove("dragOver"));
 globalDrop.addEventListener("drop",event=>{
-  event.preventDefault();globalDrop.classList.remove("dragOver");
-  addGlobalReference(event.dataTransfer.getData("text/reference-id")||selectedAsset);
+  const referenceId=event.dataTransfer.getData("text/reference-id");
+  if(!referenceId)return;
+  event.preventDefault();event.stopPropagation();globalDrop.classList.remove("dragOver");
+  addGlobalReference(referenceId);
 });
 const overlayGlobalDrop=$("overlayGlobalDrop");
 overlayGlobalDrop.addEventListener("dragover",event=>{
@@ -989,6 +1030,75 @@ function isExternalFileDrop(event){
   const types=event.dataTransfer?.types;
   return Boolean(types?.includes("Files")&&!types.includes("text/reference-id"));
 }
+const inputDropZones=new Set();
+const inputDropTimers=new WeakMap();
+function clearInputDropState(root){
+  if(!root)return;
+  clearTimeout(inputDropTimers.get(root));inputDropTimers.delete(root);
+  root.classList.remove("dragOver","dropInvalid");
+  if(!root.disabled)root.classList.remove("importing");
+  root.setAttribute("aria-busy",String(Boolean(root.disabled)));
+}
+function setInputDropState(root,state,holdMs=0){
+  clearInputDropState(root);
+  if(!state)return;
+  root.classList.add(state);
+  root.setAttribute("aria-busy",String(state==="importing"));
+  if(holdMs>0)inputDropTimers.set(root,setTimeout(()=>clearInputDropState(root),holdMs));
+}
+function clearAllInputDropStates(){ inputDropZones.forEach(clearInputDropState); }
+function wireInputDropZone(root,dropHandler){
+  if(!root)return;
+  inputDropZones.add(root);
+  let dragDepth=0;
+  root.addEventListener("dragenter",event=>{
+    if(!isExternalFileDrop(event))return;
+    event.preventDefault();
+    if(root.disabled||root.classList.contains("importing")){event.dataTransfer.dropEffect="none";return}
+    dragDepth+=1;setInputDropState(root,"dragOver");
+  });
+  root.addEventListener("dragover",event=>{
+    if(!isExternalFileDrop(event))return;
+    event.preventDefault();
+    if(root.disabled||root.classList.contains("importing")){event.dataTransfer.dropEffect="none";return}
+    event.dataTransfer.dropEffect="copy";
+    if(!root.classList.contains("dragOver"))setInputDropState(root,"dragOver");
+  });
+  root.addEventListener("dragleave",event=>{
+    if(!root.classList.contains("dragOver"))return;
+    dragDepth=Math.max(0,dragDepth-1);
+    if(dragDepth===0||!event.relatedTarget||!root.contains(event.relatedTarget))clearInputDropState(root);
+  });
+  root.addEventListener("drop",async event=>{
+    if(!isExternalFileDrop(event))return;
+    event.preventDefault();event.stopPropagation();dragDepth=0;
+    if(root.disabled||root.classList.contains("importing")){event.dataTransfer.dropEffect="none";return}
+    const files=event.dataTransfer.files;
+    setInputDropState(root,"importing");
+    try{
+      const result=await dropHandler(files);
+      if(result===false)throw new Error("Input drop rejected");
+    }catch(error){
+      setInputDropState(root,"dropInvalid",900);
+      showToast("DROP FAILED · CHECK APP LOG");
+      return;
+    }finally{
+      root.classList.remove("dragOver","importing");
+      root.setAttribute("aria-busy","false");
+    }
+  });
+  root.addEventListener("dragend",()=>{dragDepth=0;clearInputDropState(root)});
+}
+wireInputDropZone($("loadXml"),files=>{
+  const handler=window.portableMvp?.loadDroppedXml;
+  if(typeof handler!=="function")throw new Error("XML drop handler unavailable");
+  return handler(files);
+});
+wireInputDropZone($("loadVideo"),files=>{
+  const handler=window.portableMvp?.loadDroppedVideo;
+  if(typeof handler!=="function")throw new Error("Video drop handler unavailable");
+  return handler(files);
+});
 function wireReferenceDropZone(root){
   if(!root)return;
   root.addEventListener("dragover",event=>{
@@ -1006,6 +1116,14 @@ function wireReferenceDropZone(root){
   root.addEventListener("dragend",()=>root.classList.remove("dragOver"));
 }
 wireReferenceDropZone($("referenceLibraryDrop"));
+window.addEventListener("dragover",event=>{if(isExternalFileDrop(event))event.preventDefault()});
+window.addEventListener("drop",event=>{
+  if(!isExternalFileDrop(event))return;
+  event.preventDefault();clearAllInputDropStates();
+});
+window.addEventListener("dragend",clearAllInputDropStates);
+window.addEventListener("blur",clearAllInputDropStates);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)clearAllInputDropStates()});
 document.querySelectorAll(".overlayTab").forEach(tab=>tab.addEventListener("click",()=>{
   document.querySelectorAll(".overlayTab").forEach(item=>item.classList.toggle("active",item===tab));
   document.querySelectorAll(".overlayPane").forEach(pane=>pane.classList.toggle("active",pane.dataset.paneContent===tab.dataset.pane));

@@ -104,7 +104,7 @@
     setProgress({ state: "preparing", progress: 0 });
     setMessage("렌더링 화면과 인코더를 준비하고 있습니다.");
     try{
-      const result = await api.startExport(projectTitle);
+      const result = await api.startExport(projectTitle, summary?.jobId, summary?.revision);
       if(result?.cancelled){
         setRunning(false);
         setProgress({ state: "cancelled", progress: 0 });

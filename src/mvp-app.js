@@ -7,14 +7,20 @@
   let job=null;
   let timeline=null;
   let initialized=false;
+  let transitioning=false;
+  let runtimeBlocked=false;
+  let activeInputOperation=null;
+  let lifecycleGeneration=0;
   let saveTimer=0;
   let titleSaveTimer=0;
   let calloutSaveTimer=0;
+  let pendingSavePromise=Promise.resolve();
   const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"REFERENCE MAP · EDIT WORKFLOW"};
+  const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4",".mov",".m4v"])};
 
   function preview(){ return iframe.contentWindow?.portablePreview||null; }
   function waitForPreview(){
-    if(preview()) return Promise.resolve(preview());
+    if(preview())return Promise.resolve(preview());
     return new Promise(resolve=>iframe.addEventListener("load",()=>resolve(preview()),{once:true}));
   }
   function tc(frame,fps){
@@ -46,9 +52,7 @@
       shots:(timeline?.shots||[]).map(shot=>({id:String(shot.id),startFrame:shot.startFrame,endFrame:shot.endFrame})),
     };
   }
-  function applyPreviewReferences(snapshot){
-    preview()?.setReferences(previewReferenceState(snapshot));
-  }
+  function applyPreviewReferences(snapshot){ preview()?.setReferences(previewReferenceState(snapshot)); }
   function normalizeProjectTitle(projectTitle){
     if(projectTitle===undefined||projectTitle===null)return "SEEDANCE 2.0";
     return String(projectTitle).replace(/\s+/g," ").trim().slice(0,40);
@@ -60,22 +64,6 @@
     const input=document.getElementById("overlayProjectTitle");
     if(input&&document.activeElement!==input)input.value=title;
     return title;
-  }
-  async function persistProjectTitle(){
-    if(!bridge||!job)return;
-    clearTimeout(titleSaveTimer);
-    titleSaveTimer=0;
-    const input=document.getElementById("overlayProjectTitle");
-    const title=applyProjectTitle(input?input.value:job.projectTitle);
-    if(input&&document.activeElement!==input)input.value=title;
-    job=await bridge.saveJob({projectTitle:title});
-  }
-  function scheduleProjectTitleSave(value){
-    const title=normalizeProjectTitle(value);
-    if(job)job.projectTitle=title;
-    preview()?.setProjectTitle(title);
-    clearTimeout(titleSaveTimer);
-    titleSaveTimer=setTimeout(()=>persistProjectTitle().catch(reportError),160);
   }
   function normalizeCallout(value){
     const source=value&&typeof value==="object"?value:{};
@@ -117,20 +105,71 @@
     }
     return callout;
   }
+  function clearSaveTimers(){
+    clearTimeout(saveTimer);saveTimer=0;
+    clearTimeout(titleSaveTimer);titleSaveTimer=0;
+    clearTimeout(calloutSaveTimer);calloutSaveTimer=0;
+  }
+  async function safeRendererLog(event,detail={}){
+    try{await bridge?.log(event,detail)}catch{}
+  }
+  async function performSaveJobPatch(patch,retry=true){
+    if(!bridge||!job||transitioning||runtimeBlocked)return job;
+    const expectedJobId=job.jobId;
+    const expectedRevision=job.revision;
+    const generation=lifecycleGeneration;
+    const next=await bridge.saveJob({...patch,expectedJobId,expectedRevision});
+    if(generation!==lifecycleGeneration||transitioning||runtimeBlocked)return job;
+    if(next?.saveRejected==="JOB_STALE"){
+      await safeRendererLog("renderer_stale_save_ignored",{expectedJobId});
+      const {saveRejected,...current}=next;
+      job=current;
+      if(retry&&generation===lifecycleGeneration&&!transitioning&&!runtimeBlocked){
+        return performSaveJobPatch(patch,false);
+      }
+      return current;
+    }
+    job=next;
+    return next;
+  }
+  function saveJobPatch(patch){
+    const queued=pendingSavePromise.then(
+      ()=>performSaveJobPatch(patch),
+      ()=>performSaveJobPatch(patch),
+    );
+    pendingSavePromise=queued.catch(()=>{});
+    return queued;
+  }
+  async function persistProjectTitle(){
+    if(!bridge||!job||transitioning||runtimeBlocked)return;
+    clearTimeout(titleSaveTimer);titleSaveTimer=0;
+    const input=document.getElementById("overlayProjectTitle");
+    const title=applyProjectTitle(input?input.value:job.projectTitle);
+    if(input&&document.activeElement!==input)input.value=title;
+    await saveJobPatch({projectTitle:title});
+  }
+  function scheduleProjectTitleSave(value){
+    if(transitioning||runtimeBlocked||activeInputOperation)return;
+    const title=normalizeProjectTitle(value);
+    if(job)job.projectTitle=title;
+    preview()?.setProjectTitle(title);
+    clearTimeout(titleSaveTimer);
+    titleSaveTimer=setTimeout(()=>persistProjectTitle().catch(reportError),160);
+  }
   async function persistCalloutSettings(syncControls=false){
-    if(!bridge||!job)return;
-    clearTimeout(calloutSaveTimer);
-    calloutSaveTimer=0;
+    if(!bridge||!job||transitioning||runtimeBlocked)return;
+    clearTimeout(calloutSaveTimer);calloutSaveTimer=0;
     const callout=applyCalloutSettings(readCalloutControls(),{syncControls});
-    job=await bridge.saveJob({callout});
+    await saveJobPatch({callout});
   }
   function scheduleCalloutSave(){
+    if(transitioning||runtimeBlocked||activeInputOperation)return job?.callout;
     const callout=applyCalloutSettings(readCalloutControls(),{syncControls:false});
     clearTimeout(calloutSaveTimer);
     calloutSaveTimer=setTimeout(()=>persistCalloutSettings().catch(reportError),160);
     return callout;
   }
-  function mountTimeline(parsed){
+  function mountTimeline(parsed,{emitChange=false}={}){
     timeline=parsed;
     const shots=parsed.shots.map(shot=>({
       id:shot.id,
@@ -139,26 +178,26 @@
       end:shot.endFrame/parsed.fps,
       range:tc(shot.startFrame,parsed.fps)+"–"+tc(shot.endFrame,parsed.fps),
     }));
-    ui.replaceShots(shots,job?.shotMappings||{});
+    ui.replaceShots(shots,job?.shotMappings||{},emitChange);
     setStatus();
     applyPreviewReferences();
     applyProjectTitle();
     applyCalloutSettings();
   }
-  async function parseXml(text){
+  async function parseXml(text,{emitChange=false}={}){
     const target=await waitForPreview();
-    if(!target) throw new Error("Preview bridge is not ready");
-    mountTimeline(target.loadXml(text));
+    if(!target)throw new Error("Preview bridge is not ready");
+    mountTimeline(target.loadXml(text),{emitChange});
   }
   async function loadXmlText(text){
-    await parseXml(text);
+    await parseXml(text,{emitChange:false});
     return {fps:timeline.fps,edits:timeline.edits,shots:timeline.shots.length};
   }
   async function saveMapping(){
-    if(!initialized||!bridge)return;
+    if(!initialized||!bridge||transitioning||runtimeBlocked)return;
     const snapshot=ui.snapshot();
     applyPreviewReferences(snapshot);
-    job=await bridge.saveJob({
+    await saveJobPatch({
       globalReferenceIds:snapshot.globalReferenceIds,
       shotMappings:snapshot.shotMappings,
       projectTitle:job?.projectTitle,
@@ -166,70 +205,368 @@
     });
   }
   function scheduleSave(){
-    if(!initialized)return;
+    if(!initialized||transitioning||runtimeBlocked||activeInputOperation)return;
     clearTimeout(saveTimer);
     saveTimer=setTimeout(()=>saveMapping().catch(reportError),120);
   }
-  async function reportError(error){
+  async function reportError(error,toastMessage){
     const message=error?.message||String(error);
-    ui.showToast("ERROR · CHECK APP LOG");
-    await bridge?.log("renderer_error",{message});
+    ui.showToast(toastMessage||error?.toastMessage||"ERROR · CHECK APP LOG");
+    await safeRendererLog("renderer_error",{message});
+  }
+  function inputError(message){
+    const error=new Error(message);
+    error.toastMessage=message;
+    return error;
+  }
+  function droppedPath(files,kind){
+    const list=Array.from(files||[]);
+    if(list.length!==1)throw inputError((kind==="xml"?"XML":"VIDEO")+" · DROP ONE FILE");
+    const file=list[0];
+    const name=String(file.name||"");
+    const dot=name.lastIndexOf(".");
+    const extension=dot>=0?name.slice(dot).toLowerCase():"";
+    if(!INPUT_EXTENSIONS[kind].has(extension)){
+      throw inputError(kind==="xml"?"XML ONLY · .XML":"VIDEO ONLY · MP4/MOV/M4V");
+    }
+    const sourcePath=bridge.getPathForFile(file);
+    if(!sourcePath)throw inputError("DROP PATH UNAVAILABLE");
+    return sourcePath;
+  }
+  function beginInputOperation(kind){
+    if(activeInputOperation||transitioning||runtimeBlocked)return false;
+    activeInputOperation=kind;
+    for(const id of ["loadXml","loadVideo"]){
+      const root=document.getElementById(id);
+      if(!root)continue;
+      root.disabled=true;
+      root.classList.add("importing");
+      root.classList.remove("dropInvalid","dragOver");
+      root.setAttribute("aria-busy","true");
+    }
+    return true;
+  }
+  function endInputOperation(){
+    activeInputOperation=null;
+    for(const id of ["loadXml","loadVideo"]){
+      const root=document.getElementById(id);
+      if(!root)continue;
+      root.disabled=runtimeBlocked;
+      root.classList.remove("importing","dragOver");
+      root.setAttribute("aria-busy","false");
+    }
+  }
+  function markInputInvalid(id){
+    const root=document.getElementById(id);
+    if(!root)return;
+    root.classList.remove("importing","dragOver");
+    root.classList.add("dropInvalid");
+    root.setAttribute("aria-busy","false");
+    setTimeout(()=>root.classList.remove("dropInvalid"),900);
+  }
+  async function flushPendingState(){
+    await pendingSavePromise.catch(()=>{});
+    if(!initialized||!job||transitioning||runtimeBlocked)return;
+    clearSaveTimers();
+    const snapshot=ui.snapshot();
+    const input=document.getElementById("overlayProjectTitle");
+    const title=applyProjectTitle(input?input.value:job.projectTitle);
+    const callout=applyCalloutSettings(readCalloutControls(),{syncControls:true});
+    applyPreviewReferences(snapshot);
+    await saveJobPatch({
+      globalReferenceIds:snapshot.globalReferenceIds,
+      shotMappings:snapshot.shotMappings,
+      projectTitle:title,
+      callout,
+    });
+  }
+  async function blockRuntime(message,error){
+    runtimeBlocked=true;
+    initialized=false;
+    transitioning=false;
+    clearSaveTimers();
+    for(const id of ["loadXml","loadVideo"]){
+      const root=document.getElementById(id);
+      if(root){root.disabled=true;root.classList.remove("importing","dragOver");root.setAttribute("aria-busy","false")}
+    }
+    ui.showToast(message);
+    await safeRendererLog("job_runtime_blocked",{message:error?.message||String(error||message)});
+  }
+  async function hydrateJobState(nextJob,{xmlText=null}={}){
+    job=nextJob;
+    const target=await waitForPreview();
+    ui.replaceAssets(job.references||[],job.globalReferenceIds||[]);
+    await target?.clearVideo?.();
+    if(job.video?.url)target?.setVideo(job.video.url);
+    const text=xmlText??(job.xml?await bridge.readXml():null);
+    if(text)await parseXml(text,{emitChange:false});
+    else{
+      timeline=null;
+      ui.replaceShots([],job.shotMappings||{},false);
+      setStatus();
+      applyPreviewReferences();
+      applyProjectTitle();
+      applyCalloutSettings();
+    }
+  }
+  async function restoreCurrentJobView(){
+    const current=await bridge.getJob();
+    await hydrateJobState(current);
+  }
+  async function releaseCurrentJobView(){
+    const target=await waitForPreview();
+    if(target?.releaseMedia)await target.releaseMedia({references:true});
+    else{
+      await target?.clearVideo?.();
+      target?.setReferences?.({references:[],globalReferenceIds:[],shotMappings:{},shots:[]});
+    }
+    target?.setProjectTitle?.("");
+    target?.setCalloutConfig?.(DEFAULT_CALLOUT);
+    ui.replaceAssets([],[]);
+    ui.replaceShots([],{},false);
+    timeline=null;
+    setStatus();
+    const titleInput=document.getElementById("overlayProjectTitle");
+    if(titleInput)titleInput.value="";
+  }
+  async function importXmlCandidate(prepareCandidate){
+    let prepared=null;
+    let validationPassed=false;
+    let viewReleased=false;
+    let committed=false;
+    let mode=null;
+    try{
+      prepared=await prepareCandidate();
+      if(!prepared)return false;
+      const target=await waitForPreview();
+      if(!target?.inspectXml)throw new Error("Preview XML inspector is not ready");
+      const candidateTimeline=target.inspectXml(prepared.text);
+      validationPassed=true;
+      mode=await bridge.chooseXmlImportMode(prepared.token);
+      if(!mode){
+        ui.showToast("XML LOAD CANCELLED");
+        return false;
+      }
+      const expectedJobId=job?.jobId;
+      const expectedRevision=job?.revision;
+      const previousTimelineShots=timeline?.shots||[];
+      transitioning=true;
+      initialized=false;
+      lifecycleGeneration++;
+      clearSaveTimers();
+      if(mode==="new"){
+        viewReleased=true;
+        await releaseCurrentJobView();
+      }
+      const result=await bridge.commitXmlImport({
+        token:prepared.token,
+        expectedJobId,
+        expectedRevision,
+        previousTimelineShots,
+        nextTimelineShots:candidateTimeline.shots,
+      });
+      committed=true;
+      try{
+        if(result.mode==="update"){
+          job=result.job;
+          await parseXml(prepared.text,{emitChange:false});
+        }else{
+          await hydrateJobState(result.job,{xmlText:prepared.text});
+        }
+      }catch(firstHydrateError){
+        try{
+          await restoreCurrentJobView();
+          await safeRendererLog("job_view_recovered_after_commit",{jobId:result.job.jobId,mode:result.mode});
+          ui.showToast((result.mode==="update"?"XML UPDATED":"NEW JOB SAVED")+" · VIEW RECOVERED");
+          return true;
+        }catch(retryError){
+          firstHydrateError.toastMessage=(result.mode==="update"?"XML UPDATED":"NEW JOB SAVED")+" · RESTART APP";
+          await blockRuntime(firstHydrateError.toastMessage,retryError);
+          throw firstHydrateError;
+        }
+      }
+      if(result.mode==="update"){
+        const summary=result.summary||{};
+        const reattached=Number(summary.reattached)||0;
+        ui.showToast(
+          "XML UPDATED · "+(Number(summary.preserved)||0)+" KEPT · "+
+          (Number(summary.newShots)||0)+" NEW · "+(Number(summary.orphaned)||0)+" ORPHAN"+
+          (reattached?" · "+reattached+" RESTORED":""),
+        );
+        await safeRendererLog("renderer_xml_update_applied",summary);
+      }else ui.showToast("NEW JOB LOADED");
+      return true;
+    }catch(error){
+      if(prepared&&!committed){
+        try{await bridge.discardPreparedXml(prepared.token,validationPassed?"commit-failed":"validation-failed")}catch(discardError){}
+      }
+      const recoveryRequired=/JOB_RECOVERY_REQUIRED|rollback failed/i.test(error?.message||"");
+      if(recoveryRequired){
+        await blockRuntime("JOB RECOVERY REQUIRED · RESTART APP",error);
+      }else if(viewReleased&&!committed){
+        try{await restoreCurrentJobView()}catch(restoreError){
+          await blockRuntime("CURRENT JOB VIEW FAILED · RESTART APP",restoreError);
+        }
+      }
+      if(!error.toastMessage){
+        error.toastMessage=runtimeBlocked
+          ?"JOB RECOVERY REQUIRED · RESTART APP"
+          :(validationPassed
+            ?(mode==="new"?"NEW JOB FAILED · CURRENT JOB RESTORED":"XML UPDATE FAILED · CURRENT JOB KEPT")
+            :"XML REJECTED · CURRENT JOB KEPT");
+      }
+      throw error;
+    }finally{
+      if(transitioning){
+        transitioning=false;
+        initialized=!runtimeBlocked;
+      }
+    }
   }
   async function loadXml(){
+    if(!beginInputOperation("xml"))return true;
     try{
-      const result=await bridge.selectXml();
-      if(!result)return;
-      job=result.job;
-      await parseXml(result.text);
-      ui.showToast("XML LOADED");
-    }catch(error){ reportError(error); }
+      await flushPendingState();
+      await importXmlCandidate(()=>bridge.selectXml());
+    }catch(error){await reportError(error)}
+    finally{endInputOperation()}
+    return true;
+  }
+  async function loadDroppedXml(files){
+    if(!beginInputOperation("xml"))return true;
+    try{
+      await flushPendingState();
+      const sourcePath=droppedPath(files,"xml");
+      await importXmlCandidate(()=>bridge.prepareDroppedXml(sourcePath));
+    }catch(error){markInputInvalid("loadXml");await reportError(error)}
+    finally{endInputOperation()}
+    return true;
+  }
+  async function applyVideoImport(prepareVideo){
+    if(!job)throw new Error("Current Job is not ready");
+    let prepared=null;
+    let committed=false;
+    let viewReleased=false;
+    const previousJob=job;
+    try{
+      prepared=await prepareVideo();
+      if(!prepared)return false;
+      const expectedJobId=job.jobId;
+      const expectedRevision=job.revision;
+      transitioning=true;
+      initialized=false;
+      lifecycleGeneration++;
+      clearSaveTimers();
+      const target=await waitForPreview();
+      if(target?.releaseMedia)await target.releaseMedia({references:false});
+      else await target?.clearVideo?.();
+      viewReleased=true;
+      const next=await bridge.commitVideo({token:prepared.token,expectedJobId,expectedRevision});
+      committed=true;
+      job=next;
+      target?.setVideo(job.video.url);
+      ui.showToast("VIDEO LOADED");
+      return true;
+    }catch(error){
+      if(prepared&&!committed){
+        try{await bridge.discardPreparedVideo(prepared.token,"commit-failed")}catch{}
+      }
+      const recoveryRequired=/JOB_RECOVERY_REQUIRED|rollback failed/i.test(error?.message||"");
+      if(recoveryRequired){
+        await blockRuntime("JOB RECOVERY REQUIRED · RESTART APP",error);
+      }else if(viewReleased){
+        try{
+          if(committed)await restoreCurrentJobView();
+          else{
+            job=previousJob;
+            if(previousJob.video?.url)(await waitForPreview())?.setVideo(previousJob.video.url);
+          }
+        }catch(restoreError){
+          await blockRuntime("CURRENT JOB VIEW FAILED · RESTART APP",restoreError);
+        }
+      }
+      if(!error.toastMessage){
+        error.toastMessage=runtimeBlocked
+          ?"JOB RECOVERY REQUIRED · RESTART APP"
+          :(committed?"VIDEO SAVED · VIEW RECOVERED":"VIDEO IMPORT FAILED · CURRENT VIDEO RESTORED");
+      }
+      throw error;
+    }finally{
+      if(transitioning){
+        transitioning=false;
+        initialized=!runtimeBlocked;
+      }
+    }
   }
   async function loadVideo(){
+    if(!beginInputOperation("video"))return true;
     try{
-      const next=await bridge.selectVideo();
-      if(!next)return;
-      job=next;
-      (await waitForPreview())?.setVideo(job.video.url);
-      ui.showToast("VIDEO LOADED");
-    }catch(error){ reportError(error); }
+      await flushPendingState();
+      await applyVideoImport(()=>bridge.selectVideo());
+    }
+    catch(error){await reportError(error,"VIDEO IMPORT FAILED · CHECK APP LOG")}
+    finally{endInputOperation()}
+    return true;
+  }
+  async function loadDroppedVideo(files){
+    if(!beginInputOperation("video"))return true;
+    try{
+      await flushPendingState();
+      const sourcePath=droppedPath(files,"video");
+      await applyVideoImport(()=>bridge.prepareDroppedVideo(sourcePath));
+    }catch(error){markInputInvalid("loadVideo");await reportError(error,error?.toastMessage||"VIDEO IMPORT FAILED · CHECK APP LOG")}
+    finally{endInputOperation()}
+    return true;
   }
   async function addReferences(){
+    if(transitioning||runtimeBlocked)return;
     try{
-      const next=await bridge.addReferences();
+      await flushPendingState();
+      const previousCount=job?.references?.length||0;
+      const next=await bridge.addReferences(job?.jobId,job?.revision);
       if(!next)return;
+      lifecycleGeneration++;
       job=next;
       ui.replaceAssets(job.references,job.globalReferenceIds);
       applyPreviewReferences();
-      ui.showToast("REFERENCES ADDED");
-    }catch(error){ reportError(error); }
+      ui.showToast(job.references.length>previousCount?"REFERENCES ADDED":"NO SUPPORTED FILES");
+    }catch(error){reportError(error)}
   }
   async function addDroppedReferences(files){
+    if(transitioning||runtimeBlocked)return;
     try{
       if(!files?.length)return;
+      await flushPendingState();
       const paths=Array.from(files,file=>bridge.getPathForFile(file)).filter(Boolean);
       if(!paths.length)return;
-      const next=await bridge.addDroppedReferences(paths);
+      const previousCount=job?.references?.length||0;
+      const next=await bridge.addDroppedReferences(paths,job?.jobId,job?.revision);
       if(!next)return;
+      lifecycleGeneration++;
       job=next;
       ui.replaceAssets(job.references,job.globalReferenceIds);
       applyPreviewReferences();
-      ui.showToast("REFERENCES ADDED");
-    }catch(error){ reportError(error); }
+      ui.showToast(job.references.length>previousCount?"REFERENCES ADDED":"NO SUPPORTED FILES");
+    }catch(error){reportError(error)}
   }
   async function deleteReference(id){
+    if(transitioning||runtimeBlocked)return;
     try{
       if(!id||!bridge?.deleteReference)return;
-      clearTimeout(saveTimer);
-      const result=await bridge.deleteReference(id);
+      await flushPendingState();
+      clearTimeout(saveTimer);saveTimer=0;
+      const result=await bridge.deleteReference(id,job?.jobId,job?.revision);
       if(!result?.job)return;
+      lifecycleGeneration++;
       job=result.job;
       ui.replaceAssets(job.references,job.globalReferenceIds);
       ui.applyShotMappings(job.shotMappings||{});
       applyPreviewReferences(ui.snapshot());
       ui.showToast(result.warning?"REFERENCE REMOVED · FILE CLEANUP FAILED":"REFERENCE DELETED");
-    }catch(error){ reportError(error); }
+    }catch(error){reportError(error)}
   }
   async function exportVideo(){
+    if(transitioning||runtimeBlocked)return;
     ui.setOverlayOpen(false);
     try{
       await persistProjectTitle();
@@ -240,47 +577,34 @@
         sourceFps:timeline?.fps||0,
         editCount:timeline?.edits||0,
       });
-    }catch(error){ await reportError(error) }
+    }catch(error){await reportError(error)}
   }
   function syncActiveShot(id){ ui.syncShotSelection(Number(id)); }
   async function initialize(){
-    if(!bridge){
-      ui.showToast("OPEN WITH ELECTRON");
-      return;
-    }
+    if(!bridge){ui.showToast("OPEN WITH ELECTRON");return}
     try{
-      job=await bridge.getJob();
-      ui.replaceAssets(job.references,job.globalReferenceIds);
-      const target=await waitForPreview();
-      if(job.video?.url)target?.setVideo(job.video.url);
-      const xml=job.xml?await bridge.readXml():null;
-      if(xml)await parseXml(xml);
-      else{
-        timeline=null;
-        ui.replaceShots([],job.shotMappings||{});
-        setStatus();
-        applyPreviewReferences();
-        applyProjectTitle();
-        applyCalloutSettings();
-      }
+      const current=await bridge.getJob();
+      await hydrateJobState(current);
       initialized=true;
-      await bridge.log("renderer_ready",{
+      await safeRendererLog("renderer_ready",{
+        jobId:job.jobId,
         hasXml:Boolean(job.xml),
         hasVideo:Boolean(job.video),
         referenceCount:job.references.length,
       });
-    }catch(error){ reportError(error); }
+    }catch(error){reportError(error)}
   }
 
-  window.portableMvp={loadXml,loadVideo,addReferences,addDroppedReferences,deleteReference,loadXmlText,syncActiveShot,exportVideo};
-  bridge?.onProjectTitleUpdated(projectTitle=>applyProjectTitle(projectTitle));
+  window.portableMvp={
+    loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
+    addReferences,addDroppedReferences,deleteReference,loadXmlText,syncActiveShot,exportVideo,
+  };
+  bridge?.onProjectTitleUpdated(projectTitle=>{if(!transitioning&&!runtimeBlocked)applyProjectTitle(projectTitle)});
   window.addEventListener("wireframechange",scheduleSave);
   const projectTitleInput=document.getElementById("overlayProjectTitle");
   projectTitleInput?.addEventListener("input",event=>scheduleProjectTitleSave(event.currentTarget.value));
   projectTitleInput?.addEventListener("blur",()=>persistProjectTitle().catch(reportError));
-  projectTitleInput?.addEventListener("keydown",event=>{
-    if(event.key==="Enter")event.currentTarget.blur();
-  });
+  projectTitleInput?.addEventListener("keydown",event=>{if(event.key==="Enter")event.currentTarget.blur()});
   for(const id of ["calloutEnabled","calloutPosition","calloutStyle","calloutStart","calloutDuration","calloutSubtitle"]){
     const control=document.getElementById(id);
     control?.addEventListener("input",scheduleCalloutSave);
