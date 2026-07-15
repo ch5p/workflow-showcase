@@ -4,6 +4,8 @@
 
 Electron 단일 Job MVP 골격이 구성되어 있습니다. 기존 FCP XML parser는 동작을 유지한 채 `src/core/xmeml-parser.js`로, PRIMARY 계산과 SHOT/reference 순수 규칙은 나머지 `src/core/*`로 분리했습니다. `output-preview.html`은 `window.portablePreview` 브리지와 presentation runtime을 소유합니다. XML, 영상, 레퍼런스는 `current-job`에 복사되고 GLOBAL/SHOT 매핑은 `job.json`에 자동 저장됩니다.
 
+공개 source beta는 `https://github.com/ch5p/character-workflow-portable`의 `main`과 `v0.1.0-beta.1` 태그에 배포했습니다. 저장소는 사설 이력과 사용자 Job을 제외한 단일 공개 이력으로 시작하며, GitHub Actions의 Windows `npm ci`·`check`·격리 `smoke`와 공개 태그 fresh clone의 `smoke:export`까지 통과했습니다. Private vulnerability reporting도 활성화했습니다.
+
 SHOT 클릭·방향키 탐색은 실제 영상 `currentTime`과 타임라인을 함께 이동합니다. 정지 상태, 재생 시작, 재생 중 SHOT 이동을 `current-job`의 실제 XML/영상으로 검증했으며 재생 중 이전 영상 시계가 새 위치를 덮어쓰지 않도록 video-frame clock generation guard를 둡니다.
 
 `EXPORT H.264`는 `render-spec.cjs`가 공급하는 1280x1080 Electron offscreen 화면을 60fps BGRA raw frame으로 FFmpeg에 직접 전달합니다. editor fit, Export summary, offscreen window, paint 검사와 FFmpeg 입력이 같은 spec을 사용합니다. 기본은 `h264_nvenc` CBR 12 Mbps이고 런타임 실패 시 `libx264`로 전체 출력을 다시 시도합니다. 원본 AAC 오디오는 stream copy하고 출력은 `current-job/output/character_workflow_export_*.mp4`에 저장합니다.
@@ -78,7 +80,6 @@ Export 팝업이 열리지 않으면 `export_dialog_opened` 이벤트와 `export
 
 ## Next
 
-- 리팩토링 후 사용자 최종 Visual QA: 기존 Job 화면과 공개 fixture의 classic 배치·가독성 비교
-- 깨끗한 공개 후보 트리에서 `npm ci`, `check`, `smoke`, `smoke:export` 재검증
+- 사용자 최종 Visual QA: 기존 Job 화면과 공개 fixture의 classic 배치·가독성 및 1280×1080 Export 비교
 - source beta 공개 후 frame freshness, audio codec fallback, 장시간 render/cancel은 후속 이슈로 관리
 - FFmpeg 번들과 실행 파일 패키징은 public binary 단계로 분리
