@@ -1,0 +1,16 @@
+/* Classic layout design tokens. Forks may change these without touching timeline parsing. */
+:root{
+  --bg:#e9eaec;
+  --panel:#fbfbfa;
+  --surface:#ffffff;
+  --card-line:#e6e7e5;
+  --ink:#17191c;
+  --txt:#45494f;
+  --txt-dim:#92989e;
+  --accent:#31b88a;
+  --accent-soft:#e9f8f2;
+  --purple:#7655d8;
+  --mono:"Cascadia Mono","Consolas",monospace;
+  --sans:"Inter","Segoe UI","Malgun Gothic",system-ui,sans-serif;
+  --shadow-soft:0 8px 24px rgba(25,28,31,.07);
+}

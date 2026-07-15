@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reference Map Wireframe</title>
+<style>
+:root{
+  --bg:#eef1ef;
+  --surface:#ffffff;
+  --surface-2:#f6f8f7;
+  --line:#d9dfdc;
+  --line-strong:#c6ceca;
+  --text:#242a27;
+  --muted:#757f7a;
+  --accent:#22a878;
+  --accent-soft:#e7f6f0;
+  --purple:#7657d6;
+  --purple-soft:#f0ecfb;
+  --danger:#bd4e62;
+  --shadow:0 8px 24px rgba(26,34,30,.08);
+  --mono:"Cascadia Mono","SFMono-Regular",Consolas,monospace;
+  --sans:Inter,"Segoe UI",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden}
+body{min-width:1320px;display:grid;place-items:center;background:#d9dddb;color:var(--text);font-family:var(--sans);font-size:12px}
+button,input{font:inherit}
+button{border:0;background:none;color:inherit;cursor:pointer}
+button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{width:1320px;height:min(1040px,100vh);display:grid;grid-template-rows:52px minmax(0,1fr);background:var(--bg);
+  box-shadow:0 18px 50px rgba(24,31,28,.14)}
+.topbar{display:grid;grid-template-columns:250px 1fr auto;align-items:center;border-bottom:1px solid var(--line);
+  background:var(--surface);padding:0 14px;gap:16px;z-index:4}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brandMark{width:24px;height:24px;border:1px solid var(--text);display:grid;place-items:center;font-family:var(--mono);
+  font-size:10px;font-weight:700;background:var(--surface)}
+.brandText{min-width:0}
+.brandText strong{display:block;font-size:12px;letter-spacing:.4px}
+.brandText span{display:block;margin-top:2px;color:var(--muted);font-family:var(--mono);font-size:9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.projectStatus{justify-self:center;display:flex;align-items:center;gap:16px;color:var(--muted);font-family:var(--mono);
+  font-size:9px;white-space:nowrap}
+.statusReady{color:var(--accent)}
+.topActions{display:flex;align-items:center;gap:6px}
+.command{height:30px;padding:0 11px;border:1px solid var(--line-strong);background:var(--surface);border-radius:5px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.2px}
+.command:hover{border-color:#98a29d;background:var(--surface-2)}
+.command.primary{border-color:var(--accent);background:var(--accent);color:#fff}
+.inputDropZone{height:34px;min-width:70px;padding:3px 9px;display:grid;grid-template-rows:1fr 1fr;place-items:center;
+  border-style:dashed;line-height:1;transition:border-color .15s,background .15s,box-shadow .15s,opacity .15s}
+.inputDropZone.video{min-width:102px}
+.inputDropZone strong{font-size:9px;letter-spacing:.45px}
+.inputDropZone span{color:var(--muted);font-size:7px;letter-spacing:.2px;white-space:nowrap}
+.inputDropZone.dragOver{border-style:solid;border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 2px rgba(34,168,120,.15)}
+.inputDropZone.dragOver span{color:#147b58}
+.inputDropZone.dropInvalid{border-style:solid;border-color:var(--danger);background:#faedf0;box-shadow:0 0 0 2px rgba(189,78,98,.12)}
+.inputDropZone.dropInvalid span{color:var(--danger)}
+.inputDropZone.importing{border-style:solid;border-color:#8e9993;background:var(--surface-2);cursor:progress;opacity:.7}
+.workspace{min-height:0;display:grid;grid-template-columns:minmax(0,1fr)}
+.leftRail,.inspector{min-height:0;background:var(--surface);overflow:hidden}
+.leftRail{border-right:1px solid var(--line);display:grid;grid-template-rows:auto 188px minmax(0,1fr)}
+.inspector{border-left:1px solid var(--line);display:flex;flex-direction:column}
+.leftRail,.inspector{display:none}
+.railHeader,.inspectorHeader,.mapHeader{height:40px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;border-bottom:1px solid var(--line)}
+.sectionTitle{font-size:10px;font-weight:700;letter-spacing:.7px}
+.quietCount{font-family:var(--mono);font-size:9px;color:var(--muted)}
+.globalSection{padding:10px 10px 12px;border-bottom:1px solid var(--line);min-height:0}
+.globalDrop{height:100%;border:1px dashed var(--line-strong);background:var(--surface-2);border-radius:6px;padding:8px;
+  display:grid;grid-template-rows:20px minmax(0,1fr);transition:border-color .15s,background .15s}
+.globalDrop.dragOver{border-color:var(--accent);background:var(--accent-soft)}
+.globalTop{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:9px}
+.globalMode{color:var(--accent)}
+.globalRefs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:5px;min-height:0}
+.globalRef{position:relative;min-width:0;aspect-ratio:1;overflow:hidden;border:1px solid var(--line);border-radius:4px;background:#fff}
+.globalRef img,.globalRef video{width:100%;height:100%;display:block;object-fit:contain}
+.globalRef span,.assetType{position:absolute;left:4px;bottom:4px;padding:2px 4px;border-radius:3px;background:rgba(18,22,20,.72);
+  color:#fff;font-family:var(--mono);font-size:7px}
+.globalRemove{position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:4px;background:rgba(18,22,20,.76);color:#fff;
+  font-size:15px;line-height:1}
+.globalRemove:hover{background:#b84f61}
+.library{min-height:0;display:grid;grid-template-rows:37px minmax(0,1fr)}
+.libraryTools{display:flex;align-items:center;gap:5px;padding:6px 10px;border-bottom:1px solid var(--line)}
+.filter{height:24px;padding:0 8px;border-radius:4px;color:var(--muted);font-family:var(--mono);font-size:8px}
+.filter.active{background:#edf0ee;color:var(--text)}
+.assetGrid{min-height:0;overflow:auto;padding:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  align-content:start;gap:7px}
+.asset{position:relative;aspect-ratio:1;height:auto;overflow:hidden;border:1px solid var(--line);border-radius:5px;background:#fff;
+  cursor:grab;transition:border-color .15s,box-shadow .15s,transform .15s}
+.asset:hover{border-color:#9da7a2;box-shadow:0 3px 10px rgba(24,31,28,.09)}
+.asset.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.asset:active{cursor:grabbing}
+.asset img,.asset video{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;-webkit-user-drag:none;user-select:none}
+.assetName{position:absolute;left:4px;right:25px;top:4px;color:#fff;text-shadow:0 1px 3px #000;font-family:var(--mono);
+  font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.assetDelete{position:absolute;right:4px;top:4px;z-index:2;width:18px;height:18px;border-radius:4px;
+  background:rgba(18,22,20,.78);color:#fff;font-size:14px;line-height:18px;text-align:center}
+.assetDelete:hover{background:#b84f61}
+.center{min-height:0;display:grid;grid-template-rows:minmax(0,1fr);background:#e5e9e7}
+.previewArea{position:relative;min-height:0;overflow:hidden;display:grid;place-items:center;padding:12px}
+.previewShell{position:relative;overflow:hidden;background:#111;box-shadow:var(--shadow);border:1px solid #bdc5c1}
+#renderPreview{position:absolute;left:0;top:0;width:1280px;height:1080px;border:0;background:#fff;transform-origin:0 0;
+  pointer-events:none}
+.editPanelHandle{position:absolute;right:0;top:50%;z-index:10;width:24px;height:54px;padding:0;display:grid;place-items:center;
+  transform:translateY(-50%);border:1px solid rgba(255,255,255,.3);border-right:0;border-radius:6px 0 0 6px;
+  background:rgba(14,18,16,.76);color:#fff;font-family:var(--sans);font-size:22px;line-height:1;
+  backdrop-filter:blur(3px);transition:background .15s,border-color .15s}
+.editPanelHandle:hover{background:rgba(34,168,120,.9);border-color:rgba(255,255,255,.55)}
+.editOverlay{position:absolute;top:0;right:0;width:35%;height:100%;z-index:4;overflow:hidden;display:grid;
+  grid-template-rows:34px minmax(0,1fr) 42px;background:rgba(13,16,15,.82);color:#fff;
+  border-left:1px solid rgba(255,255,255,.18);backdrop-filter:blur(3px);transition:opacity .18s,transform .2s}
+.editOverlay.closed{opacity:0;transform:translateX(100%);pointer-events:none}
+.shotRail{position:absolute;top:0;right:35%;width:12%;height:100%;z-index:4;display:grid;grid-template-rows:34px minmax(0,1fr);
+  background:rgba(20,24,22,.72);color:#fff;border-left:1px solid rgba(255,255,255,.16);border-right:1px solid rgba(255,255,255,.16);
+  backdrop-filter:blur(3px);transition:opacity .18s,transform .2s}
+.shotRail.closed{opacity:0;transform:translateX(100%);pointer-events:none}
+.referenceHoverPreview{position:absolute;z-index:8;width:280px;height:200px;overflow:hidden;pointer-events:none;
+  border:1px solid rgba(255,255,255,.36);border-radius:6px;background:rgba(12,15,14,.96);
+  box-shadow:0 14px 34px rgba(0,0,0,.34);opacity:0;visibility:hidden;transform:translate3d(8px,0,0) scale(.98);
+  transition:opacity .14s ease,transform .18s ease,visibility 0s linear .18s}
+.referenceHoverPreview.visible{opacity:1;visibility:visible;transform:translate3d(0,0,0) scale(1);
+  transition:opacity .14s ease,transform .18s ease}
+.referenceHoverMedia{position:absolute;inset:0;background:#101311}
+.referenceHoverMedia img,.referenceHoverMedia video{display:block;width:100%;height:100%;object-fit:contain}
+.referenceHoverLabel{position:absolute;left:8px;bottom:7px;padding:3px 6px;border-radius:4px;
+  background:rgba(10,12,11,.76);color:#fff;font-family:var(--mono);font-size:9px}
+.shotRailHeader{display:flex;align-items:center;justify-content:space-between;padding:0 8px;border-bottom:1px solid rgba(255,255,255,.14)}
+.shotRailHeader strong{font-size:10px;letter-spacing:.6px}
+.shotRailHeader span{font-family:var(--mono);font-size:9px;color:#aab5b0}
+.shotRailList{min-height:0;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:4px}
+.shotRailItem{position:relative;min-height:38px;flex:0 0 38px;padding:5px 22px 5px 7px;text-align:left;border:1px solid rgba(255,255,255,.17);
+  border-radius:5px;background:rgba(255,255,255,.06);color:#f2f5f3}
+.shotRailItem:hover{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.32)}
+.shotRailItem.selected{border:2px solid var(--accent);background:rgba(34,168,120,.18)}
+.shotRailItem strong,.shotRailItem span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shotRailItem strong{font-family:var(--mono);font-size:10px}
+.shotRailItem span{margin-top:3px;color:#b7c0bc;font-size:9px}
+.shotRailStatus{position:absolute;right:7px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:#78817d}
+.shotRailStatus.ADD{background:#55a8ca}.shotRailStatus.REPLACE{background:#a58ae9}.shotRailStatus.HIDE{background:#d36b7e}
+.overlayHeader{display:flex;align-items:center;gap:7px;padding:0 6px 0 9px;border-bottom:1px solid rgba(255,255,255,.14)}
+.overlayHeader strong{font-size:9px;letter-spacing:.6px}
+.overlayHeader span{font-family:var(--mono);font-size:7px;color:#9ee2ca}
+.overlayTitleEditor{min-width:0;flex:1;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:7px}
+.overlayTitleEditor label{font-family:var(--mono);font-size:7px;color:#9ee2ca;white-space:nowrap}
+.overlayTitleEditor input{min-width:0;width:100%;height:23px;padding:0 7px;border:1px solid rgba(255,255,255,.22);
+  border-radius:4px;background:rgba(0,0,0,.2);color:#f0f5f2;font-family:var(--mono);font-size:9px;outline:none}
+.overlayTitleEditor input:focus{border-color:var(--accent);box-shadow:0 0 0 1px rgba(34,168,120,.25)}
+.calloutSettings{border-bottom:1px solid rgba(255,255,255,.13)}
+.calloutSettings summary{height:31px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#e1e8e4;font-family:var(--mono);font-size:9px;font-weight:700;list-style:none}
+.calloutSettings summary::-webkit-details-marker{display:none}
+.calloutSettings summary::after{content:"+";color:#9ee2ca;font-size:13px;font-weight:400}
+.calloutSettings[open] summary::after{content:"−"}
+.calloutSettingsState{margin-left:auto;margin-right:8px;color:#9ee2ca!important;font-size:7px!important;font-weight:400}
+.calloutSettingsBody{padding:0 0 9px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.calloutField{min-width:0;display:grid;gap:4px;color:#aeb8b3;font-family:var(--mono);font-size:7px}
+.calloutField.wide{grid-column:1/-1}
+.calloutField input[type="text"],.calloutField input[type="number"],.calloutField select{width:100%;height:25px;padding:0 7px;
+  border:1px solid rgba(255,255,255,.2);border-radius:4px;background:#1a1f1d;color:#eef3f0;font-family:var(--mono);font-size:9px;outline:none}
+.calloutField input:focus,.calloutField select:focus{border-color:var(--accent)}
+.calloutEnabled{height:25px;padding:0 8px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(255,255,255,.2);
+  border-radius:4px;background:#1a1f1d;color:#eef3f0;font-family:var(--mono);font-size:9px}
+.calloutEnabled input{accent-color:var(--accent)}
+.overlayClose{width:24px;height:24px;color:#dce2df;font-size:17px;line-height:1;border-radius:4px}
+.overlayClose:hover{background:rgba(255,255,255,.1)}
+.overlayBody{min-height:0;overflow:auto;padding:8px}
+.shotRailList,.overlayBody{scrollbar-width:thin;scrollbar-color:rgba(214,225,220,.42) transparent}
+.shotRailList::-webkit-scrollbar,.overlayBody::-webkit-scrollbar{width:7px;height:7px}
+.shotRailList::-webkit-scrollbar-track,.overlayBody::-webkit-scrollbar-track{background:transparent}
+.shotRailList::-webkit-scrollbar-thumb,.overlayBody::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:7px;
+  background:rgba(214,225,220,.42);background-clip:padding-box}
+.shotRailList::-webkit-scrollbar-thumb:hover,.overlayBody::-webkit-scrollbar-thumb:hover{background:rgba(66,201,154,.76);background-clip:padding-box}
+.scopeBlock{padding:8px 0 10px;border-top:2px solid rgba(255,255,255,.18);border-bottom:1px solid rgba(255,255,255,.13)}
+.scopeBlock:first-child{padding-top:2px;border-top-color:var(--accent)}
+.scopeBlock.shotScope{border-top-color:#9a7ce5;margin-top:8px}
+.scopeHeading{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.scopeHeading strong{font-size:11px;letter-spacing:.5px}
+.scopeHeading span{font-family:var(--mono);font-size:9px;color:#aeb8b3}
+.scopeState{display:block;margin:-2px 0 8px;color:#b9c2be;font-family:var(--mono);font-size:9px}
+.scopeState.INHERIT{color:#8fd8bd}
+.scopeState.ADD{color:#84c5df}
+.scopeState.REPLACE{color:#b8a4eb}
+.scopeState.HIDE{color:#e4a1ae}
+.libraryScope{position:relative;padding:10px 4px 4px;border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background .15s}
+.libraryScope.dragOver{border-color:var(--accent);background:rgba(34,168,120,.12)}
+.libraryScope.dragOver::after{content:"DROP FILES TO IMPORT";position:absolute;inset:38px 4px 4px;z-index:5;display:grid;place-items:center;
+  border:1px dashed var(--accent);border-radius:5px;background:rgba(11,18,15,.9);color:#d9f7eb;font-family:var(--mono);font-size:10px;pointer-events:none}
+.overlayLabel{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;color:#aeb8b3;
+  font-family:var(--mono);font-size:9px}
+.overlayGlobal{min-height:72px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:4px;
+  border:1px dashed transparent;border-radius:5px;transition:border-color .15s,background .15s}
+.overlayGlobal:empty{place-items:center;border-color:rgba(255,255,255,.24)}
+.overlayGlobal:empty::before{content:"DROP REFERENCE TO GLOBAL";grid-column:1/-1;color:#aeb8b3;font-family:var(--mono);font-size:9px}
+.overlayGlobal.dragOver{border-color:var(--accent);background:rgba(34,168,120,.14)}
+.overlayGlobal .globalRef{border-color:rgba(255,255,255,.2);background:#1c211f}
+.overlayGlobal .globalRef span{font-size:9px}
+.overlayAssets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.overlayAssets .asset{height:auto;border-color:rgba(255,255,255,.2);background:#1c211f}
+.overlayAssets .asset.selected{border-color:var(--accent)}
+.overlayAssets .assetName{font-size:9px}.overlayAssets .assetType{font-size:8px}
+.overlayShotSummary{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:8px}
+.overlayShotSummary strong{font-size:11px}
+.overlayShotSummary span{font-family:var(--mono);font-size:7px;color:#aeb8b3}
+.overlayModes{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:9px}
+.overlayModes .modeButton{height:25px;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#d7ddda}
+.overlayModes .modeButton{font-size:9px}
+.overlayModes .modeButton.active{border-color:var(--accent);background:rgba(34,168,120,.2);color:#fff}
+.leadInToggle{height:25px;margin:-4px 0 9px;padding:0 8px;display:flex;align-items:center;justify-content:space-between;
+  border:1px solid rgba(255,255,255,.2);border-radius:4px;background:rgba(255,255,255,.05);color:#d7ddda;
+  font-family:var(--mono);font-size:9px;cursor:pointer}
+.leadInToggle:has(input:checked){border-color:var(--accent);background:rgba(34,168,120,.2);color:#fff}
+.leadInToggle input{width:13px;height:13px;margin:0;accent-color:var(--accent)}
+.overlayAssigned{display:flex;flex-direction:column;gap:4px}
+.assignedList,.overlayAssigned{min-height:52px;border:1px dashed transparent;border-radius:5px;transition:border-color .15s,background .15s}
+.assignedList.dragOver,.overlayAssigned.dragOver{border-color:var(--accent);background:rgba(34,168,120,.14)}
+.overlayAssigned .assignedItem{height:35px;grid-template-columns:45px 1fr 20px;border-color:rgba(255,255,255,.18);
+  background:rgba(255,255,255,.05);color:#fff}
+.overlayAssigned .assignedThumb{width:45px;height:26px}
+.overlayAssigned .assignedMeta strong,.overlayAssigned .assignedMeta span{font-size:9px}
+.overlayAssigned .assignedMeta span{color:#aeb8b3}
+.overlayAssigned .emptyAssignment{height:38px;border-color:rgba(255,255,255,.22);color:#aeb8b3}
+.overlayFooter{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:7px 8px;border-top:1px solid rgba(255,255,255,.14)}
+.overlayFooter .footerButton{height:27px;border-color:rgba(255,255,255,.24);background:rgba(255,255,255,.06);color:#fff}
+.overlayFooter .footerButton.apply{border-color:var(--accent);background:var(--accent)}
+.editPanelToggle{border-color:var(--accent);color:#287d60}
+.shotMap{min-height:0;background:var(--surface);border-top:1px solid var(--line);display:grid;
+  grid-template-rows:40px 30px minmax(0,1fr)}
+.mapHeader{height:40px;padding:0 10px}
+.mapTitle{display:flex;align-items:baseline;gap:9px}
+.mapTitle strong{font-size:10px;letter-spacing:.7px}
+.mapTitle span{font-family:var(--mono);font-size:8px;color:var(--muted)}
+.bulkActions{display:flex;align-items:center;gap:5px}
+.miniButton{height:24px;padding:0 8px;border:1px solid var(--line);border-radius:4px;background:#fff;
+  font-family:var(--mono);font-size:8px;color:#555f5a}
+.miniButton:hover{border-color:#98a29d}
+.shotColumns,.shotRow{display:grid;grid-template-columns:28px 86px 70px 90px minmax(170px,1fr) 90px;align-items:center}
+.shotColumns{padding:0 8px;border-bottom:1px solid var(--line);background:var(--surface-2);color:var(--muted);
+  font-family:var(--mono);font-size:7px}
+.shotList{min-height:0;overflow:auto}
+.shotRow{min-height:38px;padding:3px 8px;border-bottom:1px solid #edf0ee;cursor:pointer;transition:background .15s}
+.shotRow:hover{background:#f8faf9}
+.shotRow.selected{background:var(--accent-soft)}
+.shotRow.dropTarget{background:var(--purple-soft);box-shadow:inset 0 0 0 1px var(--purple)}
+.shotCheck{width:14px;height:14px;accent-color:var(--accent)}
+.shotId{font-family:var(--mono);font-size:9px;font-weight:700}
+.editCount,.timeRange{font-family:var(--mono);font-size:8px;color:var(--muted)}
+.assignment{min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden}
+.refChip{max-width:94px;padding:3px 5px;border:1px solid #d8d0f0;background:var(--purple-soft);color:#59468d;
+  border-radius:4px;font-family:var(--mono);font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.refChip.global{border-color:#bfe5d5;background:var(--accent-soft);color:#27755a}
+.modeBadge{justify-self:start;padding:3px 6px;border-radius:4px;background:#edf0ee;color:#626b67;font-family:var(--mono);font-size:7px}
+.modeBadge.ADD{background:#e8f4fa;color:#35738e}
+.modeBadge.REPLACE{background:var(--purple-soft);color:#5c4894}
+.modeBadge.HIDE{background:#f9e9ec;color:var(--danger)}
+.referenceTimeline{min-height:0;background:var(--surface);border-top:1px solid var(--line);display:grid;
+  grid-template-rows:40px minmax(0,1fr)}
+.timelineToolbar{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;
+  border-bottom:1px solid var(--line)}
+.timelineTitle{display:flex;align-items:baseline;gap:9px}
+.timelineTitle strong{font-size:10px;letter-spacing:.7px}
+.timelineTitle span{font-family:var(--mono);font-size:8px;color:var(--muted)}
+.timelineRows{min-height:0;overflow:auto;padding:7px 10px 9px;display:flex;flex-direction:column;gap:5px}
+.timelineBand{height:56px;flex:0 0 56px;display:grid;grid-template-columns:58px minmax(0,1fr);border:1px solid var(--line);
+  background:#fff;border-radius:5px;overflow:hidden}
+.timelineBandLabel{display:flex;align-items:center;justify-content:center;border-right:1px solid var(--line);
+  color:#5f6864;font-family:var(--mono);font-size:8px;background:var(--surface-2)}
+.timelineBandBody{position:relative;min-width:0}
+.timelineRuler{position:absolute;left:0;right:0;top:0;height:18px;border-bottom:1px solid var(--line);background:#fafbfa}
+.timelineTick{position:absolute;top:0;bottom:0;border-left:1px solid #e2e6e4;color:#8b9490;font-family:var(--mono);font-size:7px}
+.timelineTick span{position:absolute;left:4px;top:4px;white-space:nowrap}
+.timelineLane{position:absolute;left:0;right:0;top:18px;bottom:0;background:linear-gradient(180deg,#fff,#fafbfa)}
+.timelineShot{position:absolute;top:4px;bottom:4px;min-width:4px;border:1px solid #cfc8e6;border-radius:4px;
+  background:#eeebf8;color:#594d80;overflow:hidden;cursor:pointer;transition:box-shadow .14s,border-color .14s,filter .14s}
+.timelineShot:nth-child(even){background:#e9eff5;border-color:#c8d5df;color:#4e6575}
+.timelineShot:hover{filter:brightness(.98);border-color:#9185bb}
+.timelineShot.selected{border:2px solid var(--accent);box-shadow:0 0 0 1px rgba(34,168,120,.18);z-index:3}
+.timelineShot.mapped::after{content:"";position:absolute;right:5px;top:5px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.timelineShot.hiddenMode{background:repeating-linear-gradient(135deg,#fbf0f2 0,#fbf0f2 6px,#f4e1e5 6px,#f4e1e5 10px);
+  border-color:#ddafb8;color:#9e5260}
+.timelineShot.dropTarget{border-color:var(--purple);box-shadow:0 0 0 2px rgba(118,87,214,.22);z-index:4}
+.timelineShotLabel{position:absolute;left:6px;right:16px;bottom:5px;font-family:var(--mono);font-size:8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.timelineShot.continuation .timelineShotLabel{font-size:7px;color:#7e758f}
+.timelinePlayhead{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);pointer-events:none;z-index:5}
+.timelinePlayhead::before{content:"";position:absolute;top:0;left:-3px;border-left:3px solid transparent;
+  border-right:3px solid transparent;border-top:5px solid var(--accent)}
+.inspectorHeader{flex:0 0 40px}
+.inspectorBody{min-height:0;overflow:auto;padding:12px}
+.selectionSummary{padding-bottom:12px;border-bottom:1px solid var(--line)}
+.selectionSummary strong{display:block;font-size:13px}
+.selectionSummary span{display:block;margin-top:4px;color:var(--muted);font-family:var(--mono);font-size:8px}
+.field{padding:13px 0;border-bottom:1px solid var(--line)}
+.fieldLabel{display:block;margin-bottom:8px;font-family:var(--mono);font-size:8px;color:var(--muted)}
+.segmented{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+.modeButton{height:30px;border:1px solid var(--line);border-radius:5px;background:#fff;font-family:var(--mono);font-size:8px}
+.modeButton:hover{border-color:#9fa8a4}
+.modeButton.active{border-color:var(--purple);background:var(--purple-soft);color:#59448e}
+.assignedList{display:flex;flex-direction:column;gap:6px}
+.assignedItem{height:42px;display:grid;grid-template-columns:54px 1fr 24px;align-items:center;gap:7px;border:1px solid var(--line);
+  border-radius:5px;padding:4px;background:#fff}
+.assignedThumb{width:54px;height:32px;object-fit:cover;border-radius:3px;background:#e9ecea}
+.assignedMeta{min-width:0}
+.assignedMeta strong,.assignedMeta span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.assignedMeta strong{font-family:var(--mono);font-size:8px}
+.assignedMeta span{margin-top:3px;color:var(--muted);font-size:8px}
+.removeRef{width:22px;height:22px;border-radius:4px;color:var(--muted);font-size:15px;line-height:1}
+.removeRef:hover{background:#f4e7ea;color:var(--danger)}
+.emptyAssignment{height:52px;border:1px dashed var(--line-strong);display:grid;place-items:center;color:var(--muted);
+  border-radius:5px;font-family:var(--mono);font-size:8px}
+.inspectorFooter{margin-top:auto;padding:10px 12px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.footerButton{height:30px;border:1px solid var(--line-strong);background:#fff;border-radius:5px;font-family:var(--mono);font-size:8px}
+.footerButton.apply{border-color:var(--accent);background:var(--accent);color:#fff}
+.toast{position:fixed;left:50%;bottom:18px;z-index:20;transform:translate(-50%,12px);opacity:0;pointer-events:none;
+  padding:8px 11px;border-radius:5px;background:#242a27;color:#fff;font-family:var(--mono);font-size:9px;
+  transition:opacity .18s,transform .18s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-height:780px){
+  .center{grid-template-rows:minmax(280px,1fr) 246px}
+  .leftRail{grid-template-rows:auto 154px minmax(0,1fr)}
+  .asset{height:66px}
+  .timelineBand{height:56px;flex-basis:56px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brandMark">RM</div>
+      <div class="brandText">
+        <strong>REFERENCE MAP</strong>
+        <span id="jobName">CURRENT JOB / NO XML</span>
+      </div>
+    </div>
+    <div class="projectStatus">
+      <span class="statusReady" id="xmlStatus">XML NEEDED</span>
+      <span id="fpsStatus">-- FPS</span>
+      <span id="editCountStatus">0 EDITS</span>
+      <span id="shotCountStatus">0 SHOTS</span>
+    </div>
+    <div class="topActions">
+      <button class="command inputDropZone" id="loadXml" type="button" aria-label="Load timeline XML. Click to choose or drop one .xml file." aria-busy="false" title="Click to choose or drop one .xml file">
+        <strong>XML</strong><span>CLICK · DROP</span>
+      </button>
+      <button class="command inputDropZone video" id="loadVideo" type="button" aria-label="Load source video. Click to choose or drop one MP4, MOV, or M4V file." aria-busy="false" title="Click to choose or drop one MP4, MOV, or M4V file">
+        <strong>VIDEO</strong><span>MP4 · MOV · M4V</span>
+      </button>
+      <button class="command" id="resetPreviewTop">RESET</button>
+      <button class="command editPanelToggle" id="editPanelButton">EDIT PANEL</button>
+      <button class="command" id="previewButton">OUTPUT</button>
+      <button class="command primary" id="exportButton">EXPORT H.264</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="leftRail">
+      <div class="railHeader">
+        <span class="sectionTitle">REFERENCES</span>
+        <span class="quietCount" id="assetCount">0 FILES</span>
+      </div>
+
+      <section class="globalSection">
+        <div class="globalDrop" id="globalDrop">
+          <div class="globalTop">
+            <strong>GLOBAL SET</strong>
+            <span class="globalMode">INHERITED</span>
+          </div>
+          <div class="globalRefs" id="globalRefs"></div>
+        </div>
+      </section>
+
+      <section class="library">
+        <div class="libraryTools">
+          <button class="filter active" data-filter="all">ALL</button>
+          <button class="filter" data-filter="image">IMAGE</button>
+          <button class="filter" data-filter="video">VIDEO</button>
+        </div>
+        <div class="assetGrid" id="assetGrid"></div>
+      </section>
+    </aside>
+
+    <section class="center">
+      <div class="previewArea" id="previewArea">
+        <div class="previewShell" id="previewShell">
+          <iframe id="renderPreview" src="output-preview.html?scale=1" title="Output preview"></iframe>
+          <button class="editPanelHandle" id="editPanelHandle" type="button" aria-label="Close edit panel" aria-expanded="true">›</button>
+          <div class="referenceHoverPreview" id="referenceHoverPreview" aria-hidden="true">
+            <div class="referenceHoverMedia" id="referenceHoverMedia"></div>
+            <span class="referenceHoverLabel" id="referenceHoverLabel"></span>
+          </div>
+          <nav class="shotRail" id="shotRail">
+            <div class="shotRailHeader"><strong>SHOTS</strong><span id="selectedCount">0 / 0</span></div>
+            <div class="shotRailList" id="shotRailList"></div>
+          </nav>
+          <aside class="editOverlay" id="editOverlay">
+            <div class="overlayHeader">
+              <div class="overlayTitleEditor">
+                <label for="overlayProjectTitle">PROJECT TITLE</label>
+                <input id="overlayProjectTitle" type="text" maxlength="40" autocomplete="off" spellcheck="false" value="UNTITLED PROJECT">
+              </div>
+              <button class="overlayClose" id="overlayClose" title="Close edit panel">×</button>
+            </div>
+            <div class="overlayBody">
+              <details class="calloutSettings" id="calloutSettings">
+                <summary><span>TITLE CALLOUT</span><span class="calloutSettingsState" id="calloutSettingsState">ON · LINE</span></summary>
+                <div class="calloutSettingsBody">
+                  <label class="calloutEnabled"><span>ENABLED</span><input id="calloutEnabled" type="checkbox" checked></label>
+                  <label class="calloutField"><span>POSITION</span><select id="calloutPosition"><option value="left">LEFT</option><option value="right">RIGHT</option></select></label>
+                  <label class="calloutField"><span>STYLE</span><select id="calloutStyle"><option value="line">LINE</option><option value="label">LABEL</option><option value="minimal">MINIMAL</option></select></label>
+                  <label class="calloutField"><span>START · SEC</span><input id="calloutStart" type="number" min="0" max="60" step="0.1" value="0.1"></label>
+                  <label class="calloutField"><span>DURATION · SEC</span><input id="calloutDuration" type="number" min="0.5" max="30" step="0.1" value="3.5"></label>
+                  <label class="calloutField wide"><span>SUBTITLE</span><input id="calloutSubtitle" type="text" maxlength="60" value="REFERENCE MAP · EDIT WORKFLOW"></label>
+                </div>
+              </details>
+              <section class="scopeBlock globalScope">
+                <div class="scopeHeading"><strong>GLOBAL BASE</strong><span>0 FILES · ALL SHOTS</span></div>
+                <div class="overlayGlobal" id="overlayGlobalDrop"></div>
+              </section>
+              <section class="scopeBlock shotScope">
+                <div class="scopeHeading">
+                  <strong id="overlaySelectionTitle">NO SHOT</strong>
+                  <span id="overlaySelectionMeta">0 EDITS</span>
+                </div>
+                <span class="scopeState REPLACE" id="overlayScopeState">GLOBAL OVERRIDDEN</span>
+                <div class="overlayModes">
+                  <button class="modeButton" data-mode="ADD">ADD</button>
+                  <button class="modeButton active" data-mode="REPLACE">REPLACE</button>
+                  <button class="modeButton" data-mode="HIDE">HIDE</button>
+                </div>
+                <label class="leadInToggle"><span>LEAD-IN 1S</span><input id="overlayLeadIn" type="checkbox"></label>
+                <div class="overlayLabel"><span>SHOT REFERENCES</span><span>DROP TO SHOT</span></div>
+                <div class="overlayAssigned" id="overlayAssignedList"></div>
+              </section>
+              <section class="libraryScope" id="referenceLibraryDrop" title="Drop image or video files here">
+                <div class="scopeHeading"><strong>REFERENCE FILES</strong><span id="overlayAssetCount">0 FILES</span></div>
+                <div class="overlayAssets" id="overlayAssetGrid"></div>
+              </section>
+            </div>
+            <div class="overlayFooter">
+              <button class="footerButton" id="overlayResetShot">USE DEFAULT</button>
+              <button class="footerButton apply" id="overlayApplySelected">APPLY ASSET</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <aside class="inspector">
+      <div class="inspectorHeader">
+        <span class="sectionTitle">SHOT SETTINGS</span>
+        <span class="quietCount">BULK</span>
+      </div>
+      <div class="inspectorBody">
+        <div class="selectionSummary">
+          <strong id="selectionTitle">NO SHOT</strong>
+          <span id="selectionMeta">0 EDITS</span>
+        </div>
+
+        <div class="field">
+          <span class="fieldLabel">REFERENCE MODE</span>
+          <div class="segmented" id="modeControls">
+            <button class="modeButton" data-mode="INHERIT">INHERIT</button>
+            <button class="modeButton" data-mode="ADD">ADD</button>
+            <button class="modeButton active" data-mode="REPLACE">REPLACE</button>
+            <button class="modeButton" data-mode="HIDE">HIDE</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="fieldLabel">ASSIGNED REFERENCES</span>
+          <div class="assignedList" id="assignedList"></div>
+        </div>
+
+        <div class="field">
+          <span class="fieldLabel">SOURCE MATCH</span>
+          <div class="assignedMeta">
+            <strong id="sourceMatch">NO SOURCE</strong>
+            <span>XML source ID + in/out fingerprint</span>
+          </div>
+        </div>
+      </div>
+      <div class="inspectorFooter">
+        <button class="footerButton" id="resetShot">RESET</button>
+        <button class="footerButton apply" id="applySelected">APPLY ASSET</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<input id="fileInput" type="file" accept="image/*,video/*" multiple hidden>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">UPDATED</div>
+
+<script src="./core/reference-mapping.js"></script>
+<script>
+"use strict";
+const assets=new Map();
+const shots=[];
+const selectedShots=new Set();
+let selectedAsset=null;
+let globalReferenceIds=[];
+let RENDER_SPEC={width:1280,height:1080,fps:60,bitrateMbps:12};
+let toastTimer=0;
+let hoverPreviewOwner=null;
+
+const $=id=>document.getElementById(id);
+function shotLabel(id){return "SHOT "+String(id).padStart(2,"0")}
+function showToast(message){
+  $("toast").textContent=message;
+  $("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>$("toast").classList.remove("show"),1300);
+}
+function setAssetSelection(id){
+  if(!assets.has(id)) return;
+  selectedAsset=id;
+  document.querySelectorAll(".asset").forEach(el=>el.classList.toggle("selected",el.dataset.id===id));
+}
+function releaseMediaElements(root){
+  root?.querySelectorAll("video,img").forEach(media=>{
+    if(media.tagName==="VIDEO")media.pause();
+    media.removeAttribute("src");
+    if(media.tagName==="VIDEO")media.load();
+  });
+}
+function hideReferencePreview(owner=null){
+  if(owner&&hoverPreviewOwner!==owner)return;
+  hoverPreviewOwner=null;
+  const preview=$("referenceHoverPreview");
+  preview.classList.remove("visible");
+  preview.setAttribute("aria-hidden","true");
+  releaseMediaElements($("referenceHoverMedia"));
+  $("referenceHoverMedia").replaceChildren();
+}
+function showReferencePreview(owner,id){
+  const asset=assets.get(id);if(!asset)return;
+  hoverPreviewOwner=owner;
+  const preview=$("referenceHoverPreview");
+  const mediaRoot=$("referenceHoverMedia");
+  mediaRoot.replaceChildren();
+  const media=document.createElement(asset.type==="video"?"video":"img");
+  media.src=asset.src;
+  if(asset.type==="video"){
+    media.muted=true;media.loop=true;media.autoplay=true;media.playsInline=true;media.preload="metadata";
+    media.play().catch(()=>{});
+  }
+  mediaRoot.appendChild(media);
+  $("referenceHoverLabel").textContent=asset.label;
+  const shell=$("previewShell");
+  const shellRect=shell.getBoundingClientRect();
+  const ownerRect=owner.getBoundingClientRect();
+  const railLeft=$("shotRail").offsetLeft||shell.clientWidth;
+  const left=Math.max(10,railLeft-preview.offsetWidth-10);
+  const maxTop=Math.max(10,shell.clientHeight-preview.offsetHeight-10);
+  const top=Math.max(10,Math.min(maxTop,ownerRect.top-shellRect.top));
+  preview.style.left=left+"px";
+  preview.style.top=top+"px";
+  preview.classList.add("visible");
+  preview.setAttribute("aria-hidden","false");
+}
+function wireReferenceHover(element,id){
+  element.dataset.referenceId=id;
+  element.addEventListener("pointerenter",()=>showReferencePreview(element,id));
+  element.addEventListener("pointerleave",()=>hideReferencePreview(element));
+}
+function removeLocalReference(id){
+  assets.delete(id);
+  globalReferenceIds=globalReferenceIds.filter(referenceId=>referenceId!==id);
+  shots.forEach(shot=>{
+    shot.refs=shot.refs.filter(referenceId=>referenceId!==id);
+    if(!shot.refs.length&&(shot.mode==="ADD"||shot.mode==="REPLACE"))shot.mode="INHERIT";
+  });
+  replaceAssets([...assets.values()],globalReferenceIds);
+  refreshSelection();
+  showToast("REFERENCE DELETED");
+}
+function requestReferenceDelete(id){
+  const asset=assets.get(id);if(!asset)return;
+  hideReferencePreview();
+  const confirmed=window.confirm(asset.label+" 파일을 삭제할까요?\nGLOBAL과 모든 SHOT 연결에서도 제거됩니다.");
+  if(!confirmed)return;
+  if(window.portableMvp?.deleteReference)window.portableMvp.deleteReference(id);
+  else removeLocalReference(id);
+}
+function createAssetButton(asset){
+  const button=document.createElement("div");
+  button.className="asset";button.draggable=true;button.tabIndex=0;button.setAttribute("role","button");
+  button.dataset.id=asset.id;button.dataset.type=asset.type;button.dataset.label=asset.label;
+  const media=document.createElement(asset.type==="video"?"video":"img");
+  media.src=asset.src;media.draggable=false;if(asset.type==="video"){media.muted=true;media.preload="metadata"}
+  const name=document.createElement("span");name.className="assetName";name.textContent=asset.label;
+  const badge=document.createElement("span");badge.className="assetType";badge.textContent=asset.type==="video"?"VID":"IMG";
+  const remove=document.createElement("button");remove.className="assetDelete";remove.type="button";remove.textContent="×";
+  remove.title="Delete reference file";remove.setAttribute("aria-label","Delete "+asset.label);
+  remove.addEventListener("click",event=>{event.stopPropagation();requestReferenceDelete(asset.id)});
+  button.append(media,name,badge,remove);wireAsset(button);return button;
+}
+function renderGlobalReferences(){
+  [$('globalRefs'),$('overlayGlobalDrop')].forEach(root=>{
+    releaseMediaElements(root);
+    root.replaceChildren();
+    const labelCounts={image:0,video:0};
+    globalReferenceIds.forEach(id=>{
+      const asset=assets.get(id);if(!asset)return;
+      const card=document.createElement("div");card.className="globalRef";card.dataset.id=id;
+      const media=document.createElement(asset.type==="video"?"video":"img");media.src=asset.src;if(asset.type==="video")media.muted=true;
+      const label=document.createElement("span");
+      labelCounts[asset.type]=(labelCounts[asset.type]||0)+1;
+      label.textContent=asset.type.toUpperCase()+" "+String(labelCounts[asset.type]).padStart(2,"0");
+      const remove=document.createElement("button");remove.className="globalRemove";remove.type="button";remove.title="Remove from Global Base";
+      remove.setAttribute("aria-label","Remove "+asset.label+" from Global Base");remove.textContent="×";
+      remove.addEventListener("click",event=>{event.stopPropagation();removeGlobalReference(id)});
+      card.append(media,label,remove);wireReferenceHover(card,id);root.appendChild(card);
+    });
+  });
+  const heading=document.querySelector(".globalScope .scopeHeading span");
+  if(heading) heading.textContent=globalReferenceIds.length+" FILES · ALL SHOTS";
+}
+function normalizeAssetLabels(nextAssets){
+  const counts={image:0,video:0};
+  return nextAssets.map(asset=>{
+    const type=asset.type==="video"?"video":"image";
+    counts[type]=(counts[type]||0)+1;
+    return {...asset,type,label:type.toUpperCase()+" "+String(counts[type]).padStart(2,"0")};
+  });
+}
+function replaceAssets(nextAssets,nextGlobalIds=[]){
+  hideReferencePreview();
+  [$("assetGrid"),$("overlayAssetGrid"),$("globalRefs"),$("overlayGlobalDrop"),$("assignedList"),$("overlayAssignedList")]
+    .forEach(releaseMediaElements);
+  assets.clear();
+  normalizeAssetLabels(nextAssets).forEach(asset=>assets.set(asset.id,{...asset,src:asset.url||asset.src}));
+  globalReferenceIds=nextGlobalIds.filter(id=>assets.has(id));
+  [$('assetGrid'),$('overlayAssetGrid')].forEach(root=>{
+    root.replaceChildren();
+    assets.forEach(asset=>root.appendChild(createAssetButton(asset)));
+  });
+  selectedAsset=assets.keys().next().value||null;
+  if(selectedAsset)setAssetSelection(selectedAsset);
+  $('assetCount').textContent=assets.size+" FILES";
+  $('overlayAssetCount').textContent=assets.size+" FILES";
+  renderGlobalReferences();
+  renderAssigned();
+}
+function replaceShots(nextShots,mappings={},emitChange=true){
+  shots.splice(0,shots.length,...window.PortableReferenceMapping.hydrateShots(nextShots,mappings));
+  selectedShots.clear();
+  if(shots[0])selectedShots.add(shots[0].id);
+  refreshSelection(emitChange);
+}
+function applyShotMappings(mappings={}){
+  shots.splice(0,shots.length,...window.PortableReferenceMapping.hydrateShots(shots,mappings));
+  refreshSelection(false);
+}
+function addGlobalReference(id){
+  if(!assets.has(id)||globalReferenceIds.includes(id))return;
+  globalReferenceIds.push(id);renderGlobalReferences();refreshSelection();showToast("ADDED TO GLOBAL SET");
+}
+function removeGlobalReference(id){
+  if(!globalReferenceIds.includes(id))return;
+  globalReferenceIds=globalReferenceIds.filter(referenceId=>referenceId!==id);
+  renderGlobalReferences();refreshSelection();showToast("REMOVED FROM GLOBAL SET");
+}
+function wireframeSnapshot(){
+  const mappingState=window.PortableReferenceMapping.snapshotMappings(shots,globalReferenceIds);
+  return {...mappingState,shots:shots.map(shot=>({...shot,refs:[...shot.refs]}))};
+}
+function seekPreview(shot){
+  try{
+    const win=$("renderPreview").contentWindow;
+    const fps=win.DATA?.fps||24;
+    if(win.portablePreview?.seekFrame) win.portablePreview.seekFrame(shot.start*fps);
+    else if(typeof win.setPlayhead==="function"&&win.DATA) win.setPlayhead(shot.start*fps);
+  }catch(error){}
+}
+function renderShotRail(){
+  const root=$("shotRailList");
+  root.replaceChildren();
+  shots.forEach(shot=>{
+    const item=document.createElement("button");
+    item.className="shotRailItem"+(selectedShots.has(shot.id)?" selected":"");
+    item.dataset.shot=shot.id;
+    item.title=shotLabel(shot.id)+" · "+shot.range+" · "+shot.mode;
+    item.innerHTML=`<strong>${shotLabel(shot.id)}</strong><span>${shot.edits} EDITS</span><i class="shotRailStatus ${shot.mode}"></i>`;
+    item.addEventListener("click",event=>{
+      if(event.ctrlKey||event.metaKey) toggleShot(shot.id,!selectedShots.has(shot.id));
+      else selectOnlyShot(shot.id);
+      seekPreview(shot);
+    });
+    item.addEventListener("dragover",event=>{
+      if(!event.dataTransfer.types.includes("text/reference-id"))return;
+      event.preventDefault();event.dataTransfer.dropEffect="copy";item.classList.add("dropTarget");
+    });
+    item.addEventListener("dragleave",()=>item.classList.remove("dropTarget"));
+    item.addEventListener("drop",event=>{
+      const referenceId=event.dataTransfer.getData("text/reference-id");
+      if(!referenceId)return;
+      event.preventDefault();event.stopPropagation();item.classList.remove("dropTarget");
+      assignReference([shot.id],referenceId);
+    });
+    root.appendChild(item);
+  });
+  requestAnimationFrame(()=>root.querySelector(".shotRailItem.selected")?.scrollIntoView({block:"nearest"}));
+}
+function toggleShot(id,on){
+  if(on) selectedShots.add(id); else selectedShots.delete(id);
+  if(!selectedShots.size) selectedShots.add(id);
+  // RED ZONE: SHOT selection is navigation only; only mapping edits may trigger autosave.
+  refreshSelection(false);
+}
+function selectOnlyShot(id){
+  selectedShots.clear();selectedShots.add(id);refreshSelection(false);
+}
+function refreshSelection(emitChange=true){
+  renderShotRail();
+  const selected=shots.filter(shot=>selectedShots.has(shot.id));
+  $("selectedCount").textContent=selected.length===1
+    ? String(selected[0].id).padStart(2,"0")+" / "+String(shots.length).padStart(2,"0")
+    : selected.length+" SELECTED";
+  if(selected.length===1){
+    const shot=selected[0];
+    $("selectionTitle").textContent=shotLabel(shot.id);
+    $("selectionMeta").textContent=shot.edits+" EDITS · "+shot.range;
+    $("sourceMatch").textContent="source_"+String(shot.id).padStart(2,"0")+" · "+shot.edits+" occurrences";
+    $("overlaySelectionTitle").textContent=shotLabel(shot.id);
+    $("overlaySelectionMeta").textContent=shot.edits+" EDITS · "+shot.range;
+  }else{
+    $("selectionTitle").textContent=selected.length+" SHOTS SELECTED";
+    $("selectionMeta").textContent=selected.reduce((sum,shot)=>sum+shot.edits,0)+" EDITS · BULK ASSIGNMENT";
+    $("sourceMatch").textContent="Multiple source fingerprints";
+    $("overlaySelectionTitle").textContent=selected.length+" SHOTS SELECTED";
+    $("overlaySelectionMeta").textContent=selected.reduce((sum,shot)=>sum+shot.edits,0)+" EDITS · BULK";
+  }
+  const modes=new Set(selected.map(shot=>shot.mode));
+  document.querySelectorAll(".modeButton").forEach(button=>{
+    button.classList.toggle("active",modes.size===1&&modes.has(button.dataset.mode));
+  });
+  const scopeMode=modes.size===1?[...modes][0]:"MIXED";
+  const scopeLabels={INHERIT:"GLOBAL INHERITED",ADD:"GLOBAL + SHOT",REPLACE:"GLOBAL OVERRIDDEN",HIDE:"REFERENCES HIDDEN",MIXED:"MIXED SHOT MODES"};
+  $("overlayScopeState").className="scopeState "+scopeMode;
+  $("overlayScopeState").textContent=scopeLabels[scopeMode];
+  const leadInControl=$("overlayLeadIn");
+  const leadInCount=selected.filter(shot=>shot.leadInSeconds===1).length;
+  leadInControl.checked=selected.length>0&&leadInCount===selected.length;
+  leadInControl.indeterminate=leadInCount>0&&leadInCount<selected.length;
+  renderAssigned();
+  if(emitChange)window.dispatchEvent(new CustomEvent("wireframechange"));
+}
+function syncShotSelection(id){
+  if(selectedShots.size===1&&selectedShots.has(id))return;
+  if(!shots.some(shot=>shot.id===id))return;
+  selectedShots.clear();selectedShots.add(id);refreshSelection(false);
+}
+function renderAssigned(){
+  const selected=shots.filter(shot=>selectedShots.has(shot.id));
+  const common=selected.length?selected[0].refs.filter(id=>selected.every(shot=>shot.refs.includes(id))):[];
+  [$("assignedList"),$("overlayAssignedList")].filter(Boolean).forEach(root=>{
+    releaseMediaElements(root);
+    root.replaceChildren();
+    if(!common.length){
+      const empty=document.createElement("div");
+      empty.className="emptyAssignment";
+      empty.textContent=selected.some(shot=>shot.mode==="INHERIT")?"USING GLOBAL SET":"DROP REFERENCE HERE";
+      root.appendChild(empty);
+      return;
+    }
+    const labelCounts={image:0,video:0};
+    common.forEach(id=>{
+      const asset=assets.get(id);if(!asset)return;
+      labelCounts[asset.type]=(labelCounts[asset.type]||0)+1;
+      const displayLabel=asset.type.toUpperCase()+" "+String(labelCounts[asset.type]).padStart(2,"0");
+      const item=document.createElement("div");item.className="assignedItem";
+      const media=asset.type==="video"?document.createElement("video"):document.createElement("img");
+      media.className="assignedThumb";media.src=asset.src;if(asset.type==="video")media.muted=true;
+      const meta=document.createElement("div");meta.className="assignedMeta";
+      meta.innerHTML=`<strong>${displayLabel}</strong><span>${asset.type.toUpperCase()} REFERENCE</span>`;
+      const remove=document.createElement("button");remove.className="removeRef";remove.textContent="×";remove.title="Remove reference";
+      remove.addEventListener("click",()=>{selected.forEach(shot=>shot.refs=shot.refs.filter(ref=>ref!==id));refreshSelection();showToast("REFERENCE REMOVED")});
+      item.append(media,meta,remove);wireReferenceHover(item,id);root.appendChild(item);
+    });
+  });
+}
+function wireShotReferenceDropZone(root){
+  if(!root)return;
+  root.addEventListener("dragover",event=>{
+    if(!event.dataTransfer.types.includes("text/reference-id"))return;
+    event.preventDefault();event.dataTransfer.dropEffect="copy";root.classList.add("dragOver");
+  });
+  root.addEventListener("dragleave",event=>{
+    if(!event.relatedTarget||!root.contains(event.relatedTarget))root.classList.remove("dragOver");
+  });
+  root.addEventListener("drop",event=>{
+    const referenceId=event.dataTransfer.getData("text/reference-id");
+    if(!referenceId)return;
+    event.preventDefault();event.stopPropagation();root.classList.remove("dragOver");
+    assignReference([...selectedShots],referenceId);
+  });
+  root.addEventListener("dragend",()=>root.classList.remove("dragOver"));
+}
+[$("assignedList"),$("overlayAssignedList")].forEach(wireShotReferenceDropZone);
+function assignReference(shotIds,assetId){
+  if(!assets.has(assetId)) return;
+  shots.filter(shot=>shotIds.includes(shot.id)).forEach(shot=>{
+    if(!shot.refs.includes(assetId))shot.refs.push(assetId);
+    if(shot.mode==="INHERIT"||shot.mode==="HIDE")shot.mode="REPLACE";
+  });
+  refreshSelection();showToast("REFERENCE APPLIED TO "+shotIds.length+" SHOT"+(shotIds.length===1?"":"S"));
+}
+function setMode(mode){
+  shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{
+    shot.mode=mode;
+    if(mode==="INHERIT"||mode==="HIDE")shot.refs=[];
+  });
+  refreshSelection();showToast(mode+" APPLIED");
+}
+function setLeadIn(enabled){
+  shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.leadInSeconds=enabled?1:0});
+  refreshSelection();showToast(enabled?"LEAD-IN 1S ENABLED":"LEAD-IN DISABLED");
+}
+function setRenderSpec(value={}){
+  const width=Math.max(1,Math.round(Number(value.width)||1280));
+  const height=Math.max(1,Math.round(Number(value.height)||1080));
+  const fps=Math.max(1,Math.round(Number(value.fps)||60));
+  const bitrateMbps=Math.max(1,Number(value.bitrateMbps)||12);
+  RENDER_SPEC={width,height,fps,bitrateMbps};
+  const renderPreview=$("renderPreview");
+  renderPreview.style.width=width+"px";
+  renderPreview.style.height=height+"px";
+  fitPreview();
+  return {...RENDER_SPEC};
+}
+function fitPreview(){
+  const area=$("previewArea");
+  const maxWidth=Math.max(0,area.clientWidth-24);
+  const maxHeight=Math.max(0,area.clientHeight-24);
+  const scale=Math.min(maxWidth/RENDER_SPEC.width,maxHeight/RENDER_SPEC.height);
+  const shell=$("previewShell");
+  shell.style.width=Math.round(RENDER_SPEC.width*scale)+"px";
+  shell.style.height=Math.round(RENDER_SPEC.height*scale)+"px";
+  $("renderPreview").style.transform=`scale(${scale})`;
+}
+function addLocalFiles(fileList){
+  [...fileList].forEach(file=>{
+    const type=file.type.startsWith("video/")?"video":file.type.startsWith("image/")?"image":null;
+    if(!type)return;
+    const count=[...assets.values()].filter(asset=>asset.type===type).length+1;
+    const id=type+"-local-"+Date.now()+"-"+count;
+    const asset={id,type,label:type.toUpperCase()+" "+String(count).padStart(2,"0"),src:URL.createObjectURL(file)};
+    assets.set(id,asset);
+    $("overlayAssetGrid").appendChild(createAssetButton(asset));
+  });
+  $("assetCount").textContent=assets.size+" FILES";
+  $("overlayAssetCount").textContent=assets.size+" FILES";showToast("FILES ADDED");
+}
+function wireAsset(element){
+  if(element.dataset.assetWired)return;
+  element.dataset.assetWired="true";
+  element.addEventListener("click",()=>setAssetSelection(element.dataset.id));
+  element.addEventListener("keydown",event=>{
+    if(event.key!=="Enter"&&event.key!==" ")return;
+    event.preventDefault();setAssetSelection(element.dataset.id);
+  });
+  element.addEventListener("dragstart",event=>{
+    setAssetSelection(element.dataset.id);event.dataTransfer.clearData();
+    event.dataTransfer.setData("text/reference-id",element.dataset.id);event.dataTransfer.effectAllowed="copy";
+  });
+  wireReferenceHover(element,element.dataset.id);
+}
+document.querySelectorAll(".asset").forEach(wireAsset);
+document.querySelectorAll(".filter").forEach(button=>button.addEventListener("click",()=>{
+  document.querySelectorAll(".filter").forEach(item=>item.classList.toggle("active",item===button));
+  document.querySelectorAll(".asset").forEach(asset=>asset.hidden=button.dataset.filter!=="all"&&asset.dataset.type!==button.dataset.filter);
+}));
+document.querySelectorAll(".modeButton").forEach(button=>button.addEventListener("click",()=>setMode(button.dataset.mode)));
+$("overlayLeadIn").addEventListener("change",event=>setLeadIn(event.currentTarget.checked));
+function moveShotSelection(delta){
+  if(!shots.length)return;
+  const activeId=[...selectedShots][0]||shots[0].id;
+  const currentIndex=Math.max(0,shots.findIndex(shot=>shot.id===activeId));
+  const next=shots[Math.max(0,Math.min(shots.length-1,currentIndex+delta))];
+  selectOnlyShot(next.id);seekPreview(next);
+}
+function isShortcutControl(target){
+  return target instanceof HTMLElement&&(
+    target.isContentEditable||Boolean(target.closest("button,[role=button],input,textarea,select,a[href]"))
+  );
+}
+document.addEventListener("keydown",event=>{
+  const target=event.target;
+  if(isShortcutControl(target))return;
+  if(event.code==="Space"||event.key===" "){
+    event.preventDefault();event.stopPropagation();
+    try{$("renderPreview").contentWindow.portablePreview?.playPause()}catch(error){}
+    showToast("PLAYBACK TOGGLED");
+  }else if(["ArrowUp","ArrowLeft"].includes(event.key)){
+    event.preventDefault();moveShotSelection(-1);
+  }else if(["ArrowDown","ArrowRight"].includes(event.key)){
+    event.preventDefault();moveShotSelection(1);
+  }
+});
+document.addEventListener("keyup",event=>{
+  const target=event.target;
+  if(isShortcutControl(target))return;
+  if(event.code==="Space"||event.key===" "){
+    event.preventDefault();event.stopPropagation();
+  }
+},true);
+$("applySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
+$("resetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
+$("overlayApplySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
+$("overlayResetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
+$("loadXml").addEventListener("click",()=>window.portableMvp?.loadXml()||showToast("XML INPUT READY"));
+$("loadVideo").addEventListener("click",()=>window.portableMvp?.loadVideo()||showToast("VIDEO INPUT READY"));
+function setOverlayOpen(open){
+  $("editOverlay").classList.toggle("closed",!open);
+  $("shotRail").classList.toggle("closed",!open);
+  $("editPanelButton").classList.toggle("primary",open);
+  const handle=$("editPanelHandle");
+  handle.textContent=open?"›":"‹";
+  handle.setAttribute("aria-expanded",String(open));
+  handle.setAttribute("aria-label",open?"Close edit panel":"Open edit panel");
+}
+$("editPanelButton").addEventListener("click",()=>setOverlayOpen($("editOverlay").classList.contains("closed")));
+$("editPanelHandle").addEventListener("click",event=>{
+  event.stopPropagation();
+  setOverlayOpen($("editOverlay").classList.contains("closed"));
+});
+$("previewShell").addEventListener("pointerdown",event=>{
+  if($("editOverlay").classList.contains("closed"))return;
+  if(event.target.closest("#editOverlay,#shotRail,#editPanelHandle"))return;
+  setOverlayOpen(false);
+});
+$("overlayClose").addEventListener("click",()=>setOverlayOpen(false));
+$("previewButton").addEventListener("click",async()=>{
+  const error=await window.portableApi?.openOutput?.();
+  showToast(error?"OUTPUT FOLDER ERROR":"OUTPUT FOLDER OPENED");
+});
+$("exportButton").addEventListener("click",()=>window.portableMvp?.exportVideo());
+$("resetPreviewTop").addEventListener("click",()=>{
+  try{$("renderPreview").contentWindow.portablePreview?.reset()}catch(error){}
+  showToast("RETURNED TO 00:00");
+});
+$("fileInput").addEventListener("change",event=>addLocalFiles(event.target.files));
+const globalDrop=$("globalDrop");
+globalDrop.addEventListener("dragover",event=>{
+  if(!event.dataTransfer.types.includes("text/reference-id"))return;
+  event.preventDefault();event.dataTransfer.dropEffect="copy";globalDrop.classList.add("dragOver");
+});
+globalDrop.addEventListener("dragleave",()=>globalDrop.classList.remove("dragOver"));
+globalDrop.addEventListener("drop",event=>{
+  const referenceId=event.dataTransfer.getData("text/reference-id");
+  if(!referenceId)return;
+  event.preventDefault();event.stopPropagation();globalDrop.classList.remove("dragOver");
+  addGlobalReference(referenceId);
+});
+const overlayGlobalDrop=$("overlayGlobalDrop");
+overlayGlobalDrop.addEventListener("dragover",event=>{
+  if(!event.dataTransfer.types.includes("text/reference-id"))return;
+  event.preventDefault();event.dataTransfer.dropEffect="copy";overlayGlobalDrop.classList.add("dragOver");
+});
+overlayGlobalDrop.addEventListener("dragleave",event=>{
+  if(!event.relatedTarget||!overlayGlobalDrop.contains(event.relatedTarget))overlayGlobalDrop.classList.remove("dragOver");
+});
+overlayGlobalDrop.addEventListener("drop",event=>{
+  const referenceId=event.dataTransfer.getData("text/reference-id");
+  if(!referenceId)return;
+  event.preventDefault();overlayGlobalDrop.classList.remove("dragOver");addGlobalReference(referenceId);
+});
+function isExternalFileDrop(event){
+  const types=event.dataTransfer?.types;
+  return Boolean(types?.includes("Files")&&!types.includes("text/reference-id"));
+}
+const inputDropZones=new Set();
+const inputDropTimers=new WeakMap();
+function clearInputDropState(root){
+  if(!root)return;
+  clearTimeout(inputDropTimers.get(root));inputDropTimers.delete(root);
+  root.classList.remove("dragOver","dropInvalid");
+  if(!root.disabled)root.classList.remove("importing");
+  root.setAttribute("aria-busy",String(Boolean(root.disabled)));
+}
+function setInputDropState(root,state,holdMs=0){
+  clearInputDropState(root);
+  if(!state)return;
+  root.classList.add(state);
+  root.setAttribute("aria-busy",String(state==="importing"));
+  if(holdMs>0)inputDropTimers.set(root,setTimeout(()=>clearInputDropState(root),holdMs));
+}
+function clearAllInputDropStates(){ inputDropZones.forEach(clearInputDropState); }
+function wireInputDropZone(root,dropHandler){
+  if(!root)return;
+  inputDropZones.add(root);
+  let dragDepth=0;
+  root.addEventListener("dragenter",event=>{
+    if(!isExternalFileDrop(event))return;
+    event.preventDefault();
+    if(root.disabled||root.classList.contains("importing")){event.dataTransfer.dropEffect="none";return}
+    dragDepth+=1;setInputDropState(root,"dragOver");
+  });
+  root.addEventListener("dragover",event=>{
+    if(!isExternalFileDrop(event))return;
+    event.preventDefault();
+    if(root.disabled||root.classList.contains("importing")){event.dataTransfer.dropEffect="none";return}
+    event.dataTransfer.dropEffect="copy";
+    if(!root.classList.contains("dragOver"))setInputDropState(root,"dragOver");
+  });
+  root.addEventListener("dragleave",event=>{
+    if(!root.classList.contains("dragOver"))return;
+    dragDepth=Math.max(0,dragDepth-1);
+    if(dragDepth===0||!event.relatedTarget||!root.contains(event.relatedTarget))clearInputDropState(root);
+  });
+  root.addEventListener("drop",async event=>{
+    if(!isExternalFileDrop(event))return;
+    event.preventDefault();event.stopPropagation();dragDepth=0;
+    if(root.disabled||root.classList.contains("importing")){event.dataTransfer.dropEffect="none";return}
+    const files=event.dataTransfer.files;
+    setInputDropState(root,"importing");
+    try{
+      const result=await dropHandler(files);
+      if(result===false)throw new Error("Input drop rejected");
+    }catch(error){
+      setInputDropState(root,"dropInvalid",900);
+      showToast("DROP FAILED · CHECK APP LOG");
+      return;
+    }finally{
+      root.classList.remove("dragOver","importing");
+      root.setAttribute("aria-busy","false");
+    }
+  });
+  root.addEventListener("dragend",()=>{dragDepth=0;clearInputDropState(root)});
+}
+wireInputDropZone($("loadXml"),files=>{
+  const handler=window.portableMvp?.loadDroppedXml;
+  if(typeof handler!=="function")throw new Error("XML drop handler unavailable");
+  return handler(files);
+});
+wireInputDropZone($("loadVideo"),files=>{
+  const handler=window.portableMvp?.loadDroppedVideo;
+  if(typeof handler!=="function")throw new Error("Video drop handler unavailable");
+  return handler(files);
+});
+function wireReferenceDropZone(root){
+  if(!root)return;
+  root.addEventListener("dragover",event=>{
+    if(!isExternalFileDrop(event)){root.classList.remove("dragOver");return}
+    event.preventDefault();event.dataTransfer.dropEffect="copy";root.classList.add("dragOver");
+  });
+  root.addEventListener("dragleave",event=>{
+    if(!event.relatedTarget||!root.contains(event.relatedTarget))root.classList.remove("dragOver");
+  });
+  root.addEventListener("drop",event=>{
+    if(!isExternalFileDrop(event)||!event.dataTransfer.files.length)return;
+    event.preventDefault();event.stopPropagation();root.classList.remove("dragOver");
+    window.portableMvp?.addDroppedReferences(event.dataTransfer.files)||addLocalFiles(event.dataTransfer.files);
+  });
+  root.addEventListener("dragend",()=>root.classList.remove("dragOver"));
+}
+wireReferenceDropZone($("referenceLibraryDrop"));
+window.addEventListener("dragover",event=>{if(isExternalFileDrop(event))event.preventDefault()});
+window.addEventListener("drop",event=>{
+  if(!isExternalFileDrop(event))return;
+  event.preventDefault();clearAllInputDropStates();
+});
+window.addEventListener("dragend",clearAllInputDropStates);
+window.addEventListener("blur",clearAllInputDropStates);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)clearAllInputDropStates()});
+document.querySelectorAll(".overlayTab").forEach(tab=>tab.addEventListener("click",()=>{
+  document.querySelectorAll(".overlayTab").forEach(item=>item.classList.toggle("active",item===tab));
+  document.querySelectorAll(".overlayPane").forEach(pane=>pane.classList.toggle("active",pane.dataset.paneContent===tab.dataset.pane));
+}));
+setAssetSelection(selectedAsset);
+refreshSelection();
+new ResizeObserver(fitPreview).observe($("previewArea"));
+fitPreview();
+window.wireframeApi={
+  setRenderSpec,
+  replaceAssets,
+  replaceShots,
+  applyShotMappings,
+  snapshot:wireframeSnapshot,
+  refreshSelection,
+  seekPreview,
+  syncShotSelection,
+  showToast,
+  setOverlayOpen,
+};
+</script>
+<script src="mvp-app.js"></script>
+</body>
+</html>

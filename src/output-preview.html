@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>1280 Primary Timeline Template - 24fps Video + 60fps UI</title>
+<!-- Classic output surface. The Electron shell owns Job import, persistence, editing, and Export. -->
+<link rel="stylesheet" href="./layouts/classic/tokens.css">
+<link rel="stylesheet" href="./layouts/classic/classic.css">
+</head>
+<body>
+<div id="fitWrap">
+  <div id="stage" class="mode-full">
+    <div id="videoZone">
+      <video id="mainVideo" playsinline></video>
+      <video id="thumbnailVideo" muted preload="metadata" playsinline aria-hidden="true"></video>
+      <div id="videoHint">완성본 영상 파일(mp4)을 여기에 드래그&드랍</div>
+      <div id="videoCallout" data-position="left" data-style="line" aria-hidden="true">
+        <span class="videoCalloutRule"></span>
+        <span class="videoCalloutCopy">
+          <span class="videoCalloutEyebrow">EDIT WORKFLOW</span>
+          <strong id="videoCalloutTitle">UNTITLED PROJECT</strong>
+          <span class="videoCalloutMeta" id="videoCalloutSubtitle">REFERENCE MAP · EDIT WORKFLOW</span>
+        </span>
+      </div>
+    </div>
+    <div id="panel">
+      <div id="workspace">
+        <section id="referenceCard" aria-label="Reference slot">
+          <div class="referenceCardCopy">
+            <strong id="referenceCardLabel">SHOT REFERENCES</strong>
+          </div>
+          <div id="referenceDock"></div>
+        </section>
+        <section id="timelineSection" class="section">
+          <div class="timelineHeader">
+            <span id="tcMain">00:00:00:00</span>
+            <span id="projectTitle">UNTITLED PROJECT</span>
+            <div id="timelineInfo">
+              <span id="editStatus">EDIT 01 / 01 · 24 FPS</span>
+              <span id="pageStatus">PAGE 01 / 01</span>
+              <span id="thumbnailStatus">THUMBS WAITING</span>
+              <span id="sequenceMeta">NO XML</span>
+            </div>
+          </div>
+          <div id="timelineViewport">
+            <div id="timeRuler"></div>
+            <div id="trackRows"></div>
+            <div id="timelinePlayhead"></div>
+          </div>
+          <div id="overviewTimeline" aria-label="Full sequence overview">
+            <div id="overviewLane">
+              <div id="overviewFrames"></div>
+              <div id="overviewCuts"></div>
+              <div id="overviewWindow"></div>
+              <div id="overviewPlayhead"></div>
+            </div>
+          </div>
+        </section>
+
+        <svg id="referenceConnectors" aria-hidden="true"></svg>
+        <svg id="selectionConnector" aria-hidden="true"></svg>
+      </div>
+    </div>
+    <div id="slate"><div id="slateNum">3</div><div id="slateLbl">SYNC&nbsp;SLATE</div></div>
+    <div id="flash"><span>SYNC</span></div>
+    <div id="dropHint">여기에 XML 또는 영상 파일을 놓으세요</div>
+    <div id="debug"></div>
+    <div id="help">
+      <h1>Classic Output Preview</h1>
+      <h2>Electron 앱 흐름</h2>
+      <p>앱 바깥 화면의 <code>LOAD XML</code> 드롭존에서 legacy xmeml을 불러오고,
+      기존 작업을 유지할 때는 <code>UPDATE XML</code>, 새로 시작할 때만 <code>NEW JOB</code>을 선택한다.
+      이어 <code>LOAD VIDEO</code>에 같은 시퀀스의 완성본 영상을 불러온다.</p>
+      <p>레퍼런스와 SHOT 매핑은 <code>EDIT PANEL</code>에서 설정하고, 결과 파일은 <code>OUTPUT</code>에서 H.264로 내보낸다.</p>
+      <h2>단축키</h2>
+      <p class="keys">Space 재생/일시정지 · R 리셋 · D 디버그 · H 도움말</p>
+      <h2>영상과 XML의 역할</h2>
+      <p>완성본 영상 시간이 타임라인의 기준 시계가 된다.
+      XML 길이와 영상 길이가 1프레임 이상 다르면 영상 왼쪽 위에 <code>DURATION Δ</code>가 표시된다.
+      XML은 컷 구조를 제공하며 Premiere의 effect, mask, 좌우반전, dissolve 화면은 재현하지 않는다.</p>
+       <h2>Focus Timeline</h2>
+       <p>상세 타임라인은 기본 7초 단위로 전환되고, 하단 <code>FULL</code> 바는 전체 영상 위치를 계속 표시한다.
+       XML에서 비활성화한 클립은 PRIMARY 계산에서 제외된다.</p>
+       <h2>Mixed FPS Preview</h2>
+       <p>영상은 XML의 원본 프레임 속도로 재생하고, UI는 <code>CONFIG.uiFps</code> 기준으로 갱신한다.
+       둘은 프레임 번호가 아니라 동일한 재생 시간으로 연결되므로 영상·UI·오디오 길이는 변하지 않는다.</p>
+      <h2>개발자용 단독 열기</h2>
+      <p>이 HTML을 브라우저에서 직접 여는 방식은 비영구 개발 미리보기일 뿐이다.
+      Job 저장, 안전한 XML 교체와 공식 Export에는 Electron 앱을 사용한다.</p>
+      <p style="margin-top:24px;color:#aaa">아무 곳이나 클릭하거나 H를 누르면 닫힘</p>
+    </div>
+  </div>
+</div>
+
+<script src="./core/xmeml-parser.js"></script>
+<script src="./core/primary-timeline.js"></script>
+<script src="./core/shot-model.js"></script>
+<script src="./core/reference-mapping.js"></script>
+<script>
+"use strict";
+/* ============ CONFIG (사용자 수정 영역) ============ */
+const CONFIG = {
+  accent: "#31b88a",
+  panelHeight: 360,
+  uiFps: 60,           // 최종 합성본과 UI 미리보기의 프레임 속도
+  projectTitle: "SYNTHETIC TIMELINE",
+  sourceVideo: "",
+  showTimecode: true,  // 우측 타임코드 표시
+  slateSeconds: 0,     // MVP에서는 슬레이트와 SYNC 플래시를 숨김
+  timelinePaging: {
+    pageSeconds: 7.5,  // 15초 생성 영상을 정확히 두 페이지로 나누는 상세 타임라인 길이
+  },
+  // startEdit/endEdit 또는 startSeconds/endSeconds로 가변 레퍼런스 구간을 지정한다.
+  // end를 생략하면 다음 가변 그룹이 시작할 때 교체되고, 마지막 그룹은 끝까지 유지된다.
+  referenceTimeline: [],
+  // 구간만 사용: null = 전체. 예) { in:"00:00:05:00", out:"00:00:15:00" } 또는 { in:5, out:15 }
+  range: null,
+  useWorkArea: false,  // true면 XML의 프리미어 작업 영역을 구간으로 사용 (range가 우선)
+  references: {
+    images: [],
+    video: { label: "VIDEO REF", src: "", duration: "00:08" },
+    prompt: "Synthetic Premiere fixture for timeline and reference-layout verification.",
+  },
+  // match는 XML 클립 이름의 일부와 일치시킨다. thumbnail이 비어 있으면 placeholder가 표시된다.
+};
+let CALLOUT_CONFIG={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"REFERENCE MAP · EDIT WORKFLOW"};
+let RENDER_SPEC={width:1280,height:1080,fps:60,bitrateMbps:12};
+
+/* ============ 공개 synthetic fallback ============ */
+const DEMO_DATA={fps:24,duration:288,name:"synthetic-timeline",clips:[{track:1,name:"clip-a.mp4",start:0,end:72,in:0,out:72,enabled:true,fileId:"file-a",sourceId:"file:file-a"},{track:1,name:"clip-b.mp4",start:72,end:144,in:0,out:72,enabled:true,fileId:"file-b",sourceId:"file:file-b"},{track:1,name:"clip-a.mp4",start:144,end:216,in:0,out:72,enabled:true,fileId:"file-a",sourceId:"file:file-a"},{track:1,name:"clip-c.mp4",start:216,end:288,in:0,out:72,enabled:true,fileId:"file-c",sourceId:"file:file-c"},{track:2,name:"overlay-d.mp4",start:48,end:120,in:0,out:72,enabled:true,fileId:"file-d",sourceId:"file:file-d"},{track:2,name:"disabled-e.mp4",start:168,end:192,in:0,out:24,enabled:false,fileId:"file-e",sourceId:"file:file-e"}],warns:[],workArea:null};
+
+/* ============ 상태 ============ */
+const $ = id => document.getElementById(id);
+const stage=$("stage"), panel=$("panel"), playheadEl=$("timelinePlayhead"),
+      mainVideo=$("mainVideo"), thumbnailVideo=$("thumbnailVideo");
+const params=new URLSearchParams(location.search);
+let DATA=null, SEGS=[], REF_ITEMS=[], warns=[], rangeInfo="full";
+let PORTABLE_REFERENCE_STATE=null;
+const REFERENCE_REVEAL_DELAY_SECONDS=.15;
+const REFERENCE_CROSSFADE_SECONDS=.35;
+let lastPortableVisibleIds=null;
+let immediatePortableIds=new Set();
+let lastPortableShotId=null;
+let lastPortableShotUsedLeadIn=false;
+const portableRunStartCache=new Map();
+let lastReferenceFrame=-1;
+let phase="idle";       // idle | slate | show | end
+let t0=0, tPause=0, rafId=0;
+let debugOn=false, fullMode=true;
+let syncClock="virtual", videoObjectUrl=null;
+let thumbnailGeneration=0, timelineFrame=0, timelinePage=-1, timelineRevealFrame=-1;
+let lastUiOutputFrame=-1, videoAnchorTime=0, videoAnchorWall=0;
+let lastVideoFrameWall=0, videoFrameCallbackId=0;
+let videoClockGeneration=0;
+let lastReportedShot=0;
+/* ============ 안정 코어 bridge ============ */
+const parseFCPXML=window.PortableXmeml.parseXmeml;
+const buildFocusSegments=window.PortablePrimaryTimeline.buildPrimarySegments;
+const inspectParsedXml=window.PortableShotModel.inspectTimeline;
+const resolveVisibleReferenceIds=window.PortableReferenceMapping.resolveVisibleReferenceIds;
+/* ============ 구간(range) 적용 : 잘라서 0프레임 기준으로 재정렬 ============ */
+function parseRangePoint(v,fps){
+  if(typeof v==="number") return Math.round(v*fps);
+  if(typeof v==="string"&&v.includes(":")){
+    const p=v.split(":").map(Number);
+    while(p.length<4) p.unshift(0); // ss:ff → 00:00:ss:ff
+    return ((p[0]*3600+p[1]*60+p[2])*fps)+p[3];
+  }
+  return null;
+}
+function applyRange(data){
+  let rIn=null,rOut=null;
+  if(CONFIG.range&&CONFIG.range.in!=null&&CONFIG.range.out!=null){
+    rIn=parseRangePoint(CONFIG.range.in,data.fps);
+    rOut=parseRangePoint(CONFIG.range.out,data.fps);
+    rangeInfo="config";
+  }else if(CONFIG.useWorkArea&&data.workArea){
+    rIn=data.workArea.in; rOut=data.workArea.out;
+    rangeInfo="workArea";
+  }
+  if(rIn==null||rOut==null){ rangeInfo="full"; return data; }
+  rIn=Math.max(0,rIn); rOut=Math.min(data.duration,rOut);
+  if(!(rOut>rIn)){ warns.push("range 무효 → 전체 사용"); rangeInfo="full"; return data; }
+  const clips=[];
+  data.clips.forEach(c=>{
+    const s=Math.max(c.start,rIn), e=Math.min(c.end,rOut);
+    if(e<=s) return; // 구간 밖 클립 제외
+    // 소스 in도 잘린 만큼 보정
+    const inOfs=s-c.start;
+     clips.push({...c,start:s-rIn,end:e-rIn,
+       in:c.in+inOfs,out:c.in+inOfs+(e-s)});
+  });
+  return {...data,duration:rOut-rIn,clips,
+    name:data.name+" ["+tc(rIn,data.fps)+"–"+tc(rOut,data.fps)+"]"};
+}
+
+/* ============ 유틸 ============ */
+function tc(frames,fps){
+  frames=Math.max(0,Math.round(frames));
+  const f=frames%fps, s=Math.floor(frames/fps)%60,
+        m=Math.floor(frames/fps/60)%60, h=Math.floor(frames/fps/3600);
+  const p=n=>String(n).padStart(2,"0");
+  return p(h)+":"+p(m)+":"+p(s)+":"+p(f);
+}
+function shortName(n){ return n.replace(/\.[a-z0-9]+$/i,""); }
+function escapeHtml(s){return s.replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));}
+function placeholder(label,symbol="+"){
+  return '<div class="mediaPlaceholder"><b>'+symbol+'</b><span>'+escapeHtml(label)+"</span></div>";
+}
+
+/* ============ CONFIG 기반 Reference ============ */
+function mountMedia(slot,item,type){
+  slot.replaceChildren();
+  const label=item&&item.label?item.label:(type==="video"?"VIDEO":"IMAGE");
+  if(!item||!item.src){ slot.innerHTML=placeholder(label,type==="video"?"▷":"+"); return; }
+  const media=document.createElement(type==="video"?"video":"img");
+  media.src=item.src;
+  if(type==="video"){ media.muted=true; media.loop=true; media.playsInline=true; }
+  media.onerror=()=>{ warns.push(type+" 로드 실패: "+item.src); slot.innerHTML=placeholder("NOT FOUND","!"); };
+  slot.appendChild(media);
+  const badge=document.createElement("span"); badge.className="slotBadge"; badge.textContent=label;
+  slot.appendChild(badge);
+}
+function renderReferences(){
+  const imageRoot=$("imageReferences"); imageRoot.replaceChildren();
+  const images=(CONFIG.references&&CONFIG.references.images)||[];
+  for(let i=0;i<3;i++){
+    const slot=document.createElement("div"); slot.className="referenceSlot";
+    imageRoot.appendChild(slot); mountMedia(slot,images[i]||{label:"IMAGE "+String(i+1).padStart(2,"0")},"image");
+  }
+  mountMedia($("videoReference"),(CONFIG.references&&CONFIG.references.video)||{},"video");
+  const promptBox=$("promptReference");
+  const prompt=(CONFIG.references&&CONFIG.references.prompt||"").trim();
+  promptBox.classList.toggle("empty",!prompt);
+  promptBox.textContent=prompt||"PROMPT PLACEHOLDER";
+}
+function referenceStartFrame(config){
+  const seconds=Number(config.startSeconds??config.triggerSeconds)||0;
+  const requestedFrame=Math.max(0,seconds*DATA.fps);
+  const editNumber=Number(config.startEdit??config.triggerEdit);
+  const editIndex=Number.isInteger(editNumber)&&editNumber>0?editNumber-1:-1;
+  const matched=editIndex>=0?SEGS[editIndex]:SEGS.find(segment=>segment.start>=requestedFrame);
+  return matched?matched.start:requestedFrame;
+}
+function referenceEndFrame(config,nextGroupFrame){
+  const editNumber=Number(config.endEdit);
+  if(Number.isInteger(editNumber)&&editNumber>0&&SEGS[editNumber-1]) return SEGS[editNumber-1].end;
+  if(config.endSeconds!=null) return Math.max(0,Number(config.endSeconds)||0)*DATA.fps;
+  return nextGroupFrame;
+}
+function renderReferenceCard(){
+  const root=$("referenceDock");
+  REF_ITEMS.forEach(releaseReferenceItemMedia);
+  root.replaceChildren();
+  lastPortableVisibleIds=null;
+  immediatePortableIds.clear();
+  lastPortableShotId=null;
+  lastPortableShotUsedLeadIn=false;
+  portableRunStartCache.clear();
+  lastReferenceFrame=-1;
+  $("referenceCardLabel").textContent="SHOT REFERENCES";
+  const portable=PORTABLE_REFERENCE_STATE?.references?.map((config,index)=>({
+    ...config,permanent:true,delaySeconds:REFERENCE_REVEAL_DELAY_SECONDS+index*.15,
+  }))||null;
+  const common=(portable||((CONFIG.references&&CONFIG.references.images)||[])).map((config,index)=>({
+    ...config,type:config.type||"image",permanent:true,delaySeconds:config.delaySeconds??(index+1)*.15,
+  }));
+  const dynamic=portable?[]:(CONFIG.referenceTimeline||[]).map(config=>({...config,permanent:false}));
+  const dynamicStarts=[...new Set(dynamic.map(referenceStartFrame))].sort((a,b)=>a-b);
+  const labelCounts={IMAGE:0,VIDEO:0};
+  REF_ITEMS=[...common,...dynamic].map(config=>{
+    const el=document.createElement("div");
+    el.className="referenceDockItem";
+    const isVideo=config.type==="video"||/\.(mp4|webm|mov)$/i.test(config.src||"");
+    const media=document.createElement(isVideo?"video":"img");
+    media.src=config.src||"";
+    if(isVideo){ media.muted=true; media.loop=true; media.playsInline=true; media.preload="metadata"; }
+    media.onerror=()=>{ el.classList.add("mediaError"); };
+    const label=document.createElement("span");
+    label.className="referenceDockLabel";
+    const typeLabel=isVideo?"VIDEO":"IMAGE";
+    label.textContent=config.label||typeLabel+" "+String(++labelCounts[typeLabel]).padStart(2,"0");
+    el.append(media,label); root.appendChild(el);
+
+    const baseFrame=config.permanent?0:referenceStartFrame(config);
+    const nextGroupFrame=config.permanent?Infinity:(dynamicStarts.find(start=>start>baseFrame)??Infinity);
+    const triggerFrame=baseFrame+Math.max(0,Number(config.delaySeconds)||0)*DATA.fps;
+    const endFrame=config.permanent?Infinity:referenceEndFrame(config,nextGroupFrame);
+    return {config,el,media,label,triggerFrame,endFrame,revealed:false};
+  });
+  positionReferenceDock(timelineFrame);
+}
+function syncReferencePlayback(){
+  REF_ITEMS.forEach(item=>{
+    if(item.media.tagName!=="VIDEO") return;
+    if(item.revealed&&phase==="show") item.media.play().catch(()=>{});
+    else item.media.pause();
+  });
+}
+function captureReferencePositions(){
+  const positions=new Map();
+  REF_ITEMS.forEach(item=>{
+    if(!item.revealed||item.el.classList.contains("leaving")) return;
+    const rect=item.el.getBoundingClientRect();
+    positions.set(item.config.id,{left:rect.left,top:rect.top});
+  });
+  return positions;
+}
+function animateReferenceReflow(previousPositions){
+  REF_ITEMS.forEach(item=>{
+    if(!item.revealed||item.el.classList.contains("leaving")) return;
+    const previous=previousPositions.get(item.config.id);
+    if(!previous) return;
+    const current=item.el.getBoundingClientRect();
+    const dx=previous.left-current.left;
+    const dy=previous.top-current.top;
+    if(Math.abs(dx)<.5&&Math.abs(dy)<.5) return;
+    const kick=Math.min(4,Math.max(1.5,Math.abs(dx)*.035));
+    const overshootX=dx>0?-kick:kick;
+    item.reflowAnimation?.cancel();
+    item.reflowAnimation=item.el.animate(
+      [
+        {transform:`translate3d(${dx}px,${dy}px,0) scale(1)`,offset:0},
+        {transform:`translate3d(${overshootX}px,0,0) scale(1.012)`,offset:.76},
+        {transform:"translate3d(0,0,0) scale(1)",offset:1}
+      ],
+      {duration:420,easing:"cubic-bezier(.2,.78,.2,1)"}
+    );
+  });
+}
+function cancelReferenceExit(item){
+  if(item.exitRaf) cancelAnimationFrame(item.exitRaf);
+  if(item.exitTimer) clearTimeout(item.exitTimer);
+  item.exitRaf=0;
+  item.exitTimer=0;
+  item.exitGeneration=(item.exitGeneration||0)+1;
+  item.el.classList.remove("leaving","fadeOut");
+  item.el.style.removeProperty("--leaving-left");
+  item.el.style.removeProperty("--leaving-width");
+}
+function cancelLeadInEntry(item){
+  if(item.leadInTimer)clearTimeout(item.leadInTimer);
+  item.leadInTimer=0;
+  item.el.classList.remove("leadInEnter");
+}
+function prepareLeadInEntries(nextIds){
+  REF_ITEMS.filter(item=>nextIds.includes(item.config.id)&&!item.revealed).forEach(item=>{
+    cancelLeadInEntry(item);
+    item.el.classList.add("leadInEnter");
+    void item.el.offsetWidth;
+    item.leadInTimer=setTimeout(()=>cancelLeadInEntry(item),460);
+  });
+}
+function clearOutgoingReferences(nextIds){
+  REF_ITEMS.filter(item=>item.revealed&&!nextIds.includes(item.config.id)).forEach(item=>{
+    cancelReferenceExit(item);
+    cancelLeadInEntry(item);
+    item.revealed=false;
+    item.el.classList.remove("revealed");
+    if(item.media.tagName==="VIDEO"){item.media.pause();item.media.currentTime=0}
+  });
+}
+function fadeOutgoingReferences(nextIds){
+  const outgoing=REF_ITEMS.filter(item=>item.revealed&&!nextIds.includes(item.config.id));
+  outgoing.forEach(item=>{
+    cancelReferenceExit(item);
+    const generation=item.exitGeneration;
+    const width=item.el.getBoundingClientRect().width;
+    item.el.style.setProperty("--leaving-left",item.el.offsetLeft+"px");
+    item.el.style.setProperty("--leaving-width",width+"px");
+    item.el.classList.add("leaving");
+    item.exitRaf=requestAnimationFrame(()=>{
+      item.exitRaf=0;
+      if(item.exitGeneration===generation&&!item.revealed)item.el.classList.add("fadeOut");
+    });
+    item.exitTimer=setTimeout(()=>{
+      item.exitTimer=0;
+      if(item.exitGeneration!==generation)return;
+      if(item.revealed){cancelReferenceExit(item);return;}
+      item.el.classList.remove("leaving","fadeOut");
+      item.el.style.removeProperty("--leaving-left");
+      item.el.style.removeProperty("--leaving-width");
+      positionReferenceDock(timelineFrame);
+    },REFERENCE_CROSSFADE_SECONDS*1000+30);
+  });
+}
+function portableVisibleIdsForShot(shot){
+  const globals=PORTABLE_REFERENCE_STATE?.globalReferenceIds||[];
+  if(!shot) return globals;
+  const mapping=PORTABLE_REFERENCE_STATE?.shotMappings?.[shot.id];
+  return resolveVisibleReferenceIds(globals,mapping);
+}
+function portableShotReferenceStartFrame(shot){
+  if(!shot)return 0;
+  const mapping=PORTABLE_REFERENCE_STATE?.shotMappings?.[shot.id];
+  const leadInSeconds=Number(mapping?.leadInSeconds)===1?1:0;
+  return Math.max(0,(Number(shot.startFrame)||0)-leadInSeconds*DATA.fps);
+}
+function portableReferenceShotAtFrame(frame){
+  const shots=PORTABLE_REFERENCE_STATE?.shots||[];
+  const active=[...shots].reverse().find(shot=>{
+    const start=portableShotReferenceStartFrame(shot);
+    return frame>=start&&frame<(Number(shot.endFrame)||0);
+  });
+  if(active)return active;
+  return frame>=DATA.duration?shots.at(-1)||null:null;
+}
+function portableReferenceRunStartFrame(shot,referenceId){
+  const cacheKey=String(shot?.id||"")+"|"+referenceId;
+  if(portableRunStartCache.has(cacheKey)) return portableRunStartCache.get(cacheKey);
+  const shots=PORTABLE_REFERENCE_STATE?.shots||[];
+  let index=shots.findIndex(candidate=>String(candidate.id)===String(shot?.id));
+  let startFrame=portableShotReferenceStartFrame(shot);
+  while(index>0){
+    const current=shots[index];
+    const previous=shots[index-1];
+    if(Math.abs((Number(previous.endFrame)||0)-(Number(current.startFrame)||0))>.5) break;
+    if(!portableVisibleIdsForShot(previous).includes(referenceId)) break;
+    startFrame=portableShotReferenceStartFrame(previous);
+    index--;
+  }
+  portableRunStartCache.set(cacheKey,startFrame);
+  return startFrame;
+}
+function positionReferenceDock(frame){
+  let previousPositions=null;
+  if(lastReferenceFrame>=0&&frame<lastReferenceFrame-.5){
+    lastPortableVisibleIds=null;
+    immediatePortableIds.clear();
+    lastPortableShotId=null;
+    lastPortableShotUsedLeadIn=false;
+  }
+  lastReferenceFrame=frame;
+  let visibleCount=0;
+  let changed=false;
+  let portableVisible=null;
+  let portableShot=null;
+  let portableMapping=null;
+  let portableMode="INHERIT";
+  let instantReplacement=false;
+  let additiveTransition=false;
+  let leadInTransition=false;
+  const portableLabels=new Map();
+  if(PORTABLE_REFERENCE_STATE){
+    portableShot=portableReferenceShotAtFrame(frame);
+    const globals=PORTABLE_REFERENCE_STATE.globalReferenceIds||[];
+    portableMapping=portableShot?PORTABLE_REFERENCE_STATE.shotMappings?.[portableShot.id]:null;
+    portableMode=portableMapping?.mode||"INHERIT";
+    const portableShotId=portableShot==null?null:String(portableShot.id);
+    const currentShotUsesLeadIn=Number(portableMapping?.leadInSeconds)===1;
+    const portableShotChanged=lastPortableShotId!==null&&lastPortableShotId!==portableShotId;
+    leadInTransition=currentShotUsesLeadIn
+      &&frame<(Number(portableShot?.startFrame)||0);
+    const cleanLeadInTransition=leadInTransition
+      ||(portableShotChanged&&lastPortableShotUsedLeadIn);
+    portableVisible=resolveVisibleReferenceIds(globals,portableMapping);
+    if(lastPortableVisibleIds){
+      const setChanged=portableVisible.join("|")!==lastPortableVisibleIds.join("|");
+      additiveTransition=setChanged&&portableMode==="ADD"
+        &&lastPortableVisibleIds.every((id,index)=>portableVisible[index]===id);
+      instantReplacement=setChanged&&!additiveTransition;
+      if(additiveTransition) immediatePortableIds.clear();
+      if(instantReplacement){
+        previousPositions=captureReferencePositions();
+        immediatePortableIds=portableMode==="ADD"?new Set(globals):new Set(portableVisible);
+        if(cleanLeadInTransition){
+          // RED ZONE: entering or leaving a LEAD-IN SHOT must not retain the previous card above the next card.
+          clearOutgoingReferences(portableVisible);
+          prepareLeadInEntries(portableVisible);
+        }else fadeOutgoingReferences(portableVisible);
+      }
+    }
+    lastPortableVisibleIds=[...portableVisible];
+    lastPortableShotId=portableShotId;
+    lastPortableShotUsedLeadIn=currentShotUsesLeadIn;
+    const labelCounts={IMAGE:0,VIDEO:0};
+    portableVisible.forEach(id=>{
+      const reference=(PORTABLE_REFERENCE_STATE.references||[]).find(item=>item.id===id);
+      const typeLabel=reference?.type==="video"?"VIDEO":"IMAGE";
+      labelCounts[typeLabel]+=1;
+      portableLabels.set(id,typeLabel+" "+String(labelCounts[typeLabel]).padStart(2,"0"));
+    });
+  }
+  REF_ITEMS.forEach(item=>{
+    let revealed=frame>=item.triggerFrame&&frame<item.endFrame;
+    if(portableVisible){
+      const index=portableVisible.indexOf(item.config.id);
+      item.el.style.order=index>=0?String(index):"";
+      const globals=PORTABLE_REFERENCE_STATE.globalReferenceIds||[];
+      const isShotSpecific=portableMapping?.refs?.includes(item.config.id)
+        &&(portableMode==="REPLACE"||!globals.includes(item.config.id));
+      const sequenceIndex=isShotSpecific?portableMapping.refs.indexOf(item.config.id):globals.indexOf(item.config.id);
+      const baseFrame=isShotSpecific&&portableShot
+        ?(portableMode==="ADD"?portableReferenceRunStartFrame(portableShot,item.config.id):portableShotReferenceStartFrame(portableShot))
+        :0;
+      const delaySeconds=isShotSpecific&&portableMode==="ADD"
+        ?(baseFrame<=0
+          ?REFERENCE_REVEAL_DELAY_SECONDS+globals.length*.15+Math.max(0,sequenceIndex)*.15
+          :(Math.max(0,sequenceIndex)+1)*.15)
+        :REFERENCE_REVEAL_DELAY_SECONDS+Math.max(0,sequenceIndex)*.15;
+      const trigger=baseFrame+delaySeconds*DATA.fps;
+      revealed=index>=0&&(immediatePortableIds.has(item.config.id)||frame>=trigger);
+      if(portableLabels.has(item.config.id))item.label.textContent=portableLabels.get(item.config.id);
+    }else item.el.style.order="";
+    if(revealed) visibleCount++;
+    // RED ZONE: a card that re-enters before its old crossfade ends must cancel that stale exit.
+    if(revealed&&item.el.classList.contains("leaving")){
+      previousPositions??=captureReferencePositions();
+      cancelReferenceExit(item);
+      changed=true;
+    }
+    if(revealed===item.revealed) return;
+    previousPositions??=captureReferencePositions();
+    item.revealed=revealed;
+    item.el.classList.toggle("revealed",revealed);
+    if(!revealed&&item.media.tagName==="VIDEO") item.media.currentTime=0;
+    changed=true;
+  });
+  const leavingCount=REF_ITEMS.filter(item=>item.el.classList.contains("leaving")).length;
+  const dock=$("referenceDock");
+  const availableWidth=dock.clientWidth-Math.max(0,visibleCount-1)*8;
+  const itemWidth=visibleCount?Math.min(176,Math.max(72,availableWidth/visibleCount)):176;
+  dock.style.setProperty("--reference-item-width",itemWidth+"px");
+  dock.classList.toggle("cropOverflow",visibleCount>6);
+  if(changed){
+    animateReferenceReflow(previousPositions||new Map());
+    syncReferencePlayback();
+  }
+}
+/* ============ 실제 XML의 최상단 활성 클립을 큰 PRIMARY 행으로 요약 ============ */
+let clipLabelProbe=null;
+function measureClipLabel(label,text){
+  if(!clipLabelProbe){
+    clipLabelProbe=document.createElement("span");
+    clipLabelProbe.style.cssText="position:fixed;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;pointer-events:none";
+    document.body.appendChild(clipLabelProbe);
+  }
+  const style=getComputedStyle(label);
+  clipLabelProbe.style.font=style.font;
+  clipLabelProbe.style.letterSpacing=style.letterSpacing;
+  clipLabelProbe.textContent=text;
+  return Math.ceil(clipLabelProbe.getBoundingClientRect().width);
+}
+function fitClipLabel(segment,clipWidth,thumbnailWidth){
+  const label=segment.el.querySelector(".clipName");
+  const full=segment.shotLabel;
+  const compact="SHOT…";
+  const fullWidth=measureClipLabel(label,full);
+  const compactWidth=measureClipLabel(label,compact);
+  const outsideWidth=Math.max(0,clipWidth-thumbnailWidth-10);
+  const insideWidth=Math.max(0,thumbnailWidth-10);
+  const outside=outsideWidth>=fullWidth;
+  const showFull=outside||insideWidth>=fullWidth;
+  const showCompact=!showFull&&insideWidth>=compactWidth;
+
+  segment.el.classList.toggle("thumbLimited",outside);
+  segment.el.classList.toggle("labelCompact",showCompact);
+  segment.el.classList.toggle("labelHidden",!showFull&&!showCompact);
+  label.textContent=showFull?full:(showCompact?compact:"");
+}
+function mountFocusRow(rows,role,label,segments){
+  if(!segments.length) return;
+  const row=document.createElement("div"); row.className="trackRow "+(role==="primary"?"focusPrimary":"focusFx");
+  row.dataset.role=role;
+  row.innerHTML='<div class="trackLane"></div>';
+  const lane=row.querySelector(".trackLane"); rows.appendChild(row);
+  segments.forEach((segment,index)=>{
+    const clip=segment.clip;
+    const el=document.createElement("div"); el.className="timelineClip";
+    const shotLabel="SHOT "+String(segment.shotNumber).padStart(2,"0");
+    el.title=shotLabel+" · "+tc(segment.start,DATA.fps)+" - "+tc(segment.end,DATA.fps);
+    el.innerHTML='<span class="clipShade"></span><span class="clipName">'+shotLabel+'</span>';
+    el.dataset.role=role; el.dataset.clip=index;
+    lane.appendChild(el); SEGS.push({start:segment.start,end:segment.end,clip,el,lane,row,role,
+      shotNumber:segment.shotNumber,shotLabel,editNumber:index+1});
+  });
+}
+function renderTimeline(data){
+  const rows=$("trackRows"), ruler=$("timeRuler");
+  rows.replaceChildren(); ruler.replaceChildren(); SEGS=[];
+  $("thumbnailStatus").className="";
+  $("thumbnailStatus").textContent="THUMBS WAITING";
+  const tickCount=5;
+  for(let i=0;i<=tickCount;i++){
+    const tick=document.createElement("div"); tick.className="timeTick"; tick.style.left=(i/tickCount*100)+"%";
+    tick.innerHTML="<span>"+tc(data.duration*i/tickCount,data.fps).slice(3)+"</span>"; ruler.appendChild(tick);
+  }
+  const primary=buildFocusSegments(data);
+  const shotNumbers=new Map();
+  primary.forEach(segment=>{
+    // Real XML uses the resolved source asset; embedded legacy demo data falls back to its old identity.
+    const sourceKey=segment.clip.sourceId||[segment.clip.name,segment.clip.in,segment.clip.out].join("|");
+    if(!shotNumbers.has(sourceKey)) shotNumbers.set(sourceKey,shotNumbers.size+1);
+    segment.shotNumber=shotNumbers.get(sourceKey);
+  });
+  mountFocusRow(rows,"primary","PRIMARY",primary);
+  $("projectTitle").textContent=CONFIG.projectTitle||"UNTITLED PROJECT";
+  $("sequenceMeta").textContent=data.name+" · VIDEO "+data.fps+" FPS · UI "+CONFIG.uiFps+" FPS · PRIMARY CUT · "+primary.length+" EDITS";
+  renderOverview(data);
+  positionTimeline();
+}
+function renderOverview(data){
+  $("overviewFrames").replaceChildren();
+  const cuts=$("overviewCuts"); cuts.replaceChildren();
+  const starts=[...new Set(data.clips.filter(c=>c.enabled!==false).map(c=>c.start))]
+    .filter(frame=>frame>0&&frame<data.duration);
+  starts.forEach(frame=>{
+    const cut=document.createElement("span"); cut.className="overviewCut";
+    cut.style.left=(frame/data.duration*100)+"%"; cuts.appendChild(cut);
+  });
+  timelinePage=-1;
+  timelineRevealFrame=-1;
+}
+function animatePageIn(){
+  for(const el of [$("timeRuler"),$("trackRows")]){
+    el.classList.remove("pageSwitch");
+    void el.offsetWidth;
+    el.classList.add("pageSwitch");
+  }
+}
+function positionTimeline(){
+  if(!DATA) return;
+  const frame=Math.min(DATA.duration,Math.max(0,timelineFrame));
+  const pageFrames=Math.max(1,Math.round((CONFIG.timelinePaging?.pageSeconds||10)*DATA.fps));
+  const pageCount=Math.max(1,Math.ceil(DATA.duration/pageFrames));
+  const pageIndex=Math.min(pageCount-1,Math.floor(frame/pageFrames));
+  const pageStart=pageIndex*pageFrames;
+  const pageEnd=Math.min(DATA.duration,pageStart+pageFrames);
+  const pageSpan=Math.max(1,pageEnd-pageStart);
+
+  const pageChanged=pageIndex!==timelinePage;
+  if(pageChanged){
+    timelinePage=pageIndex;
+    animatePageIn();
+    $("pageStatus").textContent="PAGE "+String(pageIndex+1).padStart(2,"0")+" / "+String(pageCount).padStart(2,"0");
+    document.querySelectorAll("#timeRuler .timeTick").forEach((tick,index,ticks)=>{
+      const tickFrame=pageStart+(index/Math.max(1,ticks.length-1))*pageSpan;
+      const label=tick.querySelector("span");
+      if(label) label.textContent=tc(tickFrame,DATA.fps).slice(3);
+    });
+    SEGS.forEach(s=>{
+      const width=s.lane.clientWidth;
+      if(!width) return;
+      const visibleStart=Math.max(s.start,pageStart);
+      const visibleEnd=Math.min(s.end,pageEnd);
+      s.inPage=visibleEnd>visibleStart;
+      s.el.classList.toggle("outsidePage",!s.inPage);
+      if(!s.inPage) return;
+      const left=(visibleStart-pageStart)/pageSpan*width;
+      const natural=(visibleEnd-visibleStart)/pageSpan*width;
+      const clipWidth=Math.max(7,Math.min(natural,width-left));
+      const thumbnailMax=s.el.clientHeight*(16/9);
+      const thumbnailWidth=Math.min(clipWidth,thumbnailMax);
+      s.el.classList.toggle("flushLeft",left<=.5);
+      s.el.style.left=left+"px";
+      s.el.style.width=clipWidth+"px";
+      s.el.style.setProperty("--clip-thumb-width",thumbnailWidth+"px");
+      fitClipLabel(s,clipWidth,thumbnailWidth);
+    });
+    $("overviewWindow").style.left=(pageStart/DATA.duration*100)+"%";
+    $("overviewWindow").style.width=(pageSpan/DATA.duration*100)+"%";
+  }
+
+  const revealFrame=Math.floor(frame+1e-6);
+  if(pageChanged||revealFrame!==timelineRevealFrame){
+    timelineRevealFrame=revealFrame;
+    SEGS.forEach(s=>{
+      const revealed=s.inPage&&s.start<=frame;
+      s.el.classList.toggle("revealed",revealed);
+      s.el.classList.remove("historyNear","historyFar");
+    });
+    document.querySelectorAll(".trackRow").forEach(row=>{
+      const hasVisibleClip=SEGS.some(s=>s.row===row&&s.el.classList.contains("revealed"));
+      row.classList.toggle("revealed",hasVisibleClip);
+    });
+  }
+
+  const lane=$("timelineViewport").querySelector(".trackLane");
+  if(lane){
+    const fraction=Math.min(1,Math.max(0,(frame-pageStart)/pageSpan));
+    playheadEl.style.left=(lane.offsetLeft+fraction*lane.clientWidth)+"px";
+  }
+  let editIndex=SEGS.findIndex(segment=>segment.start<=frame&&frame<segment.end);
+  if(editIndex<0){
+    editIndex=SEGS.reduce((latest,segment,index)=>segment.start<=frame?index:latest,0);
+  }
+  const digits=Math.max(2,String(SEGS.length||1).length);
+  $("editStatus").textContent="EDIT "+String(editIndex+1).padStart(digits,"0")+
+    " / "+String(SEGS.length||1).padStart(digits,"0")+" · "+DATA.fps+" FPS";
+  positionReferenceDock(frame);
+  $("overviewPlayhead").style.left=(frame/DATA.duration*100)+"%";
+}
+function setPlayhead(frame){
+  if(!DATA) return;
+  // stage transform과 무관한 1280px 내부 좌표에서 현재 7초 페이지와 overview를 함께 갱신한다.
+  timelineFrame=Math.min(DATA.duration,Math.max(0,frame));
+  positionTimeline();
+}
+
+function seekThumbnailFrame(time,generation){
+  return new Promise(resolve=>{
+    if(generation!==thumbnailGeneration){ resolve(false); return; }
+    const target=Math.max(0,Math.min(time,Math.max(0,thumbnailVideo.duration-1/(DATA?.fps||24))));
+    if(Math.abs(thumbnailVideo.currentTime-target)<.001&&thumbnailVideo.readyState>=2){
+      resolve(true); return;
+    }
+    let settled=false;
+    const finish=ok=>{
+      if(settled) return;
+      settled=true; clearTimeout(timer); thumbnailVideo.removeEventListener("seeked",onSeeked); resolve(ok);
+    };
+    const onSeeked=()=>finish(generation===thumbnailGeneration);
+    const timer=setTimeout(()=>finish(false),4000);
+    thumbnailVideo.addEventListener("seeked",onSeeked,{once:true});
+    thumbnailVideo.currentTime=target;
+  });
+}
+
+async function generateOverviewThumbnails(generation){
+  const root=$("overviewFrames"); root.replaceChildren();
+  const count=14;
+  for(let index=0;index<count;index++){
+    if(generation!==thumbnailGeneration) return false;
+    const time=thumbnailVideo.duration*((index+.5)/count);
+    const ok=await seekThumbnailFrame(time,generation);
+    if(!ok||generation!==thumbnailGeneration) return false;
+    const canvas=document.createElement("canvas"); canvas.width=160; canvas.height=90;
+    canvas.getContext("2d",{alpha:false}).drawImage(thumbnailVideo,0,0,canvas.width,canvas.height);
+    root.appendChild(canvas);
+  }
+  return true;
+}
+
+async function generateTimelineThumbnails(){
+  const status=$("thumbnailStatus");
+  const generation=++thumbnailGeneration;
+  if(!DATA||!SEGS.length||thumbnailVideo.readyState<1||!Number.isFinite(thumbnailVideo.duration)){
+    status.className=""; status.textContent="THUMBS WAITING"; return;
+  }
+  status.className=""; status.textContent="THUMBS 0/"+SEGS.length;
+  const ordered=[...SEGS].sort((a,b)=>(a.start+a.end)-(b.start+b.end));
+  let completed=0;
+  try{
+    for(const seg of ordered){
+      if(generation!==thumbnailGeneration) return;
+      const frame=Math.floor((seg.start+seg.end)/2);
+      const ok=await seekThumbnailFrame(frame/DATA.fps,generation);
+      if(!ok||generation!==thumbnailGeneration) return;
+      const old=seg.el.querySelector(".clipThumbnail");
+      if(old) old.remove();
+      const canvas=document.createElement("canvas");
+      canvas.className="clipThumbnail"; canvas.width=160; canvas.height=90;
+      canvas.getContext("2d",{alpha:false}).drawImage(thumbnailVideo,0,0,canvas.width,canvas.height);
+      seg.el.prepend(canvas);
+      completed++;
+      status.textContent="THUMBS "+completed+"/"+SEGS.length;
+    }
+    status.textContent="BUILDING OVERVIEW";
+    if(!await generateOverviewThumbnails(generation)) return;
+    status.className="ready"; status.textContent="THUMBS READY";
+  }catch(err){
+    warns.push("타임라인 썸네일 실패: "+err.message);
+    status.className="warn"; status.textContent="THUMBS ERROR";
+  }
+}
+
+function build(rawData){
+  warns=rawData.warns?[...rawData.warns]:[];
+  DATA=applyRange(rawData);
+  REF_ITEMS.forEach(item=>{
+    releaseReferenceItemMedia(item);
+  });
+  REF_ITEMS=[];
+  renderTimeline(DATA);
+  renderReferenceCard();
+  resetShow();
+  generateTimelineThumbnails();
+}
+
+function setProjectTitle(value){
+  CONFIG.projectTitle=value===undefined||value===null?"UNTITLED PROJECT":String(value).replace(/\s+/g," ").trim().slice(0,40);
+  $("projectTitle").textContent=CONFIG.projectTitle;
+  $("videoCalloutTitle").textContent=CONFIG.projectTitle;
+  updateVideoCallout(mainVideo.currentTime||0);
+  return CONFIG.projectTitle;
+}
+function setCalloutConfig(value){
+  const source=value&&typeof value==="object"?value:{};
+  const number=(candidate,fallback,min,max)=>{
+    const parsed=Number(candidate);
+    return Number.isFinite(parsed)?Math.max(min,Math.min(max,parsed)):fallback;
+  };
+  CALLOUT_CONFIG={
+    enabled:source.enabled===undefined?true:Boolean(source.enabled),
+    position:source.position==="right"?"right":"left",
+    style:["line","label","minimal"].includes(source.style)?source.style:"line",
+    startSeconds:number(source.startSeconds,.08,0,60),
+    durationSeconds:number(source.durationSeconds,3.5,.5,30),
+    subtitle:source.subtitle===undefined?"REFERENCE MAP · EDIT WORKFLOW":String(source.subtitle).replace(/\s+/g," ").trim().slice(0,60),
+  };
+  const callout=$("videoCallout");
+  callout.dataset.position=CALLOUT_CONFIG.position;
+  callout.dataset.style=CALLOUT_CONFIG.style;
+  $("videoCalloutSubtitle").textContent=CALLOUT_CONFIG.subtitle;
+  updateVideoCallout(mainVideo.currentTime||0);
+  return {...CALLOUT_CONFIG};
+}
+function updateVideoCallout(seconds){
+  const time=Math.max(0,Number(seconds)||0);
+  const clamp=value=>Math.max(0,Math.min(1,value));
+  const enter=clamp((time-CALLOUT_CONFIG.startSeconds)/.58);
+  const leave=1-clamp((time-(CALLOUT_CONFIG.startSeconds+CALLOUT_CONFIG.durationSeconds))/.55);
+  const visibility=CALLOUT_CONFIG.enabled&&CONFIG.projectTitle?enter*leave:0;
+  const eased=1-Math.pow(1-enter,3);
+  const direction=CALLOUT_CONFIG.position==="right"?1:-1;
+  const callout=$("videoCallout");
+  callout.style.opacity=visibility.toFixed(4);
+  callout.style.transform=`translate3d(${(direction*22*(1-eased)).toFixed(2)}px,0,0)`;
+  callout.querySelector(".videoCalloutRule").style.transform=`scaleY(${(.25+.75*eased).toFixed(4)})`;
+}
+
+function updateConnectors(){}
+
+/* ============ 쇼 엔진 / 영상 싱크 ============ */
+function now(){ return performance.now()/1000; }
+function anchorVideoClock(mediaTime,wallTime=now()){
+  videoAnchorTime=Math.max(0,mediaTime||0);
+  videoAnchorWall=wallTime;
+}
+function stopVideoFrameClock(){
+  videoClockGeneration++;
+  if(videoFrameCallbackId&&mainVideo.cancelVideoFrameCallback){
+    mainVideo.cancelVideoFrameCallback(videoFrameCallbackId);
+  }
+  videoFrameCallbackId=0;
+}
+function startVideoFrameClock(){
+  stopVideoFrameClock();
+  const generation=videoClockGeneration;
+  anchorVideoClock(mainVideo.currentTime);
+  lastVideoFrameWall=now();
+  if(!mainVideo.requestVideoFrameCallback) return;
+  const onVideoFrame=(timestamp,metadata)=>{
+    if(generation!==videoClockGeneration||phase!=="show"||syncClock!=="video") return;
+    // RED ZONE: 정상 재생 중에는 60fps UI 시계를 꺾지 않고 큰 오차가 날 때만 재동기화한다.
+    const callbackWall=timestamp/1000;
+    const predicted=videoAnchorTime+Math.max(0,callbackWall-videoAnchorWall);
+    const drift=metadata.mediaTime-predicted;
+    lastVideoFrameWall=callbackWall;
+    if(Math.abs(drift)>2/DATA.fps) anchorVideoClock(metadata.mediaTime,callbackWall);
+    videoFrameCallbackId=mainVideo.requestVideoFrameCallback(onVideoFrame);
+  };
+  videoFrameCallbackId=mainVideo.requestVideoFrameCallback(onVideoFrame);
+}
+function hasSyncVideo(){
+  return !!(mainVideo.currentSrc||mainVideo.getAttribute("src"))&&
+    Number.isFinite(mainVideo.duration)&&mainVideo.duration>0&&mainVideo.readyState>=1;
+}
+function formatSeconds(seconds){ return Number.isFinite(seconds)?seconds.toFixed(3)+"s":"--"; }
+function play(){
+  if(phase==="show"){ pause(); return; }
+  if(phase==="end") resetShow();
+  document.body.classList.add("running");
+  phase="show";
+  t0=now()-tPause;
+  if(hasSyncVideo()){
+    syncClock="video";
+    const resume=Math.max(0,tPause-CONFIG.slateSeconds);
+    if(Math.abs(mainVideo.currentTime-resume)>.04){
+      mainVideo.currentTime=Math.min(resume,Math.max(0,mainVideo.duration-.001));
+    }
+    startVideoFrameClock();
+    mainVideo.play().catch(err=>{
+      stopVideoFrameClock();
+      syncClock="virtual";
+      warns.push("영상 재생 실패 → virtual clock: "+err.message);
+    });
+  }else syncClock="virtual";
+  syncReferencePlayback();
+  lastUiOutputFrame=-1;
+  loop();
+}
+function pause(){
+  tPause=syncClock==="video"&&hasSyncVideo()
+    ?mainVideo.currentTime+CONFIG.slateSeconds
+    :now()-t0;
+  cancelAnimationFrame(rafId);
+  stopVideoFrameClock();
+  phase="idle";
+  document.body.classList.remove("running");
+  mainVideo.pause();
+  syncReferencePlayback();
+}
+function resetShow(){
+  cancelAnimationFrame(rafId);
+  stopVideoFrameClock();
+  phase="idle"; tPause=0; syncClock="virtual"; lastUiOutputFrame=-1;
+  document.body.classList.remove("running");
+  $("slate").classList.remove("on"); $("flash").classList.remove("on");
+  SEGS.forEach(s=>{ if(s.el) s.el.classList.remove("active"); });
+  setPlayhead(0);
+  $("tcMain").textContent=tc(0,DATA?DATA.fps:24);
+  updateVideoCallout(0);
+  if(mainVideo.getAttribute("src")){ mainVideo.pause(); mainVideo.currentTime=0; }
+  lastReportedShot=0;
+  const firstShot=SEGS.find(segment=>segment.start<=0&&0<segment.end)?.shotNumber||SEGS[0]?.shotNumber;
+  if(firstShot)window.parent.portableMvp?.syncActiveShot(firstShot);
+  syncReferencePlayback();
+  requestAnimationFrame(updateConnectors);
+}
+function loop(){
+  rafId=requestAnimationFrame(loop);
+  const wallTime=now();
+  const virtualRaw=now()-t0;
+  const durSec=DATA.duration/DATA.fps;
+  const virtualTime=Math.max(0,virtualRaw-CONFIG.slateSeconds);
+  const usingVideo=syncClock==="video"&&hasSyncVideo();
+  let t=virtualTime;
+  if(usingVideo){
+    t=videoAnchorTime+Math.max(0,wallTime-videoAnchorWall);
+    if(mainVideo.requestVideoFrameCallback&&wallTime-lastVideoFrameWall>3/DATA.fps){
+      anchorVideoClock(mainVideo.currentTime,wallTime);
+      t=mainVideo.currentTime;
+    }
+    if(!mainVideo.requestVideoFrameCallback){
+      const fallbackDrift=mainVideo.currentTime-t;
+      if(Math.abs(fallbackDrift)>1.5/DATA.fps){
+        anchorVideoClock(mainVideo.currentTime,wallTime);
+        t=mainVideo.currentTime;
+      }
+    }
+  }
+  phase="show";
+  const tClamp=Math.min(t,durSec);
+  const reachedEnd=t>=durSec||(usingVideo&&mainVideo.ended);
+  const uiFrame=Math.min(Math.ceil(durSec*CONFIG.uiFps),Math.floor(tClamp*CONFIG.uiFps+1e-6));
+  if(uiFrame===lastUiOutputFrame&&!reachedEnd) return;
+  lastUiOutputFrame=uiFrame;
+  const uiTime=uiFrame/CONFIG.uiFps;
+  const curFrame=Math.min(DATA.duration,uiTime*DATA.fps);
+  updateVideoCallout(uiTime);
+
+  const activeClips=SEGS.filter(s=>s.start<=curFrame&&curFrame<s.end);
+  const active=activeClips.sort((a,b)=>b.clip.track-a.clip.track)[0]||null;
+  SEGS.forEach(s=>{ if(s.el) s.el.classList.toggle("active",activeClips.includes(s)); });
+  if(active&&active.shotNumber!==lastReportedShot){
+    lastReportedShot=active.shotNumber;
+    window.parent.portableMvp?.syncActiveShot(active.shotNumber);
+  }
+
+  setPlayhead(curFrame);
+  updateConnectors();
+  if(CONFIG.showTimecode) $("tcMain").textContent=tc(Math.floor(curFrame+1e-6),DATA.fps);
+
+  if(debugOn){
+    const drift=usingVideo?mainVideo.currentTime-uiTime:0;
+    $("debug").textContent=
+      "phase   : "+phase+"\n"+
+      "clock   : "+(usingVideo?"video + UI interpolation":"virtual")+"\n"+
+      "range   : "+rangeInfo+"\n"+
+      "ui time : "+uiTime.toFixed(3)+"s / "+durSec.toFixed(2)+"s\n"+
+      "video   : "+(hasSyncVideo()?(mainVideo.currentTime.toFixed(3)+" / "+mainVideo.duration.toFixed(3)+"s"):"-")+"\n"+
+      "drift   : "+(usingVideo?drift.toFixed(4)+"s":"-")+"\n"+
+      "fps     : VIDEO "+DATA.fps+" / UI "+CONFIG.uiFps+"\n"+
+      "frame   : V"+Math.floor(curFrame)+" / UI"+uiFrame+"\n"+
+      "active  : "+(active?("SHOT "+String(active.shotNumber).padStart(2,"0")):"-")+"\n"+
+      (warns.length?("warn    : "+warns[warns.length-1]):"");
+  }
+
+  if(reachedEnd){
+    if(usingVideo&&mainVideo.ended&&t<durSec){
+      warns.push("영상이 XML보다 먼저 종료됨: "+formatSeconds(durSec-t));
+    }
+    phase="end";
+    cancelAnimationFrame(rafId);
+    stopVideoFrameClock();
+    document.body.classList.remove("running");
+    mainVideo.pause();
+    syncReferencePlayback();
+    tPause=0;
+  }
+}
+
+/* ============ 레이아웃 / 모드 / 스케일 ============ */
+function applyLayout(){
+  document.documentElement.style.setProperty("--accent",CONFIG.accent);
+  panel.style.height=CONFIG.panelHeight+"px";
+  $("tcMain").style.visibility=CONFIG.showTimecode?"visible":"hidden";
+}
+function applyMode(){
+  stage.classList.add("mode-full");
+  stage.classList.remove("mode-panel");
+  fitScale();
+}
+function setRenderSpec(value={}){
+  const width=Math.max(1,Math.round(Number(value.width)||1280));
+  const height=Math.max(1,Math.round(Number(value.height)||1080));
+  const fps=Math.max(1,Math.round(Number(value.fps)||60));
+  const bitrateMbps=Math.max(1,Number(value.bitrateMbps)||12);
+  RENDER_SPEC={width,height,fps,bitrateMbps};
+  CONFIG.uiFps=fps;
+  fitScale();
+  return {...RENDER_SPEC};
+}
+function fitScale(){
+  panel.style.height=CONFIG.panelHeight+"px";
+  stage.style.width=RENDER_SPEC.width+"px";
+  stage.style.height=RENDER_SPEC.height+"px";
+  if(params.get("scale")==="1"){ stage.style.transform="none"; return; }
+  const s=Math.min(window.innerWidth/RENDER_SPEC.width,window.innerHeight/RENDER_SPEC.height,1);
+  stage.style.transform="scale("+s+")";
+}
+
+/* ============ 입력 ============ */
+document.addEventListener("keydown",e=>{
+  if(e.code==="Space"){ e.preventDefault(); play(); }
+  else if(e.key==="r"||e.key==="R") resetShow();
+  else if(e.key==="d"||e.key==="D"){ debugOn=!debugOn; $("debug").classList.toggle("on",debugOn); }
+  else if(e.key==="h"||e.key==="H") $("help").classList.toggle("on");
+});
+$("help").addEventListener("click",()=>$("help").classList.remove("on"));
+
+/* 드래그&드랍 : xml → 타임라인 / 영상 → full 모드 메인 비디오 */
+let dragDepth=0;
+window.addEventListener("dragenter",e=>{e.preventDefault();dragDepth++;$("dropHint").classList.add("on");});
+window.addEventListener("dragleave",e=>{e.preventDefault();dragDepth--;if(dragDepth<=0){dragDepth=0;$("dropHint").classList.remove("on");}});
+window.addEventListener("dragover",e=>e.preventDefault());
+window.addEventListener("drop",e=>{
+  e.preventDefault(); dragDepth=0; $("dropHint").classList.remove("on");
+  const f=e.dataTransfer.files[0];
+  if(f) loadFile(f);
+});
+function setVideoSource(src,openFull=false){
+  mainVideo.src=src;
+  thumbnailVideo.src=src;
+  mainVideo.load();
+  thumbnailVideo.load();
+  $("videoHint").classList.add("hidden");
+  $("thumbnailStatus").className="";
+  $("thumbnailStatus").textContent="THUMBS LOADING";
+  if(openFull&&!fullMode){ fullMode=true; applyMode(); }
+}
+function unloadVideoElement(video){
+  return new Promise(resolve=>{
+    let settled=false;
+    const finish=()=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timer);
+      video.removeEventListener("emptied",finish);
+      resolve();
+    };
+    const timer=setTimeout(finish,250);
+    video.addEventListener("emptied",finish,{once:true});
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    if(!video.currentSrc&&!video.getAttribute("src"))queueMicrotask(finish);
+  });
+}
+async function clearVideoSource(){
+  cancelAnimationFrame(rafId);
+  rafId=0;
+  thumbnailGeneration++;
+  stopVideoFrameClock();
+  phase="idle";
+  syncClock="virtual";
+  tPause=0;
+  document.body.classList.remove("running");
+  await Promise.all([mainVideo,thumbnailVideo].map(unloadVideoElement));
+  if(videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+  videoObjectUrl=null;
+  $("videoHint").classList.remove("hidden");
+  $("thumbnailStatus").className="";
+  $("thumbnailStatus").textContent="THUMBS WAITING";
+}
+function releaseReferenceItemMedia(item){
+  cancelReferenceExit(item);
+  cancelLeadInEntry(item);
+  item.reflowAnimation?.cancel();
+  if(item.media.tagName==="VIDEO")item.media.pause();
+  item.media.removeAttribute("src");
+  if(item.media.tagName==="VIDEO")item.media.load();
+}
+function releaseReferenceMedia(){
+  REF_ITEMS.forEach(releaseReferenceItemMedia);
+  REF_ITEMS=[];
+  PORTABLE_REFERENCE_STATE=null;
+  lastPortableVisibleIds=null;
+  immediatePortableIds.clear();
+  portableRunStartCache.clear();
+  $("referenceDock").replaceChildren();
+}
+async function releaseMedia({references=false}={}){
+  await clearVideoSource();
+  if(references)releaseReferenceMedia();
+  return {released:true,references:Boolean(references)};
+}
+function loadFile(f){
+  if(f.name.toLowerCase().endsWith(".xml")){
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        build(parseFCPXML(rd.result));
+      }catch(err){
+        alert("XML 읽기 실패: "+err.message);
+  }
+};
+    rd.readAsText(f);
+  }else if(f.type.startsWith("video/")){
+    if(videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+    videoObjectUrl=URL.createObjectURL(f);
+    setVideoSource(videoObjectUrl,true);
+  }
+}
+
+mainVideo.addEventListener("loadedmetadata",()=>{
+  resetShow();
+});
+mainVideo.addEventListener("error",()=>{
+  warns.push("영상 로드 실패");
+});
+thumbnailVideo.addEventListener("loadedmetadata",generateTimelineThumbnails);
+thumbnailVideo.addEventListener("error",()=>{
+  $("thumbnailStatus").className="warn";
+  $("thumbnailStatus").textContent="THUMBS VIDEO ERROR";
+  warns.push("썸네일 영상 로드 실패");
+});
+
+/* ============ 초기화 ============ */
+const layoutObserver=new ResizeObserver(()=>{
+  timelinePage=-1;
+  positionTimeline();
+  updateConnectors();
+});
+layoutObserver.observe(panel);
+layoutObserver.observe($("timelineViewport"));
+window.addEventListener("resize",()=>{
+  fitScale();
+  timelinePage=-1;
+  positionTimeline();
+  updateConnectors();
+});
+applyLayout();
+applyMode();
+build(DEMO_DATA);
+if(CONFIG.sourceVideo) setVideoSource(CONFIG.sourceVideo);
+
+/* RED ZONE: 기존 FCP XML 파서와 쇼 엔진은 유지하고 Electron에서는 이 브리지만 호출한다. */
+window.portablePreview={
+  setRenderSpec,
+  inspectXml(text){ return inspectParsedXml(parseFCPXML(text)); },
+  validateXml(text){
+    return inspectParsedXml(parseFCPXML(text));
+  },
+  loadXml(text){
+    const parsed=parseFCPXML(text);
+    const inspected=inspectParsedXml(parsed);
+    build(parsed);
+    return inspected;
+  },
+  setVideo(url){ setVideoSource(url,true); },
+  clearVideo(){ return clearVideoSource(); },
+  releaseMedia,
+  async waitForVideoReady(timeoutMs=60000){
+    const started=performance.now();
+    while(mainVideo.readyState<2||!Number.isFinite(mainVideo.duration)||mainVideo.duration<=0){
+      if(performance.now()-started>timeoutMs)throw new Error("영상 준비 시간 초과");
+      await new Promise(resolve=>setTimeout(resolve,50));
+    }
+    while(!/THUMBS READY|THUMBS ERROR/.test($("thumbnailStatus").textContent)){
+      if(performance.now()-started>timeoutMs)throw new Error("타임라인 썸네일 준비 시간 초과");
+      await new Promise(resolve=>setTimeout(resolve,50));
+    }
+    return {duration:mainVideo.duration,readyState:mainVideo.readyState};
+  },
+  seekFrame(frame){
+    if(!DATA) return;
+    const safeFrame=Math.max(0,Math.min(DATA.duration-1,Number(frame)||0));
+    const seconds=safeFrame/DATA.fps;
+    const wasPlaying=phase==="show"&&!mainVideo.paused;
+    stopVideoFrameClock();
+    tPause=seconds+CONFIG.slateSeconds;
+    if(phase==="show"){
+      t0=now()-tPause;
+      anchorVideoClock(seconds);
+    }
+    setPlayhead(safeFrame);
+    $("tcMain").textContent=tc(Math.floor(safeFrame+1e-6),DATA.fps);
+    updateVideoCallout(seconds);
+    if(mainVideo.src){
+      mainVideo.currentTime=seconds;
+      if(wasPlaying){
+        mainVideo.addEventListener("seeked",()=>{
+          if(phase!=="show")return;
+          anchorVideoClock(mainVideo.currentTime);
+          startVideoFrameClock();
+        },{once:true});
+      }
+    }
+  },
+  playPause(){ play(); },
+  reset(){ resetShow(); },
+  prepareRealtimeExport(){
+    cancelAnimationFrame(rafId);
+    stopVideoFrameClock();
+    mainVideo.pause();thumbnailVideo.pause();
+    resetShow();
+    phase="idle";syncClock="virtual";tPause=0;lastUiOutputFrame=-1;
+    document.body.classList.add("running");
+    setPlayhead(0);
+    $("tcMain").textContent=tc(0,DATA?.fps||24);
+    return {durationFrames:DATA.duration,fps:DATA.fps};
+  },
+  startRealtimeExport(){
+    if(phase==="show")pause();
+    tPause=0;
+    play();
+    return {started:true};
+  },
+  stopRealtimeExport(){
+    if(phase==="show")pause();
+    else mainVideo.pause();
+    return {stopped:true,currentTime:mainVideo.currentTime};
+  },
+  setReferences(state){
+    PORTABLE_REFERENCE_STATE=state||null;
+    renderReferenceCard();
+  },
+  setProjectTitle,
+  setCalloutConfig,
+  getState(){
+    return {
+      ready:Boolean(DATA),fps:DATA?.fps||0,outputFps:RENDER_SPEC.fps,edits:SEGS.length,phase,
+      currentTime:mainVideo.currentTime||0,duration:mainVideo.duration||0,
+      paused:mainVideo.paused,readyState:mainVideo.readyState,
+    };
+  },
+};
+</script>
+</body>
+</html>

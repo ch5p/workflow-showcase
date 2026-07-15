@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Private security report
+    url: https://github.com/ch5p/character-workflow-portable/security/advisories/new
+    about: Report path traversal, arbitrary file access, IPC bypass, or process-orphan vulnerabilities privately.

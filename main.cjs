@@ -1,0 +1,1213 @@
+"use strict";
+
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const { randomUUID } = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const { createExportController } = require("./exporter.cjs");
+const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
+const {
+  inspectInputFile,
+  prepareXmlCandidate,
+  discardPreparedCandidate,
+  commitPreparedXml,
+  commitPreparedXmlUpdate,
+  recoverXmlTransactions,
+} = require("./job-lifecycle.cjs");
+const { reconcileTimelineMappings } = require("./timeline-reconcile.cjs");
+const {
+  prepareVideoCandidate,
+  discardPreparedVideoCandidate,
+  commitPreparedVideo,
+  recoverVideoTransactions,
+} = require("./video-lifecycle.cjs");
+
+const APP_ROOT = __dirname;
+const SMOKE_TEST = process.argv.includes("--smoke-test");
+const EXPORT_SMOKE = process.argv.includes("--export-smoke");
+const TEST_JOB_ROOT = process.env.PORTABLE_TEST_JOB_ROOT;
+if((SMOKE_TEST||EXPORT_SMOKE)&&!TEST_JOB_ROOT){
+  throw new Error("Smoke tests require an isolated PORTABLE_TEST_JOB_ROOT. Use npm run smoke.");
+}
+if(TEST_JOB_ROOT&&!(SMOKE_TEST||EXPORT_SMOKE)){
+  throw new Error("PORTABLE_TEST_JOB_ROOT is test-only.");
+}
+const JOB_ROOT = TEST_JOB_ROOT ? path.resolve(TEST_JOB_ROOT) : path.join(APP_ROOT, "current-job");
+if(TEST_JOB_ROOT){
+  const relativeToApp=path.relative(APP_ROOT,JOB_ROOT);
+  if(!path.isAbsolute(JOB_ROOT)||!relativeToApp||(!relativeToApp.startsWith("..")&&!path.isAbsolute(relativeToApp))){
+    throw new Error("Smoke Job root must be an absolute directory outside the app root.");
+  }
+  const testStateRoot=path.join(path.dirname(JOB_ROOT),"electron-state");
+  app.setPath("userData",path.join(testStateRoot,"user-data"));
+  app.setPath("sessionData",path.join(testStateRoot,"session-data"));
+  app.disableHardwareAcceleration();
+}
+const SOURCE_ROOT = path.join(JOB_ROOT, "source");
+const REFERENCES_ROOT = path.join(JOB_ROOT, "references");
+const OUTPUT_ROOT = path.join(JOB_ROOT, "output");
+const LOG_ROOT = path.join(JOB_ROOT, "logs");
+const JOB_PATH = path.join(JOB_ROOT, "job.json");
+const DEFAULT_CALLOUT = {
+  enabled: true,
+  position: "left",
+  style: "line",
+  startSeconds: 0.08,
+  durationSeconds: 3.5,
+  subtitle: "REFERENCE MAP · EDIT WORKFLOW",
+};
+const DEFAULT_PROJECT_TITLE = "UNTITLED PROJECT";
+const LOG_PATH = path.join(LOG_ROOT, "app.log");
+const VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
+const VIDEO_MAX_BYTES = 512 * 1024 * 1024 * 1024;
+const REFERENCE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".mp4", ".mov", ".m4v", ".webm"];
+const REFERENCE_MAX_BYTES = 64 * 1024 * 1024 * 1024;
+const PREPARED_XML_TTL_MS = 10 * 60 * 1000;
+const PREPARED_VIDEO_TTL_MS = 10 * 60 * 1000;
+const preparedXmlImports = new Map();
+const preparedVideoImports = new Map();
+let recoveryRequired = false;
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
+function ensureJobFolders(){
+  for(const directory of [JOB_ROOT, SOURCE_ROOT, REFERENCES_ROOT, OUTPUT_ROOT, LOG_ROOT]){
+    fs.mkdirSync(directory, { recursive: true });
+  }
+}
+
+function logEvent(event, detail = {}){
+  try{
+    ensureJobFolders();
+    const line = JSON.stringify({ at: new Date().toISOString(), event, ...detail });
+    fs.appendFileSync(LOG_PATH, line + "\n", "utf8");
+    return true;
+  }catch(error){
+    console.error("APP_LOG_FAILED " + String(event) + " " + (error.code || "WRITE_FAILED"));
+    return false;
+  }
+}
+
+function emptyJob(){
+  const now = new Date().toISOString();
+  return {
+    version: 1,
+    jobId: randomUUID(),
+    revision: 0,
+    createdAt: now,
+    updatedAt: now,
+    xml: null,
+    video: null,
+    references: [],
+    globalReferenceIds: [],
+    shotMappings: {},
+    timelineShots: [],
+    orphanedShotMappings: [],
+    projectTitle: DEFAULT_PROJECT_TITLE,
+    callout: { ...DEFAULT_CALLOUT },
+    ui: { scale: 1.25 },
+    output: { codec: CLASSIC_RENDER_SPEC.codec, bitrateMbps: CLASSIC_RENDER_SPEC.bitrateMbps, fps: CLASSIC_RENDER_SPEC.fps },
+  };
+}
+
+function isPlainObject(value){
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateStoredRelativePath(relativePath, ownedRoot, label){
+  if(typeof relativePath !== "string" || !relativePath || path.isAbsolute(relativePath)){
+    throw new Error(label + " relativePath is invalid");
+  }
+  const resolvedRoot = path.resolve(ownedRoot);
+  const resolvedPath = path.resolve(JOB_ROOT, relativePath);
+  const relative = path.relative(resolvedRoot, resolvedPath);
+  if(!relative || relative.startsWith("..") || path.isAbsolute(relative)){
+    throw new Error(label + " relativePath escapes its owned root");
+  }
+}
+
+function validateJobShape(job){
+  if(!isPlainObject(job) || job.version !== 1) throw new Error("Unsupported or invalid Job schema version");
+  for(const [label, value, ownedRoot] of [
+    ["xml", job.xml, SOURCE_ROOT],
+    ["video", job.video, SOURCE_ROOT],
+  ]){
+    if(value === null) continue;
+    if(!isPlainObject(value) || typeof value.name !== "string") throw new Error(label + " record is invalid");
+    validateStoredRelativePath(value.relativePath, ownedRoot, label);
+  }
+  if(!Array.isArray(job.references)) throw new Error("references must be an array");
+  const referenceIds = new Set();
+  for(const reference of job.references){
+    if(!isPlainObject(reference) || typeof reference.id !== "string" || !reference.id ||
+        !["image", "video"].includes(reference.type) || referenceIds.has(reference.id)){
+      throw new Error("reference record is invalid");
+    }
+    validateStoredRelativePath(reference.relativePath, REFERENCES_ROOT, "reference");
+    referenceIds.add(reference.id);
+  }
+  if(!Array.isArray(job.globalReferenceIds) || job.globalReferenceIds.some(id => typeof id !== "string")){
+    throw new Error("globalReferenceIds must be a string array");
+  }
+  if(!isPlainObject(job.shotMappings)) throw new Error("shotMappings must be an object");
+  for(const mapping of Object.values(job.shotMappings)){
+    if(!isPlainObject(mapping) || !Array.isArray(mapping.refs) || mapping.refs.some(id => typeof id !== "string")){
+      throw new Error("shotMappings record is invalid");
+    }
+  }
+  if(job.timelineShots !== undefined && !Array.isArray(job.timelineShots)) throw new Error("timelineShots must be an array");
+  if(job.orphanedShotMappings !== undefined && !Array.isArray(job.orphanedShotMappings)){
+    throw new Error("orphanedShotMappings must be an array");
+  }
+  if((job.timelineShots?.length || 0) > 0 || (job.orphanedShotMappings?.length || 0) > 0){
+    // RED ZONE: persisted reconcile metadata must stay anonymous and exhaustive.
+    reconcileTimelineMappings({
+      previousShots: job.timelineShots || [],
+      nextShots: job.timelineShots || [],
+      shotMappings: job.shotMappings,
+      orphanedShotMappings: job.orphanedShotMappings || [],
+    });
+  }
+  if(job.projectTitle !== undefined && typeof job.projectTitle !== "string") throw new Error("projectTitle must be a string");
+  if(job.callout !== undefined && !isPlainObject(job.callout)) throw new Error("callout must be an object");
+  if(!isPlainObject(job.ui) || !isPlainObject(job.output)) throw new Error("ui and output must be objects");
+  return job;
+}
+
+function loadJob(){
+  ensureJobFolders();
+  if(!fs.existsSync(JOB_PATH)){
+    const job = emptyJob();
+    return writeJob(job);
+  }
+  try{
+    const parsed = validateJobShape(JSON.parse(fs.readFileSync(JOB_PATH, "utf8")));
+    if(typeof parsed.jobId !== "string" || !parsed.jobId || !Number.isSafeInteger(parsed.revision) || parsed.revision < 0){
+      if(typeof parsed.jobId !== "string" || !parsed.jobId) parsed.jobId = randomUUID();
+      parsed.revision = Number.isSafeInteger(parsed.revision) && parsed.revision >= 0 ? parsed.revision : 0;
+      return writeJob(parsed);
+    }
+    return parsed;
+  }catch(error){
+    try{logEvent("job_read_failed", { message: error.message })}catch{}
+    const blocked = new Error("current-job/job.json is unreadable. The original file was kept.");
+    blocked.code = "JOB_READ_FAILED";
+    blocked.cause = error;
+    throw blocked;
+  }
+}
+
+function writeJob(job){
+  ensureJobFolders();
+  const next = {
+    ...job,
+    version: 1,
+    jobId: typeof job?.jobId === "string" && job.jobId ? job.jobId : randomUUID(),
+    revision: (Number.isSafeInteger(job?.revision) && job.revision >= 0 ? job.revision : 0) + 1,
+    updatedAt: new Date().toISOString(),
+  };
+  const temporary = JOB_PATH + ".tmp";
+  fs.writeFileSync(temporary, JSON.stringify(next, null, 2), "utf8");
+  fs.renameSync(temporary, JOB_PATH);
+  return next;
+}
+
+function safeName(name){
+  const normalized = path.basename(name).normalize("NFKC");
+  return normalized.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/\s+/g, " ").trim() || "file";
+}
+
+function normalizeProjectTitle(value){
+  if(value === undefined || value === null) return DEFAULT_PROJECT_TITLE;
+  return String(value).replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+function normalizeCallout(value){
+  const source = value && typeof value === "object" ? value : {};
+  const position = source.position === "right" ? "right" : "left";
+  const style = ["line", "label", "minimal"].includes(source.style) ? source.style : "line";
+  const startValue = source.startSeconds === undefined ? DEFAULT_CALLOUT.startSeconds : Number(source.startSeconds);
+  const startSeconds = Math.max(0, Math.min(60, Number.isFinite(startValue) ? startValue : DEFAULT_CALLOUT.startSeconds));
+  const durationSeconds = Math.max(0.5, Math.min(30, Number(source.durationSeconds) || DEFAULT_CALLOUT.durationSeconds));
+  return {
+    enabled: source.enabled === undefined ? DEFAULT_CALLOUT.enabled : Boolean(source.enabled),
+    position,
+    style,
+    startSeconds,
+    durationSeconds,
+    subtitle: source.subtitle === undefined
+      ? DEFAULT_CALLOUT.subtitle
+      : String(source.subtitle).replace(/\s+/g, " ").trim().slice(0, 60),
+  };
+}
+
+function copyInto(sourcePath, destinationPath){
+  if(path.resolve(sourcePath).toLowerCase() !== path.resolve(destinationPath).toLowerCase()){
+    fs.copyFileSync(sourcePath, destinationPath);
+  }
+}
+
+function staleJobError(operation){
+  const error = new Error("Current Job changed. Please try the action again.");
+  error.code = "JOB_STALE";
+  error.operation = operation;
+  return error;
+}
+
+function requireRuntimeReady(operation){
+  if(!recoveryRequired) return;
+  const error = new Error("JOB_RECOVERY_REQUIRED: restart the app and inspect current-job/logs/app.log.");
+  error.code = "JOB_RECOVERY_REQUIRED";
+  error.operation = operation;
+  throw error;
+}
+
+function requireExpectedJob(expectedJobId, expectedRevision, operation){
+  requireRuntimeReady(operation);
+  const current = loadJob();
+  if(typeof expectedJobId === "string" && expectedJobId === current.jobId &&
+      Number.isSafeInteger(expectedRevision) && expectedRevision === current.revision) return current;
+  logEvent("job_mutation_rejected_stale", {
+    operation,
+    expectedJobId: typeof expectedJobId === "string" ? expectedJobId : null,
+    currentJobId: current.jobId,
+    expectedRevision: Number.isSafeInteger(expectedRevision) ? expectedRevision : null,
+    currentRevision: current.revision,
+  });
+  throw staleJobError(operation);
+}
+
+function discardPreparedXmlEntry(entry, reason){
+  if(!entry) return false;
+  preparedXmlImports.delete(entry.token);
+  try{
+    const discarded = discardPreparedCandidate(entry.preparation);
+    logEvent(reason === "validation-failed" ? "job_xml_validation_failed" : "job_xml_discarded", {
+      transactionId: entry.token,
+      xmlName: entry.name,
+      reason: String(reason || "discarded").slice(0, 60),
+    });
+    return discarded;
+  }catch(error){
+    logEvent("job_xml_cleanup_deferred", {
+      transactionId: entry.token,
+      code: error.code || "DISCARD_FAILED",
+    });
+    return false;
+  }
+}
+
+function prunePreparedXmlImports(){
+  const now = Date.now();
+  for(const entry of preparedXmlImports.values()){
+    if(entry.expiresAt <= now) discardPreparedXmlEntry(entry, "expired");
+  }
+}
+
+function discardPreparedXmlForOwner(ownerId){
+  for(const entry of [...preparedXmlImports.values()]){
+    if(entry.ownerId === ownerId) discardPreparedXmlEntry(entry, "superseded");
+  }
+}
+
+function prepareXmlImport(event, sourcePath, inputMethod){
+  requireRuntimeReady("xml_prepare");
+  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a new XML.");
+  prunePreparedXmlImports();
+  discardPreparedXmlForOwner(event.sender.id);
+  const preparation = prepareXmlCandidate({ sourcePath, logRoot: LOG_ROOT, inputMethod });
+  const text = fs.readFileSync(preparation.candidatePath, "utf8");
+  const entry = {
+    token: preparation.transactionId,
+    preparation,
+    ownerId: event.sender.id,
+    name: preparation.inputName,
+    text,
+    mode: null,
+    expiresAt: Date.now() + PREPARED_XML_TTL_MS,
+  };
+  preparedXmlImports.set(entry.token, entry);
+  logEvent("job_xml_prepared", {
+    transactionId: entry.token,
+    xmlName: entry.name,
+    inputMethod,
+    size: preparation.inputSize,
+  });
+  return { token: entry.token, name: entry.name, text: entry.text };
+}
+
+function preparedXmlEntry(event, token){
+  prunePreparedXmlImports();
+  if(typeof token !== "string" || !token) throw new Error("Prepared XML token is required.");
+  const entry = preparedXmlImports.get(token);
+  if(!entry || entry.ownerId !== event.sender.id) throw new Error("Prepared XML is unavailable or expired.");
+  return entry;
+}
+
+function newJobForXml(current, xmlName, timelineShots=[]){
+  const base = emptyJob();
+  return {
+    ...base,
+    revision: 1,
+    xml: { name: xmlName, relativePath: "source/timeline.xml" },
+    video: null,
+    references: [],
+    globalReferenceIds: [],
+    shotMappings: {},
+    timelineShots,
+    orphanedShotMappings: [],
+    projectTitle: "",
+    callout: { ...DEFAULT_CALLOUT },
+    ui: current.ui && typeof current.ui === "object" ? { ...base.ui, ...current.ui } : base.ui,
+    output: current.output && typeof current.output === "object" ? { ...base.output, ...current.output } : base.output,
+  };
+}
+
+function normalizeTimelineShots(value){
+  if(!Array.isArray(value) || value.length > 10000) throw new Error("Timeline SHOT metadata is invalid.");
+  const ids = new Set();
+  return value.map((shot, index) => {
+    if(!isPlainObject(shot)) throw new Error("Timeline SHOT metadata is invalid.");
+    const id = String(shot.id ?? "");
+    const identityKey = String(shot.identityKey || "");
+    const nameKey = String(shot.nameKey || "");
+    const startFrame = Number(shot.startFrame);
+    const endFrame = Number(shot.endFrame);
+    if(!id || ids.has(id) || !/^src-[0-9a-f]{16}$/i.test(identityKey) ||
+        !/^name-[0-9a-f]{16}$/i.test(nameKey) || !Number.isSafeInteger(startFrame) ||
+        !Number.isSafeInteger(endFrame) || startFrame < 0 || endFrame <= startFrame){
+      throw new Error("Timeline SHOT metadata is invalid.");
+    }
+    ids.add(id);
+    const occurrences = (Array.isArray(shot.occurrences) ? shot.occurrences : []).map(occurrence => {
+      const next = {
+        startFrame: Number(occurrence?.startFrame),
+        endFrame: Number(occurrence?.endFrame),
+        inFrame: Number(occurrence?.inFrame),
+        outFrame: Number(occurrence?.outFrame),
+      };
+      if(Object.values(next).some(frame => !Number.isSafeInteger(frame) || frame < 0) ||
+          next.endFrame <= next.startFrame || next.outFrame <= next.inFrame ||
+          next.startFrame < startFrame || next.endFrame > endFrame){
+        throw new Error("Timeline SHOT occurrence metadata is invalid.");
+      }
+      return next;
+    });
+    return { id, identityKey, nameKey, startFrame, endFrame, occurrences };
+  });
+}
+
+function updatedJobForXml(current, xmlName, timelineShots, reconciliation){
+  return {
+    ...current,
+    revision: current.revision + 1,
+    updatedAt: new Date().toISOString(),
+    xml: { name: xmlName, relativePath: "source/timeline.xml" },
+    shotMappings: reconciliation.shotMappings,
+    timelineShots,
+    orphanedShotMappings: reconciliation.orphanedShotMappings,
+  };
+}
+
+function discardPreparedVideoEntry(entry, reason){
+  if(!entry) return false;
+  preparedVideoImports.delete(entry.token);
+  try{
+    const discarded = discardPreparedVideoCandidate(entry.preparation);
+    logEvent("video_import_discarded", {
+      transactionId: entry.token,
+      videoName: entry.name,
+      reason: String(reason || "discarded").slice(0, 60),
+    });
+    return discarded;
+  }catch(error){
+    logEvent("video_import_cleanup_deferred", {
+      transactionId: entry.token,
+      code: error.code || "DISCARD_FAILED",
+    });
+    return false;
+  }
+}
+
+function prunePreparedVideoImports(){
+  const now = Date.now();
+  for(const entry of preparedVideoImports.values()){
+    if(entry.expiresAt <= now) discardPreparedVideoEntry(entry, "expired");
+  }
+}
+
+function discardPreparedVideoForOwner(ownerId){
+  for(const entry of [...preparedVideoImports.values()]){
+    if(entry.ownerId === ownerId) discardPreparedVideoEntry(entry, "superseded");
+  }
+}
+
+function prepareVideoImport(event, sourcePath, inputMethod){
+  requireRuntimeReady("video_prepare");
+  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a video.");
+  prunePreparedVideoImports();
+  discardPreparedVideoForOwner(event.sender.id);
+  const preparation = prepareVideoCandidate({
+    sourcePath,
+    logRoot: LOG_ROOT,
+    inputMethod,
+    allowedExtensions: VIDEO_EXTENSIONS,
+    maxBytes: VIDEO_MAX_BYTES,
+  });
+  const entry = {
+    token: preparation.transactionId,
+    preparation,
+    ownerId: event.sender.id,
+    name: preparation.inputName,
+    extension: preparation.inputExtension,
+    expiresAt: Date.now() + PREPARED_VIDEO_TTL_MS,
+  };
+  preparedVideoImports.set(entry.token, entry);
+  logEvent("video_import_prepared", {
+    transactionId: entry.token,
+    videoName: entry.name,
+    inputMethod,
+    size: preparation.inputSize,
+  });
+  return { token: entry.token, name: entry.name, extension: entry.extension };
+}
+
+function preparedVideoEntry(event, token){
+  prunePreparedVideoImports();
+  if(typeof token !== "string" || !token) throw new Error("Prepared video token is required.");
+  const entry = preparedVideoImports.get(token);
+  if(!entry || entry.ownerId !== event.sender.id) throw new Error("Prepared video is unavailable or expired.");
+  return entry;
+}
+
+function referenceType(filePath){
+  const extension = path.extname(filePath).toLowerCase();
+  if([".mp4", ".mov", ".m4v", ".webm"].includes(extension)) return "video";
+  if([".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"].includes(extension)) return "image";
+  return null;
+}
+
+function normalizeReferenceLabels(references){
+  const counts = { image: 0, video: 0 };
+  return (references || []).map(reference => {
+    const type = reference.type === "video" ? "video" : "image";
+    counts[type] += 1;
+    return {
+      ...reference,
+      label: type.toUpperCase() + " " + String(counts[type]).padStart(2, "0"),
+    };
+  });
+}
+
+function publicFile(relativePath){
+  if(!relativePath) return null;
+  const absolutePath = path.join(JOB_ROOT, relativePath);
+  return { relativePath, url: pathToFileURL(absolutePath).href, absolutePath };
+}
+
+function hydrateJob(job){
+  return {
+    ...job,
+    projectTitle: normalizeProjectTitle(job.projectTitle),
+    callout: normalizeCallout(job.callout),
+    xml: job.xml ? { ...job.xml, ...publicFile(job.xml.relativePath) } : null,
+    video: job.video ? { ...job.video, ...publicFile(job.video.relativePath) } : null,
+    references: normalizeReferenceLabels(job.references).map(reference => ({
+      ...reference,
+      ...publicFile(reference.relativePath),
+    })),
+    paths: {
+      jobRoot: JOB_ROOT,
+      outputRoot: OUTPUT_ROOT,
+      logPath: LOG_PATH,
+    },
+  };
+}
+
+const exportController = createExportController({
+  BrowserWindow,
+  appRoot: APP_ROOT,
+  jobRoot: JOB_ROOT,
+  outputRoot: OUTPUT_ROOT,
+  logEvent,
+});
+
+let exportWindow = null;
+let exportDialogContext = {};
+
+function exportSummary(){
+  const job = hydrateJob(loadJob());
+  const durationSeconds = Math.max(0, Number(exportDialogContext.durationSeconds) || 0);
+  const spec = resolveRenderSpec(job.output);
+  return {
+    jobId: job.jobId,
+    revision: job.revision,
+    projectTitle: job.projectTitle,
+    format: "H.264",
+    width: spec.width,
+    height: spec.height,
+    outputFps: spec.fps,
+    sourceFps: Math.max(0, Number(exportDialogContext.sourceFps) || 0),
+    bitrateMbps: spec.bitrateMbps,
+    durationSeconds,
+    totalFrames: durationSeconds ? Math.ceil(durationSeconds * spec.fps) : 0,
+    editCount: Math.max(0, Number(exportDialogContext.editCount) || 0),
+    outputFolder: OUTPUT_ROOT,
+    videoName: job.video?.name || "NO VIDEO",
+    xmlName: job.xml?.name || "NO XML",
+    ready: !recoveryRequired && Boolean(job.xml?.relativePath && job.video?.relativePath),
+  };
+}
+
+function notifyProjectTitle(projectTitle){
+  for(const window of BrowserWindow.getAllWindows()){
+    if(!window.isDestroyed()) window.webContents.send("project:title-updated", projectTitle);
+  }
+}
+
+function openExportWindow(sender, context = {}){
+  exportDialogContext = {
+    durationSeconds: Math.max(0, Number(context.durationSeconds) || 0),
+    sourceFps: Math.max(0, Number(context.sourceFps) || 0),
+    editCount: Math.max(0, Number(context.editCount) || 0),
+  };
+  if(exportWindow && !exportWindow.isDestroyed()){
+    exportWindow.webContents.send("export:summary-updated", exportSummary());
+    exportWindow.focus();
+    return true;
+  }
+  const parent = BrowserWindow.fromWebContents(sender) || undefined;
+  exportWindow = new BrowserWindow({
+    width: 520,
+    height: 620,
+    useContentSize: true,
+    parent,
+    modal: Boolean(parent),
+    show: false,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    autoHideMenuBar: true,
+    backgroundColor: "#f4f6f5",
+    title: "Export H.264",
+    webPreferences: {
+      preload: path.join(APP_ROOT, "export-preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      minimumFontSize: 0,
+    },
+  });
+  exportWindow.loadFile(path.join(APP_ROOT, "src", "export-dialog.html"));
+  logEvent("export_dialog_opened", { durationSeconds: exportDialogContext.durationSeconds });
+  exportWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  exportWindow.webContents.on("will-navigate", event => event.preventDefault());
+  exportWindow.once("ready-to-show", () => exportWindow?.show());
+  exportWindow.on("closed", () => {
+    if(exportController.isRunning()) exportController.cancel();
+    logEvent("export_dialog_closed");
+    exportWindow = null;
+  });
+  return true;
+}
+
+function createWindow(){
+  const window = new BrowserWindow({
+    width: 1360,
+    height: 1040,
+    minWidth: 1320,
+    minHeight: 720,
+    backgroundColor: "#d9dddb",
+    autoHideMenuBar: true,
+    show: !SMOKE_TEST && !EXPORT_SMOKE,
+    webPreferences: {
+      preload: path.join(APP_ROOT, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      minimumFontSize: 0,
+      zoomFactor: 1,
+    },
+  });
+  window.loadFile(path.join(APP_ROOT, "src", "index.html"));
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", event => event.preventDefault());
+  const ownerId = window.webContents.id;
+  window.webContents.once("destroyed", () => {
+    discardPreparedXmlForOwner(ownerId);
+    discardPreparedVideoForOwner(ownerId);
+  });
+  if(SMOKE_TEST){
+    window.webContents.once("did-finish-load", async () => {
+      try{
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        const smokeXmlPath = process.env.PORTABLE_SMOKE_XML;
+        if(smokeXmlPath && fs.existsSync(smokeXmlPath)){
+          const xmlText = fs.readFileSync(smokeXmlPath, "utf8");
+          const parsed = await window.webContents.executeJavaScript(
+            `window.portableMvp.loadXmlText(${JSON.stringify(xmlText)})`
+          );
+          if(parsed?.fps!==24||parsed?.durationFrames!==288||parsed?.edits!==5||parsed?.shots!==4){
+            throw new Error("Public fixture contract changed: "+JSON.stringify(parsed));
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        await window.webContents.executeJavaScript('document.getElementById("calloutSettings").setAttribute("open", "")');
+        const result = await window.webContents.executeJavaScript(`({
+          title: document.title,
+          hasApi: Boolean(window.portableApi),
+          hasWireframe: Boolean(window.wireframeApi),
+          hasPreview: Boolean(document.getElementById("renderPreview")?.contentWindow?.portablePreview),
+          shotRail: Boolean(document.getElementById("shotRail")),
+          editOverlay: Boolean(document.getElementById("editOverlay")),
+          calloutSettingsOpen: document.getElementById("calloutSettings")?.open,
+          previewState: document.getElementById("renderPreview")?.contentWindow?.portablePreview?.getState(),
+          shotItems: document.querySelectorAll("#shotRailList .shotRailItem").length,
+          editStatus: document.getElementById("editCountStatus")?.textContent
+        })`);
+        if(!result.hasApi || !result.hasWireframe || !result.hasPreview || !result.shotRail || !result.editOverlay || !result.calloutSettingsOpen){
+          throw new Error("Smoke contract failed: " + JSON.stringify(result));
+        }
+        if(process.env.PORTABLE_SMOKE_XML && (!result.shotItems || result.editStatus==="0 EDITS")){
+          throw new Error("XML did not reach the parent SHOT rail: " + JSON.stringify(result));
+        }
+        const job = loadJob();
+        if(job.xml?.relativePath && job.video?.relativePath){
+          const playback = await window.webContents.executeJavaScript(`(async()=>{
+            const bridge=document.getElementById("renderPreview").contentWindow.portablePreview;
+            for(let attempt=0;attempt<30&&bridge.getState().readyState<1;attempt+=1){
+              await new Promise(resolve=>setTimeout(resolve,100));
+            }
+            const items=document.querySelectorAll("#shotRailList .shotRailItem");
+            (items[1]||items[0])?.click();
+            await new Promise(resolve=>setTimeout(resolve,150));
+            const sought=bridge.getState();
+             bridge.playPause();
+             await new Promise(resolve=>setTimeout(resolve,600));
+             const playing=bridge.getState();
+             const expectedPlayingSeek=window.wireframeApi.snapshot().shots[2]?.start||0;
+             (items[2]||items[1]||items[0])?.click();
+             await new Promise(resolve=>setTimeout(resolve,500));
+             const playingSeek=bridge.getState();
+             bridge.playPause();
+             const shots=window.wireframeApi.snapshot().shots;
+             const crossingStart=Math.max(0,(shots[1]?.end||0)-.1);
+             bridge.seekFrame(crossingStart*bridge.getState().fps);
+             document.activeElement?.blur?.();
+             document.body.dispatchEvent(new KeyboardEvent("keydown",{key:" ",code:"Space",bubbles:true,cancelable:true}));
+             await new Promise(resolve=>setTimeout(resolve,500));
+             const shortcutPlaying=bridge.getState();
+             const syncedShot=document.querySelector("#shotRailList .shotRailItem.selected")?.dataset.shot||null;
+             document.body.dispatchEvent(new KeyboardEvent("keyup",{key:" ",code:"Space",bubbles:true,cancelable:true}));
+             document.body.dispatchEvent(new KeyboardEvent("keydown",{key:" ",code:"Space",bubbles:true,cancelable:true}));
+             return {sought,playing,playingSeek,expectedPlayingSeek,shortcutPlaying,syncedShot,expectedSyncedShot:String(shots[2]?.id||"")};
+          })()`);
+          if(playback.sought.readyState<1 || playback.sought.currentTime<.5){
+            throw new Error("SHOT seek failed: " + JSON.stringify(playback));
+          }
+           if(playback.playing.paused || playback.playing.currentTime<=playback.sought.currentTime+.1){
+             throw new Error("Video playback failed: " + JSON.stringify(playback));
+           }
+           if(playback.playingSeek.paused || Math.abs(playback.playingSeek.currentTime-playback.expectedPlayingSeek)>.9){
+             throw new Error("Playing SHOT seek drifted: " + JSON.stringify(playback));
+           }
+           if(playback.shortcutPlaying.paused || playback.syncedShot!==playback.expectedSyncedShot){
+             throw new Error("Space shortcut or SHOT follow failed: " + JSON.stringify(playback));
+           }
+          result.playback=playback;
+        }
+        await window.webContents.executeJavaScript(`(()=>{
+          const bridge=document.getElementById("renderPreview").contentWindow.portablePreview;
+          bridge.setCalloutConfig({enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:30,subtitle:"REFERENCE MAP · EDIT WORKFLOW"});
+          bridge.seekFrame(2*bridge.getState().fps);
+        })()`);
+        await new Promise(resolve => setTimeout(resolve, 180));
+        const image = await window.webContents.capturePage();
+        fs.writeFileSync(path.join(OUTPUT_ROOT, "mvp-smoke.png"), image.toPNG());
+        logEvent("smoke_passed", result);
+        console.log("SMOKE_OK " + JSON.stringify(result));
+        app.exit(0);
+      }catch(error){
+        logEvent("smoke_failed", { message: error.message });
+        console.error("SMOKE_FAILED " + error.stack);
+        app.exit(1);
+      }
+    });
+  }
+  if(EXPORT_SMOKE){
+    window.webContents.once("did-finish-load", async () => {
+      try{
+        const result = await exportController.start(window.webContents, loadJob());
+        console.log("EXPORT_SMOKE_OK " + JSON.stringify(result));
+        app.exit(0);
+      }catch(error){
+        console.error("EXPORT_SMOKE_FAILED " + error.stack);
+        app.exit(1);
+      }
+    });
+  }
+}
+
+app.whenReady().then(() => {
+  ensureJobFolders();
+  let recovery = null;
+  try{
+    recovery = recoverXmlTransactions({
+      logRoot: LOG_ROOT,
+      sourceRoot: SOURCE_ROOT,
+      referencesRoot: REFERENCES_ROOT,
+      jobPath: JOB_PATH,
+      onEvent: (event, detail) => logEvent(event, detail),
+    });
+  }catch(error){
+    try{logEvent("job_xml_recovery_boot_failed", { code: error.code || "RECOVERY_BOOT_FAILED" })}catch{}
+    dialog.showErrorBox(
+      "Current Job recovery required",
+      "안전한 Job 복구 상태를 확인하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
+    );
+    app.quit();
+    return;
+  }
+  if(recovery.recovered || recovery.cleaned || recovery.deferred || recovery.failed){
+    logEvent("job_xml_recovery_summary", recovery);
+  }
+  if(recovery.failed){
+    dialog.showErrorBox(
+      "Current Job recovery required",
+      "완료되지 않은 XML 교체를 자동 복구하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
+    );
+    app.quit();
+    return;
+  }
+  let videoRecovery = null;
+  try{
+    videoRecovery = recoverVideoTransactions({
+      logRoot: LOG_ROOT,
+      sourceRoot: SOURCE_ROOT,
+      jobPath: JOB_PATH,
+      onEvent: (event, detail) => logEvent(event, detail),
+    });
+  }catch(error){
+    try{logEvent("job_video_recovery_boot_failed", { code: error.code || "RECOVERY_BOOT_FAILED" })}catch{}
+    dialog.showErrorBox(
+      "Current Job recovery required",
+      "안전한 영상 교체 복구 상태를 확인하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
+    );
+    app.quit();
+    return;
+  }
+  if(videoRecovery.recovered || videoRecovery.cleaned || videoRecovery.deferred || videoRecovery.failed){
+    logEvent("job_video_recovery_summary", videoRecovery);
+  }
+  if(videoRecovery.failed){
+    dialog.showErrorBox(
+      "Current Job recovery required",
+      "완료되지 않은 영상 교체를 자동 복구하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
+    );
+    app.quit();
+    return;
+  }
+  try{
+    loadJob();
+  }catch(error){
+    dialog.showErrorBox(
+      "Current Job is unreadable",
+      "current-job/job.json을 읽을 수 없어 앱을 중단했습니다. 원본 파일은 덮어쓰지 않았습니다. current-job/logs/app.log를 확인하세요.",
+    );
+    app.quit();
+    return;
+  }
+  logEvent("app_started", { appRoot: APP_ROOT });
+  createWindow();
+  app.on("activate", () => {
+    if(BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on("window-all-closed", () => {
+  if(process.platform !== "darwin") app.quit();
+});
+
+ipcMain.handle("job:get", () => hydrateJob(loadJob()));
+ipcMain.handle("app:get-render-spec", () => publicRenderSpec(loadJob().output));
+
+ipcMain.handle("job:save", (_event, payload) => {
+  requireRuntimeReady("job_save");
+  const current = loadJob();
+  if(typeof payload?.expectedJobId !== "string" || payload.expectedJobId !== current.jobId ||
+      !Number.isSafeInteger(payload?.expectedRevision) || payload.expectedRevision !== current.revision){
+    logEvent("job_save_rejected_stale", {
+      expectedJobId: typeof payload?.expectedJobId === "string" ? payload.expectedJobId : null,
+      currentJobId: current.jobId,
+      expectedRevision: Number.isSafeInteger(payload?.expectedRevision) ? payload.expectedRevision : null,
+      currentRevision: current.revision,
+    });
+    return { ...hydrateJob(current), saveRejected: "JOB_STALE" };
+  }
+  const validReferenceIds = new Set((current.references || []).map(reference => reference.id));
+  const requestedMappings = payload?.shotMappings && typeof payload.shotMappings === "object"
+    ? payload.shotMappings
+    : current.shotMappings;
+  const safeMappings = {};
+  for(const [shotId, mapping] of Object.entries(requestedMappings || {})){
+    if(!mapping || typeof mapping !== "object") continue;
+    const refs = Array.isArray(mapping.refs) ? mapping.refs.filter(id => validReferenceIds.has(id)) : [];
+    if((mapping.mode === "ADD" || mapping.mode === "REPLACE") && !refs.length) continue;
+    safeMappings[shotId] = { ...mapping, refs };
+  }
+  const next = writeJob({
+    ...current,
+    globalReferenceIds: Array.isArray(payload?.globalReferenceIds)
+      ? payload.globalReferenceIds.filter(id => validReferenceIds.has(id))
+      : current.globalReferenceIds,
+    shotMappings: safeMappings,
+    projectTitle: payload?.projectTitle === undefined ? current.projectTitle : normalizeProjectTitle(payload.projectTitle),
+    callout: payload?.callout === undefined ? current.callout : normalizeCallout(payload.callout),
+    ui: payload?.ui && typeof payload.ui === "object" ? { ...current.ui, ...payload.ui } : current.ui,
+  });
+  logEvent("job_saved", {
+    globalCount: next.globalReferenceIds.length,
+    shotMappingCount: Object.keys(next.shotMappings || {}).length,
+  });
+  return hydrateJob(next);
+});
+
+ipcMain.handle("job:select-xml", async event => {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const options = {
+    title: "Load timeline XML",
+    properties: ["openFile"],
+    filters: [{ name: "Timeline XML", extensions: ["xml"] }],
+  };
+  const result = owner
+    ? await dialog.showOpenDialog(owner, options)
+    : await dialog.showOpenDialog(options);
+  if(result.canceled || !result.filePaths[0]) return null;
+  return prepareXmlImport(event, result.filePaths[0], "picker");
+});
+
+ipcMain.handle("job:prepare-xml-path", (event, sourcePath) => prepareXmlImport(event, sourcePath, "drop"));
+
+ipcMain.handle("job:choose-xml-mode", async (event, token) => {
+  requireRuntimeReady("xml_choose_mode");
+  const entry = preparedXmlEntry(event, token);
+  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a new XML.");
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const options = {
+    type: "warning",
+    title: "Load timeline XML",
+    message: "새 XML을 현재 작업에 반영할 방식을 선택하세요.",
+    detail: "타임라인만 업데이트: 영상·레퍼런스·GLOBAL·제목·콜아웃·출력 설정을 유지하고 SHOT 매핑을 안전하게 재연결합니다.\n새 Job으로 불러오기: 기존 작업 자료를 초기화합니다.",
+    buttons: ["타임라인만 업데이트", "새 Job으로 불러오기", "취소"],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+  };
+  const result = owner
+    ? await dialog.showMessageBox(owner, options)
+    : await dialog.showMessageBox(options);
+  if(result.response === 2){
+    logEvent("job_xml_cancelled", { transactionId: entry.token, xmlName: entry.name });
+    discardPreparedXmlEntry(entry, "cancelled");
+    return null;
+  }
+  entry.mode = result.response === 1 ? "new" : "update";
+  entry.expiresAt = Date.now() + PREPARED_XML_TTL_MS;
+  logEvent("job_xml_mode_selected", { transactionId: entry.token, mode: entry.mode });
+  return entry.mode;
+});
+
+ipcMain.handle("job:commit-xml", (event, payload) => {
+  const entry = preparedXmlEntry(event, payload?.token);
+  if(!["update", "new"].includes(entry.mode)) throw new Error("Choose how to import XML before committing it.");
+  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a new XML.");
+  const current = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "job_xml_commit");
+  const nextTimelineShots = normalizeTimelineShots(payload?.nextTimelineShots);
+  let reconciliation = {
+    shotMappings: {},
+    orphanedShotMappings: [],
+    summary: { preserved: 0, newShots: nextTimelineShots.length, orphaned: 0, ambiguous: 0, reattached: 0 },
+  };
+  let nextJob = null;
+  let commitXml = commitPreparedXml;
+  if(entry.mode === "update"){
+    const storedTimelineShots = Array.isArray(current.timelineShots) && current.timelineShots.length
+      ? current.timelineShots
+      : payload?.previousTimelineShots;
+    const previousTimelineShots = normalizeTimelineShots(storedTimelineShots || []);
+    reconciliation = reconcileTimelineMappings({
+      previousShots: previousTimelineShots,
+      nextShots: nextTimelineShots,
+      shotMappings: current.shotMappings || {},
+      orphanedShotMappings: current.orphanedShotMappings || [],
+    });
+    nextJob = updatedJobForXml(current, entry.name, nextTimelineShots, reconciliation);
+    commitXml = commitPreparedXmlUpdate;
+  }else{
+    nextJob = newJobForXml(current, entry.name, nextTimelineShots);
+  }
+  logEvent(entry.mode === "update" ? "job_xml_update_started" : "job_reset_started", {
+    transactionId: entry.token,
+    mode: entry.mode,
+    previousJobId: current.jobId,
+    nextJobId: nextJob.jobId,
+    previousReferenceCount: current.references?.length || 0,
+    previousMappingCount: Object.keys(current.shotMappings || {}).length,
+    ...reconciliation.summary,
+  });
+  try{
+    const committed = commitXml({
+      preparation: entry.preparation,
+      sourceRoot: SOURCE_ROOT,
+      referencesRoot: REFERENCES_ROOT,
+      jobPath: JOB_PATH,
+      nextJob,
+      onEvent: (eventName, detail) => logEvent(eventName, detail),
+    });
+    preparedXmlImports.delete(entry.token);
+    try{
+      logEvent(entry.mode === "update" ? "job_xml_update_committed" : "job_reset_committed", {
+        transactionId: entry.token,
+        mode: entry.mode,
+        previousJobId: current.jobId,
+        nextJobId: committed.job.jobId,
+        xmlName: entry.name,
+        removedSourceCount: committed.removedSourceCount,
+        removedReferenceCount: committed.removedReferenceCount,
+        ...reconciliation.summary,
+      });
+    }catch{}
+    return { job: hydrateJob(committed.job), mode: entry.mode, summary: reconciliation.summary };
+  }catch(error){
+    preparedXmlImports.delete(entry.token);
+    try{logEvent("job_xml_commit_failed", { transactionId: entry.token, mode: entry.mode, code: error.code || "COMMIT_FAILED" })}catch{}
+    if(error.rollbackError){
+      recoveryRequired = true;
+      logEvent("job_runtime_recovery_required", { transactionId: entry.token, code: "ROLLBACK_FAILED" });
+      dialog.showErrorBox(
+        "Current Job recovery required",
+        "XML 교체 rollback을 완료하지 못해 저장과 Export를 차단했습니다. 앱을 다시 시작한 뒤 current-job/logs/app.log를 확인하세요.",
+      );
+      const fatal = new Error("JOB_RECOVERY_REQUIRED: XML commit rollback failed.");
+      fatal.code = "JOB_RECOVERY_REQUIRED";
+      throw fatal;
+    }
+    throw error;
+  }
+});
+
+ipcMain.handle("job:discard-prepared-xml", (event, payload) => {
+  const entry = preparedXmlEntry(event, payload?.token);
+  return discardPreparedXmlEntry(entry, payload?.reason);
+});
+
+ipcMain.handle("job:select-video", async event => {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const options = {
+    title: "Load H.264 source video",
+    properties: ["openFile"],
+    filters: [{ name: "Video", extensions: ["mp4", "mov", "m4v"] }],
+  };
+  const result = owner
+    ? await dialog.showOpenDialog(owner, options)
+    : await dialog.showOpenDialog(options);
+  if(result.canceled || !result.filePaths[0]) return null;
+  return prepareVideoImport(event, result.filePaths[0], "picker");
+});
+
+ipcMain.handle("job:prepare-video-path", (event, sourcePath) => prepareVideoImport(event, sourcePath, "drop"));
+
+ipcMain.handle("job:commit-video", (event, payload) => {
+  const entry = preparedVideoEntry(event, payload?.token);
+  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a video.");
+  const current = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "video_import_commit");
+  const nextJob = {
+    ...current,
+    revision: current.revision + 1,
+    updatedAt: new Date().toISOString(),
+    video: {
+      name: entry.name,
+      relativePath: "source/video" + entry.extension,
+    },
+  };
+  try{
+    const committed = commitPreparedVideo({
+      preparation: entry.preparation,
+      sourceRoot: SOURCE_ROOT,
+      jobPath: JOB_PATH,
+      nextJob,
+      onEvent: (eventName, detail) => logEvent(eventName, detail),
+    });
+    preparedVideoImports.delete(entry.token);
+    try{
+      logEvent("video_imported", {
+        transactionId: entry.token,
+        name: entry.name,
+        replacedVideoCount: committed.replacedVideoCount,
+      });
+    }catch{}
+    return hydrateJob(committed.job);
+  }catch(error){
+    preparedVideoImports.delete(entry.token);
+    try{logEvent("video_import_failed", { transactionId: entry.token, code: error.code || "COMMIT_FAILED" })}catch{}
+    if(error.rollbackError){
+      recoveryRequired = true;
+      logEvent("job_runtime_recovery_required", { transactionId: entry.token, code: "VIDEO_ROLLBACK_FAILED" });
+      dialog.showErrorBox(
+        "Current Job recovery required",
+        "영상 교체 rollback을 완료하지 못해 저장과 Export를 차단했습니다. 앱을 다시 시작한 뒤 current-job/logs/app.log를 확인하세요.",
+      );
+      const fatal = new Error("JOB_RECOVERY_REQUIRED: video commit rollback failed.");
+      fatal.code = "JOB_RECOVERY_REQUIRED";
+      throw fatal;
+    }
+    throw error;
+  }
+});
+
+ipcMain.handle("job:discard-prepared-video", (event, payload) => {
+  const entry = preparedVideoEntry(event, payload?.token);
+  return discardPreparedVideoEntry(entry, payload?.reason);
+});
+
+function importReferencePaths(sourcePaths, expectedJobId, expectedRevision){
+  const current = requireExpectedJob(expectedJobId, expectedRevision, "reference_import");
+  const added = [];
+  const createdPaths = [];
+  let next = null;
+  try{
+    for(const candidate of sourcePaths || []){
+      if(typeof candidate !== "string") continue;
+      let inspected = null;
+      try{
+        inspected = inspectInputFile(candidate, REFERENCE_EXTENSIONS, REFERENCE_MAX_BYTES);
+      }catch(error){
+        logEvent("reference_import_skipped", { code: error.code || "INVALID_INPUT" });
+        continue;
+      }
+      const sourcePath = inspected.absolutePath;
+      const type = referenceType(sourcePath);
+      if(!type) continue;
+      const nextNumber = current.references.filter(reference => reference.type === type).length + 1;
+      const id = type + "-" + String(nextNumber).padStart(2, "0") + "-" + Date.now().toString(36);
+      const destinationName = id + "_" + safeName(path.basename(sourcePath));
+      const destinationPath = path.join(REFERENCES_ROOT, destinationName);
+      copyInto(sourcePath, destinationPath);
+      createdPaths.push(destinationPath);
+      const reference = {
+        id,
+        type,
+        label: type.toUpperCase() + " " + String(nextNumber).padStart(2, "0"),
+        originalName: path.basename(sourcePath),
+        relativePath: path.relative(JOB_ROOT, destinationPath).replaceAll("\\", "/"),
+      };
+      current.references.push(reference);
+      added.push(reference);
+    }
+    current.references = normalizeReferenceLabels(current.references);
+    next = added.length ? writeJob(current) : current;
+  }catch(error){
+    for(const createdPath of createdPaths){
+      try{if(fs.existsSync(createdPath)) fs.unlinkSync(createdPath)}catch(cleanupError){
+        logEvent("reference_import_cleanup_failed", { code: cleanupError.code || "CLEANUP_FAILED" });
+      }
+    }
+    throw error;
+  }
+  logEvent("references_imported", { count: added.length });
+  return hydrateJob(next);
+}
+
+ipcMain.handle("job:add-references", async (event, payload) => {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const options = {
+    title: "Add image or video references",
+    properties: ["openFile", "multiSelections"],
+    filters: [
+      { name: "References", extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif", "mp4", "mov", "m4v", "webm"] },
+    ],
+  };
+  const result = owner
+    ? await dialog.showOpenDialog(owner, options)
+    : await dialog.showOpenDialog(options);
+  if(result.canceled || !result.filePaths.length) return null;
+  return importReferencePaths(result.filePaths, payload?.expectedJobId, payload?.expectedRevision);
+});
+
+ipcMain.handle("job:add-reference-paths", (_event, payload) => (
+  importReferencePaths(payload?.paths, payload?.expectedJobId, payload?.expectedRevision)
+));
+
+ipcMain.handle("job:delete-reference", (_event, payload) => {
+  const referenceId = payload?.id;
+  if(typeof referenceId !== "string" || !referenceId) throw new Error("Invalid reference id");
+  const current = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "reference_delete");
+  const reference = (current.references || []).find(item => item.id === referenceId);
+  if(!reference) return { job: hydrateJob(current), fileDeleted: false, missing: true };
+
+  current.references = normalizeReferenceLabels(current.references.filter(item => item.id !== referenceId));
+  current.globalReferenceIds = (current.globalReferenceIds || []).filter(id => id !== referenceId);
+  for(const [shotId, mapping] of Object.entries(current.shotMappings || {})){
+    const refs = (mapping?.refs || []).filter(id => id !== referenceId);
+    if(!refs.length && (mapping?.mode === "ADD" || mapping?.mode === "REPLACE")){
+      delete current.shotMappings[shotId];
+    }else{
+      current.shotMappings[shotId] = { ...mapping, refs };
+    }
+  }
+  current.orphanedShotMappings = (current.orphanedShotMappings || []).flatMap(record => {
+    const refs = (record?.mapping?.refs || []).filter(id => id !== referenceId);
+    if(!refs.length && (record?.mapping?.mode === "ADD" || record?.mapping?.mode === "REPLACE")) return [];
+    return [{ ...record, mapping: { ...record.mapping, refs } }];
+  });
+
+  const next = writeJob(current);
+  let fileDeleted = false;
+  let warning = null;
+  try{
+    const absolutePath = path.resolve(JOB_ROOT, reference.relativePath || "");
+    const relativeToReferences = path.relative(path.resolve(REFERENCES_ROOT), absolutePath);
+    const insideReferences = relativeToReferences && !relativeToReferences.startsWith("..") && !path.isAbsolute(relativeToReferences);
+    if(!insideReferences) throw new Error("Reference path is outside current-job/references");
+    if(fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+    fileDeleted = true;
+  }catch(error){
+    warning = error.message;
+    logEvent("reference_file_delete_failed", { id: referenceId, message: warning });
+  }
+  logEvent("reference_deleted", { id: referenceId, fileDeleted });
+  return { job: hydrateJob(next), fileDeleted, warning };
+});
+
+ipcMain.handle("job:read-xml", () => {
+  const job = loadJob();
+  if(!job.xml?.relativePath) return null;
+  const xmlPath = path.join(JOB_ROOT, job.xml.relativePath);
+  if(!fs.existsSync(xmlPath)) return null;
+  return fs.readFileSync(xmlPath, "utf8");
+});
+
+ipcMain.handle("app:log", (_event, event, detail) => {
+  logEvent(String(event || "renderer_event"), detail && typeof detail === "object" ? detail : {});
+  return true;
+});
+
+ipcMain.handle("export:open-dialog", (event, context) => openExportWindow(event.sender, context));
+ipcMain.handle("export:get-summary", () => exportSummary());
+ipcMain.handle("export:start", async (event, payload) => {
+  const job = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "export_start");
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if(window && !window.isDestroyed()) window.setClosable(false);
+  try{
+    return await exportController.start(event.sender, job);
+  }finally{
+    if(window && !window.isDestroyed()) window.setClosable(true);
+  }
+});
+ipcMain.handle("export:cancel", () => exportController.cancel());
+ipcMain.handle("export:close-dialog", () => {
+  if(exportController.isRunning()) return false;
+  if(exportWindow && !exportWindow.isDestroyed()) exportWindow.close();
+  return true;
+});
+ipcMain.handle("export:open-output", () => shell.openPath(OUTPUT_ROOT));
