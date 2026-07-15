@@ -54,7 +54,7 @@
   }
   function applyPreviewReferences(snapshot){ preview()?.setReferences(previewReferenceState(snapshot)); }
   function normalizeProjectTitle(projectTitle){
-    if(projectTitle===undefined||projectTitle===null)return "SEEDANCE 2.0";
+    if(projectTitle===undefined||projectTitle===null)return "UNTITLED PROJECT";
     return String(projectTitle).replace(/\s+/g," ").trim().slice(0,40);
   }
   function applyProjectTitle(projectTitle=job?.projectTitle){
@@ -191,7 +191,7 @@
   }
   async function loadXmlText(text){
     await parseXml(text,{emitChange:false});
-    return {fps:timeline.fps,edits:timeline.edits,shots:timeline.shots.length};
+    return {fps:timeline.fps,durationFrames:timeline.durationFrames,edits:timeline.edits,shots:timeline.shots.length};
   }
   async function saveMapping(){
     if(!initialized||!bridge||transitioning||runtimeBlocked)return;
@@ -583,7 +583,10 @@
   async function initialize(){
     if(!bridge){ui.showToast("OPEN WITH ELECTRON");return}
     try{
-      const current=await bridge.getJob();
+      const [current,renderSpec]=await Promise.all([bridge.getJob(),bridge.getRenderSpec()]);
+      const target=await waitForPreview();
+      target?.setRenderSpec?.(renderSpec);
+      ui.setRenderSpec?.(renderSpec);
       await hydrateJobState(current);
       initialized=true;
       await safeRendererLog("renderer_ready",{

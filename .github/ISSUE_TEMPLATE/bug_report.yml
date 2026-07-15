@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible problem without private project data.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not upload private XML, video, references, paths, or credentials.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Prefer the bundled synthetic fixture.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: 0.1.0-beta.1
+  - type: textarea
+    id: validation
+    attributes:
+      label: Check and smoke output

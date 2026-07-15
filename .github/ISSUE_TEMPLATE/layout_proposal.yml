@@ -1,0 +1,40 @@
+name: Layout proposal
+description: Propose a fixed layout or presentation-only contribution.
+title: "[Layout] "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: aspect
+    attributes:
+      label: Fixed aspect ratio
+      options:
+        - 16:9
+        - 9:16
+        - 1:1
+        - 4:5
+        - Other fixed ratio
+    validations:
+      required: true
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case and information hierarchy
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: Screenshot and Export validation
+      description: Explain readability, reference density, and the bundled fixture result.
+    validations:
+      required: true
+  - type: checkboxes
+    id: contract
+    attributes:
+      label: Core contract
+      options:
+        - label: I will not require a runtime preset registry or Job layout field.
+          required: true
+        - label: I will preserve parser, SHOT identity, mapping, and Export process contracts.
+          required: true

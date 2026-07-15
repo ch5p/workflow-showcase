@@ -2,13 +2,13 @@
 
 ## Current State
 
-Electron 단일 Job MVP 골격이 구성되어 있습니다. 기존 `output-preview.html`의 FCP XML 파서는 다시 작성하지 않고 `window.portablePreview` 브리지로만 호출합니다. XML, 영상, 레퍼런스는 `current-job`에 복사되고 GLOBAL/SHOT 매핑은 `job.json`에 자동 저장됩니다.
+Electron 단일 Job MVP 골격이 구성되어 있습니다. 기존 FCP XML parser는 동작을 유지한 채 `src/core/xmeml-parser.js`로, PRIMARY 계산과 SHOT/reference 순수 규칙은 나머지 `src/core/*`로 분리했습니다. `output-preview.html`은 `window.portablePreview` 브리지와 presentation runtime을 소유합니다. XML, 영상, 레퍼런스는 `current-job`에 복사되고 GLOBAL/SHOT 매핑은 `job.json`에 자동 저장됩니다.
 
 SHOT 클릭·방향키 탐색은 실제 영상 `currentTime`과 타임라인을 함께 이동합니다. 정지 상태, 재생 시작, 재생 중 SHOT 이동을 `current-job`의 실제 XML/영상으로 검증했으며 재생 중 이전 영상 시계가 새 위치를 덮어쓰지 않도록 video-frame clock generation guard를 둡니다.
 
-`EXPORT H.264`는 1280x1080 Electron offscreen 화면을 60fps BGRA raw frame으로 FFmpeg에 직접 전달합니다. 기본은 `h264_nvenc` CBR 12 Mbps이고 런타임 실패 시 `libx264`로 전체 출력을 다시 시도합니다. 원본 AAC 오디오는 stream copy하고 출력은 `current-job/output/character_workflow_export_*.mp4`에 저장합니다.
+`EXPORT H.264`는 `render-spec.cjs`가 공급하는 1280x1080 Electron offscreen 화면을 60fps BGRA raw frame으로 FFmpeg에 직접 전달합니다. editor fit, Export summary, offscreen window, paint 검사와 FFmpeg 입력이 같은 spec을 사용합니다. 기본은 `h264_nvenc` CBR 12 Mbps이고 런타임 실패 시 `libx264`로 전체 출력을 다시 시도합니다. 원본 AAC 오디오는 stream copy하고 출력은 `current-job/output/character_workflow_export_*.mp4`에 저장합니다.
 
-메인 Export 버튼은 즉시 렌더하지 않고 `src/export-dialog.html` 독립 modal 창을 엽니다. 사용자가 편집 패널에서 확정한 `PROJECT TITLE`과 고정 출력 정보를 확인한 뒤 `START EXPORT`를 눌러야 시작하며, 진행률·프레임·경과/예상 시간·완료 경로를 팝업에서 표시합니다. 제목은 입력 즉시 메인 프리뷰에 반영되고 짧은 debounce 뒤 `job.json`의 선택 필드 `projectTitle`에 저장되며 offscreen 출력에도 함께 적용됩니다. 필드가 없을 때만 `SEEDANCE 2.0`을 쓰고, 사용자가 명시적으로 저장한 빈 문자열은 그대로 유지합니다.
+메인 Export 버튼은 즉시 렌더하지 않고 `src/export-dialog.html` 독립 modal 창을 엽니다. 사용자가 편집 패널에서 확정한 `PROJECT TITLE`과 고정 출력 정보를 확인한 뒤 `START EXPORT`를 눌러야 시작하며, 진행률·프레임·경과/예상 시간·완료 경로를 팝업에서 표시합니다. 제목은 입력 즉시 메인 프리뷰에 반영되고 짧은 debounce 뒤 `job.json`의 선택 필드 `projectTitle`에 저장되며 offscreen 출력에도 함께 적용됩니다. 필드가 없을 때만 `UNTITLED PROJECT`를 쓰고, 사용자가 명시적으로 저장한 빈 문자열은 그대로 유지합니다.
 
 `LOAD XML` 버튼과 XML drop은 후보 파일을 먼저 검증한 뒤 `타임라인만 업데이트`(기본값), `새 Job으로 불러오기`, `취소`를 선택하는 같은 backend 경계를 사용합니다. UPDATE는 영상·레퍼런스·GLOBAL·제목·콜아웃·출력 설정을 유지하고 익명 `source identity + in/out occurrence`로 기존 SHOT 매핑을 보수적으로 재연결합니다. 확실하지 않거나 사라진 매핑은 삭제하지 않고 `orphanedShotMappings`에 보관하며, NEW JOB을 명시한 경우에만 source video/reference/GLOBAL/SHOT mapping을 초기화합니다. 두 모드 모두 트랜잭션 journal과 `jobId + revision` 비교로 rollback과 늦은 저장 차단을 수행합니다. XML/video picker와 drop은 각각 같은 Main prepare/commit helper를 사용합니다.
 
@@ -16,9 +16,9 @@ Windows의 `EPERM`/`EACCES`/`EBUSY`에 대비해 XML/video transaction의 manife
 
 ## Red Zone
 
-- `src/output-preview.html`의 `parseFCPXML`, `buildFocusSegments`, `build`, 재생 시계는 기존 출력 계약입니다. 파서 재작성 금지.
+- `src/core/xmeml-parser.js`, `primary-timeline.js`, `shot-model.js`, `reference-mapping.js`와 `src/output-preview.html`의 `build`, 재생 시계는 기존 출력 계약입니다. 레이아웃 작업에서 core를 수정하거나 parser를 다시 작성하지 않습니다.
 - `current-job/job.json`의 `version`, `jobId`, `revision`, `relativePath`, `globalReferenceIds`, `shotMappings`, `timelineShots`, `orphanedShotMappings` key를 임의 변경하지 않습니다.
-- `projectTitle`은 최대 40자의 선택 필드입니다. 필드가 없을 때만 `SEEDANCE 2.0`으로 복원하며 빈 문자열은 유효한 사용자 선택입니다. 편집 패널의 `PROJECT TITLE`이 유일한 편집 위치이며 Export 팝업은 저장된 값을 확인만 합니다.
+- `projectTitle`은 최대 40자의 선택 필드입니다. 필드가 없을 때만 `UNTITLED PROJECT`로 복원하며 빈 문자열은 유효한 사용자 선택입니다. 편집 패널의 `PROJECT TITLE`이 유일한 편집 위치이며 Export 팝업은 저장된 값을 확인만 합니다.
 - `callout`은 선택 필드이며 `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`을 저장합니다. 없으면 기존 LINE/LEFT 기본값으로 복원합니다. TOOL TAG 기능은 출력 가독성 문제로 제거했습니다.
 - `projectTitle`과 `callout.subtitle` 자동 저장은 입력 중인 DOM 값을 다시 쓰지 않습니다. 포커스를 벗어날 때만 공백을 정리해야 하며, debounce 저장이 사용자의 띄어쓰기를 지우는 회귀를 만들면 안 됩니다.
 - Export 시작 주체는 `export-preload.cjs`가 노출한 제한 API를 사용하는 popup 창입니다. 진행 중 창의 기본 닫기를 막고, `CANCEL EXPORT`를 통해서만 FFmpeg와 offscreen 창을 정리합니다.
@@ -34,6 +34,8 @@ Windows의 `EPERM`/`EACCES`/`EBUSY`에 대비해 XML/video transaction의 manife
 - `rollback-complete.json`은 backup 폴더가 비었다는 추측을 대체하는 완료 증거입니다. transaction ID와 종류가 일치하는 유효 final 또는 durable staged marker만 이미 끝난 rollback으로 인정하고, 잘리거나 불일치한 marker는 무시합니다. marker가 없으면 이전 timeline/video가 원래 없었던 경우에도 설치된 candidate를 제거하며, 재시도 때는 `moved` inventory와 backup 잔존 여부로 복원된 이전 파일을 다시 지우지 않습니다.
 - `backup/job.json`은 manifest에 `hadJob: true`가 durable하게 기록된 경우에만 복원합니다. `hadJob: null`은 Job backup 생성 중이며 live Job mutation 전이라는 뜻이므로 final backup이 존재해도 신뢰하지 않고 현재 `job.json`을 보존합니다. 정상 `.partial`과 잘린 final이 함께 남는 crash-window를 회귀 테스트로 고정합니다.
 - `exporter.cjs`의 raw BGRA 1:1 캡처, 60fps, bt709, AAC stream copy 계약을 깨지 않습니다. PNG/JPEG 중간 프레임 방식으로 되돌리지 않습니다.
+- `render-spec.cjs`가 classic width/height/fps/bitrate의 단일 소스입니다. `src/layouts/classic/*`은 presentation surface이며 runtime preset, Job layout ID, 화면비 선택 UI를 beta에 추가하지 않습니다.
+- `npm run smoke`와 `smoke:export`는 `scripts/run-smoke.cjs`가 만든 앱 외부 임시 Job root와 전용 Electron userData에서만 실행합니다. `PORTABLE_TEST_JOB_ROOT` 없이 smoke flag를 직접 실행하거나 앱 내부/current-job을 test root로 지정하면 Main이 즉시 거부해야 합니다.
 - 시작 시 WAITING placeholder 없이 빈 레퍼런스 영역으로 두고, 재생 0.15초부터 GLOBAL 카드를 0.15초 간격으로 이어 붙입니다. 이후 REPLACE/INHERIT는 이전 카드를 유지한 0.35초 크로스페이드로 공백 없이 교체합니다. ADD는 기존 카드를 유지하고 추가 카드만 0.15초 간격으로 표시합니다.
 - SHOT 클릭·방향키·다중 선택은 탐색 상태일 뿐입니다. `wireframechange`, `job:save`, `setReferences`는 실제 레퍼런스 매핑 편집에서만 호출합니다.
 - EDIT PANEL은 우측 `editPanelHandle`과 상단 버튼으로 열고 닫으며, 열린 상태에서 렌더 왼쪽 영역을 누르면 닫힙니다. 패널 헤더에는 `PROJECT TITLE` 입력과 닫기만 둡니다. `previewShell` 닫기 이벤트는 `#editOverlay`, `#shotRail`, `#editPanelHandle` 내부 조작을 반드시 제외해야 합니다.
@@ -54,7 +56,7 @@ Windows의 `EPERM`/`EACCES`/`EBUSY`에 대비해 XML/video transaction의 manife
 1. `current-job/logs/app.log`의 마지막 이벤트를 확인합니다.
 2. `current-job/job.json`에서 XML, video, references의 `relativePath`가 실제 파일과 일치하는지 확인합니다.
 3. `npm.cmd run check`로 문법, 파서 브리지, 상대 경로 계약을 확인합니다.
-4. Electron smoke는 실제 `current-job`이 아닌 임시 앱 복사본/전용 user-data에서 실행해 API와 프리뷰 브리지를 검사합니다.
+4. Electron smoke는 `scripts/run-smoke.cjs`가 OS 임시 폴더에 만든 전용 Job/userData에서 실행해 API와 프리뷰 브리지를 검사합니다. 정상 종료 후 임시 폴더는 0개여야 합니다.
 5. `job_read_failed`가 있으면 앱이 원본을 보존하고 기동을 차단합니다. 손상 파일을 별도 보관한 뒤 수동 복구하거나 명시적으로 새 Job을 구성합니다.
 6. `job_*_commit_cleanup_deferred` 또는 `job_*_recovery_cleanup_deferred`만 있으면 교체 결과는 확정됐고 임시 transaction 정리만 미뤄진 상태입니다. 앱을 종료해 파일 잠금을 해제한 뒤 다시 시작하면 정리를 재시도하며, 이 상태만으로 Job을 삭제하지 않습니다.
 
@@ -76,8 +78,7 @@ Export 팝업이 열리지 않으면 `export_dialog_opened` 이벤트와 `export
 
 ## Next
 
-- 실제 사용자 XML/영상/레퍼런스로 전체 동선 검수
-- 사용자 Visual QA: 복구된 기존 Job에서 영상·레퍼런스·GLOBAL/SHOT 매핑·제목이 그대로 보이는지 먼저 확인한 뒤, `LOAD XML`의 UPDATE/NEW JOB/취소 문구와 안전 기본값, XML/VIDEO drop zone, UPDATE 결과 toast, 새 Job 전환 전후 상태의 배치·가독성을 검수합니다. 사용자 확인 전에는 NEW JOB을 다시 실행하지 않습니다. 자동 `check`와 격리 smoke 통과는 기능 확인일 뿐 최종 시각 승인으로 간주하지 않습니다.
-- 전체 길이 실제 렌더의 장시간 안정성 및 취소 동선 검수
-- 시스템 FFmpeg를 앱 내부 `ffmpeg/ffmpeg.exe` 번들로 교체
-- 실행 파일 패키징 후 폴더 이동 검수
+- 리팩토링 후 사용자 최종 Visual QA: 기존 Job 화면과 공개 fixture의 classic 배치·가독성 비교
+- 깨끗한 공개 후보 트리에서 `npm ci`, `check`, `smoke`, `smoke:export` 재검증
+- source beta 공개 후 frame freshness, audio codec fallback, 장시간 render/cancel은 후속 이슈로 관리
+- FFmpeg 번들과 실행 파일 패키징은 public binary 단계로 분리

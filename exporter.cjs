@@ -5,9 +5,7 @@ const path = require("node:path");
 const { once } = require("node:events");
 const { spawn, spawnSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
-
-const WIDTH = 1280;
-const HEIGHT = 1080;
+const { resolveRenderSpec } = require("./render-spec.cjs");
 
 function sleep(milliseconds){
   return new Promise(resolve => setTimeout(resolve, Math.max(0, milliseconds)));
@@ -30,10 +28,10 @@ function resolveFfmpeg(appRoot){
   throw new Error("FFmpeg를 찾을 수 없습니다. 앱의 ffmpeg 폴더 또는 PATH를 확인하세요.");
 }
 
-function canUseNvenc(ffmpegPath){
+function canUseNvenc(ffmpegPath,spec=resolveRenderSpec()){
   const result = spawnSync(ffmpegPath, [
     "-hide_banner", "-loglevel", "error",
-    "-f", "lavfi", "-i", "color=c=black:s=1280x1080:r=60:d=0.1",
+    "-f", "lavfi", "-i", "color=c=black:s="+spec.width+"x"+spec.height+":r="+spec.fps+":d=0.1",
     "-frames:v", "1", "-c:v", "h264_nvenc", "-preset", "p5", "-f", "null", "-",
   ], { encoding: "utf8", windowsHide: true });
   return result.status === 0;
@@ -87,14 +85,15 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
   }
 
   async function captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath }){
-    const fps = Math.max(1, Number(job.output?.fps) || 60);
-    const bitrateMbps = Math.max(1, Number(job.output?.bitrateMbps) || 12);
+    const spec = resolveRenderSpec(job.output);
+    const fps = spec.fps;
+    const bitrateMbps = spec.bitrateMbps;
     const xmlPath = jobFile(job.xml.relativePath);
     const videoPath = jobFile(job.video.relativePath);
     const xmlText = fs.readFileSync(xmlPath, "utf8");
     const renderWindow = new BrowserWindow({
-      width: WIDTH,
-      height: HEIGHT,
+      width: spec.width,
+      height: spec.height,
       useContentSize: true,
       show: false,
       paintWhenInitiallyHidden: true,
@@ -116,9 +115,9 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     const firstFrame = new Promise(resolve => { firstFrameResolve = resolve; });
     renderWindow.webContents.on("paint", (_event, _dirtyRect, image) => {
       const size = image.getSize();
-      if(size.width !== WIDTH || size.height !== HEIGHT) return;
+      if(size.width !== spec.width || size.height !== spec.height) return;
       const bitmap = image.toBitmap();
-      if(bitmap.length !== WIDTH * HEIGHT * 4) return;
+      if(bitmap.length !== spec.width * spec.height * 4) return;
       latestFrame = bitmap;
       if(firstFrameResolve){
         firstFrameResolve();
@@ -132,13 +131,13 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       await renderWindow.loadFile(path.join(appRoot, "src", "output-preview.html"), { query: { scale: "1" } });
       const videoUrl = pathToFileURL(videoPath).href;
       const parsed = await renderWindow.webContents.executeJavaScript(
-        `window.portablePreview.loadXml(${JSON.stringify(xmlText)})`
+        `window.portablePreview.setRenderSpec(${JSON.stringify(spec)}); window.portablePreview.loadXml(${JSON.stringify(xmlText)})`
       );
       await renderWindow.webContents.executeJavaScript(
         `window.portablePreview.setVideo(${JSON.stringify(videoUrl)}); window.portablePreview.waitForVideoReady()`
       );
       const references = referenceState(job, parsed);
-      const projectTitle = job.projectTitle === undefined || job.projectTitle === null ? "SEEDANCE 2.0" : job.projectTitle;
+      const projectTitle = job.projectTitle === undefined || job.projectTitle === null ? "UNTITLED PROJECT" : job.projectTitle;
       await renderWindow.webContents.executeJavaScript(
         `window.portablePreview.setProjectTitle(${JSON.stringify(projectTitle)}); window.portablePreview.setCalloutConfig(${JSON.stringify(job.callout || {})}); window.portablePreview.setReferences(${JSON.stringify(references)}); window.portablePreview.prepareRealtimeExport()`
       );
@@ -156,13 +155,13 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       const totalFrames = Math.ceil(durationSeconds * fps);
       const ffmpegArgs = [
         "-y", "-hide_banner", "-loglevel", "warning",
-        "-f", "rawvideo", "-pixel_format", "bgra",
-        "-video_size", WIDTH + "x" + HEIGHT, "-framerate", String(fps), "-i", "pipe:0",
+        "-f", "rawvideo", "-pixel_format", spec.inputPixelFormat,
+        "-video_size", spec.width + "x" + spec.height, "-framerate", String(fps), "-i", "pipe:0",
         "-i", videoPath,
         "-map", "0:v:0", "-map", "1:a?", "-t", durationSeconds.toFixed(6),
-        "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+        "-vf", "scale=out_color_matrix="+spec.colorSpace+":out_range=tv,format="+spec.outputPixelFormat,
         ...encoderArguments(encoder, bitrateMbps),
-        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+        "-color_primaries", spec.colorSpace, "-color_trc", spec.colorSpace, "-colorspace", spec.colorSpace,
         "-c:a", "copy", "-movflags", "+faststart", temporaryPath,
       ];
       ffmpeg = spawn(ffmpegPath, ffmpegArgs, { stdio: ["pipe", "ignore", "pipe"], windowsHide: true });
@@ -215,12 +214,15 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     const outputPath = path.join(outputRoot, baseName + ".mp4");
     const temporaryPath = path.join(outputRoot, baseName + ".part.mp4");
     active = { cancelled: false, ffmpeg: null, renderWindow: null };
-    const preferredEncoder = canUseNvenc(ffmpegPath) ? "h264_nvenc" : "libx264";
+    const spec = resolveRenderSpec(job.output);
+    const preferredEncoder = canUseNvenc(ffmpegPath,spec) ? "h264_nvenc" : "libx264";
     emit(sender, { state: "preparing", progress: 0, encoder: preferredEncoder });
     logEvent("export_started", {
       encoder: preferredEncoder,
-      fps: job.output?.fps || 60,
-      bitrateMbps: job.output?.bitrateMbps || 12,
+      width: spec.width,
+      height: spec.height,
+      fps: spec.fps,
+      bitrateMbps: spec.bitrateMbps,
       output: path.basename(outputPath),
     });
     try{

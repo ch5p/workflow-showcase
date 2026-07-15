@@ -1,16 +1,21 @@
 {
   "name": "character-workflow-portable",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "private": true,
+  "license": "MIT",
   "description": "Portable single-job character workflow renderer",
   "main": "main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "electron .",
     "check": "node scripts/check.cjs",
-    "smoke": "electron . --smoke-test",
-    "smoke:export": "electron . --export-smoke"
+    "smoke": "node scripts/run-smoke.cjs",
+    "smoke:export": "node scripts/run-smoke.cjs --export",
+    "prepare:public": "node scripts/create-public-tree.cjs"
   },
   "devDependencies": {
-    "electron": "latest"
+    "electron": "43.1.1"
   }
 }

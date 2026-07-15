@@ -18,11 +18,11 @@
 
   function renderSummary(next){
     summary = next;
-    $("projectTitle").value = next.projectTitle ?? "SEEDANCE 2.0";
+    $("projectTitle").value = next.projectTitle ?? "UNTITLED PROJECT";
     updateTitleCount();
     $("formatValue").textContent = next.format;
     $("frameValue").textContent = next.width + " × " + next.height + " · " + next.outputFps + " FPS";
-    $("bitrateValue").textContent = next.bitrateMbps + " Mbps CBR";
+    $("bitrateValue").textContent = next.bitrateMbps + " Mbps TARGET";
     $("durationValue").textContent = next.durationSeconds
       ? clock(next.durationSeconds) + " · " + next.totalFrames.toLocaleString() + " FRAMES"
       : "CALCULATED ON START";

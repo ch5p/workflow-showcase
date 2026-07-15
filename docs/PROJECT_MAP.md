@@ -7,18 +7,21 @@
 - `job-lifecycle.cjs`: XML UPDATE/NEW JOB의 prepare/commit/rollback/crash recovery와 Windows-safe staged replace
 - `video-lifecycle.cjs`: source video 교체의 prepare/commit/rollback/crash recovery와 Windows-safe staged replace
 - `timeline-reconcile.cjs`: 익명 SHOT descriptor 1:1 재매칭과 orphan 보존
+- `render-spec.cjs`: classic 1280x1080, output fps, bitrate, pixel/color 계약의 단일 소스
 - `export-preload.cjs`: Export 팝업에만 노출하는 시작·취소·진행·폴더 열기 API
 - `exporter.cjs`: offscreen BGRA 프레임 수집, FFmpeg H.264/AAC 출력, 진행률·취소·fallback
 - `src/index.html`: 편집 화면과 SHOT 레일
 - `src/mvp-app.js`: 편집 화면, Job 저장소, 출력 프리뷰 연결
-- `src/output-preview.html`: 기존 FCP XML 파서와 1280x1080 출력 프리뷰 복사본
+- `src/core/*`: legacy xmeml parser, PRIMARY timeline, SHOT descriptor, reference mapping 순수 코어
+- `src/layouts/classic/tokens.css`, `classic.css`: 공식 classic presentation token과 배치
+- `src/output-preview.html`: named presentation regions, 재생 시계와 `window.portablePreview` bridge
 - `src/export-dialog.html`, `src/export-dialog.js`: 저장된 제목과 렌더 사양 확인, 진행률과 완료 경로를 표시하는 독립 Export 창
 
 ## Current Job Contract
 
 - `current-job/job.json`: 레퍼런스와 SHOT 매핑의 기준 파일
 - `jobId`, `revision`: 새 Job identity와 같은 Job 안의 변경 세대. 모든 renderer mutation은 자신이 읽은 두 값을 보내며 Main은 하나라도 다른 stale save를 거부
-- `projectTitle`: 편집 패널에서 입력 즉시 미리보기에 반영되고 자동 저장되는 최대 40자의 선택 필드. 필드가 없으면 `SEEDANCE 2.0`, 명시적인 빈 문자열은 빈 제목으로 사용
+- `projectTitle`: 편집 패널에서 입력 즉시 미리보기에 반영되고 자동 저장되는 최대 40자의 선택 필드. 필드가 없으면 `UNTITLED PROJECT`, 명시적인 빈 문자열은 빈 제목으로 사용
 - `callout`: `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`을 가진 선택 필드이며 출력 미리보기와 offscreen 렌더가 동일하게 사용
 - `shotMappings.<shotId>`: 기존 `mode`, `refs`에 선택 필드 `leadInSeconds: 1`을 추가할 수 있으며, 없으면 `0`으로 처리
 - `timelineShots`: 원본 이름·경로 없이 `identityKey`, `nameKey`, timeline/source in-out occurrence만 저장하는 재매칭 descriptor
@@ -52,7 +55,7 @@
 
 Premiere가 처음 만든 raw XML과 원본 첨부 파일은 Git에 추가하지 않습니다. `tests/fixtures/`를 추가할 때는 실제 Premiere 통합 fixture를 복제하지 않고, 손작성 `xmeml` edge case와 Job 단위 fixture만 둡니다.
 
-현재 smoke는 실제 앱 폴더가 아닌 임시 앱 복사본에서 `PORTABLE_SMOKE_XML`로 공개 XML을 읽어 실행합니다. MP4 자동 fixture 연결은 명시적인 test-only Job root가 생긴 뒤 추가합니다.
+`scripts/run-smoke.cjs`는 OS 임시 폴더에 test-only Job root와 Electron userData를 만들고 `PORTABLE_SMOKE_XML`로 공개 XML을 읽습니다. Main은 test root가 없거나 앱 폴더 내부를 가리키는 smoke를 거부합니다. `smoke:export`는 같은 임시 Job에 공개 XML/MP4를 복사해 1초 출력 후 전체 임시 폴더를 삭제합니다.
 
 Lifecycle 회귀 검사는 OS 임시 Job root에서만 실행하며 manifest/Job backup/install/restore의 지속적 `EPERM`, 유효 primary + 오래된 `.tmp`, 손상 primary + 유효 UUID fallback, 잠긴 고정 staging 우회, rollback 뒤 cleanup 중단, 이전 timeline/video가 없던 candidate 설치 중단, marker 기록 실패 뒤 재복구, 정상 `.partial` + 잘린 Job backup final, 동일 Job 해시 교체 생략을 강제로 검증합니다. 실제 `current-job` 접근은 guard로 실패시킵니다.
 
@@ -60,6 +63,6 @@ Lifecycle 회귀 검사는 OS 임시 Job root에서만 실행하며 manifest/Job
 
 - 문서 기준: 위 `current-job` 구조, `job.json` version 1, `jobId + revision`, UPDATE/NEW JOB Import Contract
 - 실제 샘플: Premiere Pro 2026 fixture의 24 fps, 288 frames, 반복 source identity와 앱의 격리 smoke 결과 5 EDITS/4 SHOTS. 실패 transaction 실복구에서 source 2개/reference 11개/기존 Job의 파일별 SHA-256 일치를 확인
-- 코드 가정: `main.cjs`의 `JOB_ROOT`, XML/video lifecycle, timeline reconcile, CAS guard와 `hydrateJob()`이 같은 구조를 읽음
+- 코드 가정: `main.cjs`의 `JOB_ROOT`, XML/video lifecycle, timeline reconcile, `src/core/*`, `render-spec.cjs`, CAS guard와 `hydrateJob()`이 같은 구조를 읽음
 - 불일치 여부: 없음
 - 처리 방식: 구조 변경 시 문서, 실제 샘플, 코드 세 곳을 함께 확인

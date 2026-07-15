@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("portableApi", {
   getJob: () => ipcRenderer.invoke("job:get"),
+  getRenderSpec: () => ipcRenderer.invoke("app:get-render-spec"),
   saveJob: payload => ipcRenderer.invoke("job:save", payload),
   selectXml: () => ipcRenderer.invoke("job:select-xml"),
   prepareDroppedXml: sourcePath => ipcRenderer.invoke("job:prepare-xml-path", sourcePath),

@@ -357,7 +357,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
     <aside class="leftRail">
       <div class="railHeader">
         <span class="sectionTitle">REFERENCES</span>
-        <span class="quietCount" id="assetCount">5 FILES</span>
+        <span class="quietCount" id="assetCount">0 FILES</span>
       </div>
 
       <section class="globalSection">
@@ -366,11 +366,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
             <strong>GLOBAL SET</strong>
             <span class="globalMode">INHERITED</span>
           </div>
-          <div class="globalRefs" id="globalRefs">
-            <div class="globalRef"><img src="../refs/ref1_C1_sheet.webp" alt="Character sheet"><span>IMAGE 01</span></div>
-            <div class="globalRef"><img src="../refs/ref2_moonjelly_sheet.webp" alt="Moon jelly sheet"><span>IMAGE 02</span></div>
-            <div class="globalRef"><img src="../refs/ref3_riding.webp" alt="Riding poses"><span>IMAGE 03</span></div>
-          </div>
+          <div class="globalRefs" id="globalRefs"></div>
         </div>
       </section>
 
@@ -380,23 +376,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
           <button class="filter" data-filter="image">IMAGE</button>
           <button class="filter" data-filter="video">VIDEO</button>
         </div>
-        <div class="assetGrid" id="assetGrid">
-          <button class="asset" draggable="true" data-id="image-01" data-type="image" data-label="IMAGE 01">
-            <img src="../refs/ref1_C1_sheet.webp" alt="Character sheet"><span class="assetName">IMAGE 01</span><span class="assetType">IMG</span>
-          </button>
-          <button class="asset" draggable="true" data-id="image-02" data-type="image" data-label="IMAGE 02">
-            <img src="../refs/ref2_moonjelly_sheet.webp" alt="Moon jelly sheet"><span class="assetName">IMAGE 02</span><span class="assetType">IMG</span>
-          </button>
-          <button class="asset" draggable="true" data-id="image-03" data-type="image" data-label="IMAGE 03">
-            <img src="../refs/ref3_riding.webp" alt="Riding poses"><span class="assetName">IMAGE 03</span><span class="assetType">IMG</span>
-          </button>
-          <button class="asset" draggable="true" data-id="video-01" data-type="video" data-label="VIDEO 01">
-            <video src="../38s_clip_video_ref.mp4" muted preload="metadata"></video><span class="assetName">VIDEO 01</span><span class="assetType">VID</span>
-          </button>
-          <button class="asset" draggable="true" data-id="video-02" data-type="video" data-label="VIDEO 02">
-            <video src="../38s_clip_video_ref2.mp4" muted preload="metadata"></video><span class="assetName">VIDEO 02</span><span class="assetType">VID</span>
-          </button>
-        </div>
+        <div class="assetGrid" id="assetGrid"></div>
       </section>
     </aside>
 
@@ -410,14 +390,14 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
             <span class="referenceHoverLabel" id="referenceHoverLabel"></span>
           </div>
           <nav class="shotRail" id="shotRail">
-            <div class="shotRailHeader"><strong>SHOTS</strong><span id="selectedCount">1 / 12</span></div>
+            <div class="shotRailHeader"><strong>SHOTS</strong><span id="selectedCount">0 / 0</span></div>
             <div class="shotRailList" id="shotRailList"></div>
           </nav>
           <aside class="editOverlay" id="editOverlay">
             <div class="overlayHeader">
               <div class="overlayTitleEditor">
                 <label for="overlayProjectTitle">PROJECT TITLE</label>
-                <input id="overlayProjectTitle" type="text" maxlength="40" autocomplete="off" spellcheck="false" value="SEEDANCE 2.0">
+                <input id="overlayProjectTitle" type="text" maxlength="40" autocomplete="off" spellcheck="false" value="UNTITLED PROJECT">
               </div>
               <button class="overlayClose" id="overlayClose" title="Close edit panel">×</button>
             </div>
@@ -434,17 +414,13 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
                 </div>
               </details>
               <section class="scopeBlock globalScope">
-                <div class="scopeHeading"><strong>GLOBAL BASE</strong><span>3 FILES · ALL SHOTS</span></div>
-                <div class="overlayGlobal" id="overlayGlobalDrop">
-                  <div class="globalRef"><img src="../refs/ref1_C1_sheet.webp" alt="Character sheet"><span>IMAGE 01</span></div>
-                  <div class="globalRef"><img src="../refs/ref2_moonjelly_sheet.webp" alt="Moon jelly sheet"><span>IMAGE 02</span></div>
-                  <div class="globalRef"><img src="../refs/ref3_riding.webp" alt="Riding poses"><span>IMAGE 03</span></div>
-                </div>
+                <div class="scopeHeading"><strong>GLOBAL BASE</strong><span>0 FILES · ALL SHOTS</span></div>
+                <div class="overlayGlobal" id="overlayGlobalDrop"></div>
               </section>
               <section class="scopeBlock shotScope">
                 <div class="scopeHeading">
-                  <strong id="overlaySelectionTitle">SHOT 03</strong>
-                  <span id="overlaySelectionMeta">4 EDITS · 00:06:18–00:11:10</span>
+                  <strong id="overlaySelectionTitle">NO SHOT</strong>
+                  <span id="overlaySelectionMeta">0 EDITS</span>
                 </div>
                 <span class="scopeState REPLACE" id="overlayScopeState">GLOBAL OVERRIDDEN</span>
                 <div class="overlayModes">
@@ -457,24 +433,8 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
                 <div class="overlayAssigned" id="overlayAssignedList"></div>
               </section>
               <section class="libraryScope" id="referenceLibraryDrop" title="Drop image or video files here">
-                <div class="scopeHeading"><strong>REFERENCE FILES</strong><span id="overlayAssetCount">5 FILES</span></div>
-                <div class="overlayAssets" id="overlayAssetGrid">
-                  <button class="asset" draggable="true" data-id="image-01" data-type="image" data-label="IMAGE 01">
-                    <img src="../refs/ref1_C1_sheet.webp" alt="Character sheet"><span class="assetName">IMAGE 01</span><span class="assetType">IMG</span>
-                  </button>
-                  <button class="asset" draggable="true" data-id="image-02" data-type="image" data-label="IMAGE 02">
-                    <img src="../refs/ref2_moonjelly_sheet.webp" alt="Moon jelly sheet"><span class="assetName">IMAGE 02</span><span class="assetType">IMG</span>
-                  </button>
-                  <button class="asset" draggable="true" data-id="image-03" data-type="image" data-label="IMAGE 03">
-                    <img src="../refs/ref3_riding.webp" alt="Riding poses"><span class="assetName">IMAGE 03</span><span class="assetType">IMG</span>
-                  </button>
-                  <button class="asset" draggable="true" data-id="video-01" data-type="video" data-label="VIDEO 01">
-                    <video src="../38s_clip_video_ref.mp4" muted preload="metadata"></video><span class="assetName">VIDEO 01</span><span class="assetType">VID</span>
-                  </button>
-                  <button class="asset" draggable="true" data-id="video-02" data-type="video" data-label="VIDEO 02">
-                    <video src="../38s_clip_video_ref2.mp4" muted preload="metadata"></video><span class="assetName">VIDEO 02</span><span class="assetType">VID</span>
-                  </button>
-                </div>
+                <div class="scopeHeading"><strong>REFERENCE FILES</strong><span id="overlayAssetCount">0 FILES</span></div>
+                <div class="overlayAssets" id="overlayAssetGrid"></div>
               </section>
             </div>
             <div class="overlayFooter">
@@ -493,8 +453,8 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       </div>
       <div class="inspectorBody">
         <div class="selectionSummary">
-          <strong id="selectionTitle">SHOT 03</strong>
-          <span id="selectionMeta">4 EDITS · 00:06:18–00:11:10</span>
+          <strong id="selectionTitle">NO SHOT</strong>
+          <span id="selectionMeta">0 EDITS</span>
         </div>
 
         <div class="field">
@@ -515,7 +475,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
         <div class="field">
           <span class="fieldLabel">SOURCE MATCH</span>
           <div class="assignedMeta">
-            <strong id="sourceMatch">source_03 · 4 occurrences</strong>
+            <strong id="sourceMatch">NO SOURCE</strong>
             <span>XML source ID + in/out fingerprint</span>
           </div>
         </div>
@@ -531,32 +491,15 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 <input id="fileInput" type="file" accept="image/*,video/*" multiple hidden>
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">UPDATED</div>
 
+<script src="./core/reference-mapping.js"></script>
 <script>
 "use strict";
-const assets=new Map([
-  ["image-01",{id:"image-01",label:"IMAGE 01",type:"image",src:"../refs/ref1_C1_sheet.webp"}],
-  ["image-02",{id:"image-02",label:"IMAGE 02",type:"image",src:"../refs/ref2_moonjelly_sheet.webp"}],
-  ["image-03",{id:"image-03",label:"IMAGE 03",type:"image",src:"../refs/ref3_riding.webp"}],
-  ["video-01",{id:"video-01",label:"VIDEO 01",type:"video",src:"../38s_clip_video_ref.mp4"}],
-  ["video-02",{id:"video-02",label:"VIDEO 02",type:"video",src:"../38s_clip_video_ref2.mp4"}],
-]);
-const shots=[
-  {id:1,edits:2,start:0,end:2.625,range:"00:00:00–00:02:15",mode:"INHERIT",refs:[]},
-  {id:2,edits:3,start:2.625,end:6.75,range:"00:02:15–00:06:18",mode:"INHERIT",refs:[]},
-  {id:3,edits:4,start:6.75,end:11.417,range:"00:06:18–00:11:10",mode:"REPLACE",refs:["image-01","image-03"]},
-  {id:4,edits:1,start:11.417,end:15.167,range:"00:11:10–00:15:04",mode:"ADD",refs:["image-02"]},
-  {id:5,edits:2,start:15.167,end:21.917,range:"00:15:04–00:21:22",mode:"INHERIT",refs:[]},
-  {id:6,edits:3,start:21.917,end:28.833,range:"00:21:22–00:28:20",mode:"INHERIT",refs:[]},
-  {id:7,edits:2,start:28.833,end:34.25,range:"00:28:20–00:34:06",mode:"HIDE",refs:[]},
-  {id:8,edits:2,start:34.25,end:38,range:"00:34:06–00:38:00",mode:"INHERIT",refs:[]},
-  {id:9,edits:2,start:38,end:41.5,range:"00:38:00–00:41:12",mode:"REPLACE",refs:["video-01","video-02"]},
-  {id:10,edits:1,start:41.5,end:43.708,range:"00:41:12–00:43:17",mode:"INHERIT",refs:[]},
-  {id:11,edits:2,start:43.708,end:46.25,range:"00:43:17–00:46:06",mode:"ADD",refs:["image-03"]},
-  {id:12,edits:1,start:46.25,end:48.75,range:"00:46:06–00:48:18",mode:"INHERIT",refs:[]},
-];
-const selectedShots=new Set([3]);
-let selectedAsset="image-01";
-let globalReferenceIds=["image-01","image-02","image-03"];
+const assets=new Map();
+const shots=[];
+const selectedShots=new Set();
+let selectedAsset=null;
+let globalReferenceIds=[];
+let RENDER_SPEC={width:1280,height:1080,fps:60,bitrateMbps:12};
 let toastTimer=0;
 let hoverPreviewOwner=null;
 
@@ -700,21 +643,13 @@ function replaceAssets(nextAssets,nextGlobalIds=[]){
   renderAssigned();
 }
 function replaceShots(nextShots,mappings={},emitChange=true){
-  shots.splice(0,shots.length,...nextShots.map(shot=>{
-    const mapping=mappings[String(shot.id)]||{};
-    return {...shot,mode:mapping.mode||"INHERIT",refs:[...(mapping.refs||[])],leadInSeconds:Number(mapping.leadInSeconds)===1?1:0};
-  }));
+  shots.splice(0,shots.length,...window.PortableReferenceMapping.hydrateShots(nextShots,mappings));
   selectedShots.clear();
   if(shots[0])selectedShots.add(shots[0].id);
   refreshSelection(emitChange);
 }
 function applyShotMappings(mappings={}){
-  shots.forEach(shot=>{
-    const mapping=mappings[String(shot.id)]||{};
-    shot.mode=mapping.mode||"INHERIT";
-    shot.refs=[...(mapping.refs||[])];
-    shot.leadInSeconds=Number(mapping.leadInSeconds)===1?1:0;
-  });
+  shots.splice(0,shots.length,...window.PortableReferenceMapping.hydrateShots(shots,mappings));
   refreshSelection(false);
 }
 function addGlobalReference(id){
@@ -727,16 +662,8 @@ function removeGlobalReference(id){
   renderGlobalReferences();refreshSelection();showToast("REMOVED FROM GLOBAL SET");
 }
 function wireframeSnapshot(){
-  const shotMappings={};
-  shots.forEach(shot=>{
-    const hasLeadIn=shot.leadInSeconds===1;
-    if(shot.mode!=="INHERIT"||shot.refs.length||hasLeadIn){
-      const mapping={mode:shot.mode,refs:[...shot.refs]};
-      if(hasLeadIn)mapping.leadInSeconds=1;
-      shotMappings[String(shot.id)]=mapping;
-    }
-  });
-  return {globalReferenceIds:[...globalReferenceIds],shotMappings,shots:shots.map(shot=>({...shot,refs:[...shot.refs]}))};
+  const mappingState=window.PortableReferenceMapping.snapshotMappings(shots,globalReferenceIds);
+  return {...mappingState,shots:shots.map(shot=>({...shot,refs:[...shot.refs]}))};
 }
 function seekPreview(shot){
   try{
@@ -890,14 +817,26 @@ function setLeadIn(enabled){
   shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.leadInSeconds=enabled?1:0});
   refreshSelection();showToast(enabled?"LEAD-IN 1S ENABLED":"LEAD-IN DISABLED");
 }
+function setRenderSpec(value={}){
+  const width=Math.max(1,Math.round(Number(value.width)||1280));
+  const height=Math.max(1,Math.round(Number(value.height)||1080));
+  const fps=Math.max(1,Math.round(Number(value.fps)||60));
+  const bitrateMbps=Math.max(1,Number(value.bitrateMbps)||12);
+  RENDER_SPEC={width,height,fps,bitrateMbps};
+  const renderPreview=$("renderPreview");
+  renderPreview.style.width=width+"px";
+  renderPreview.style.height=height+"px";
+  fitPreview();
+  return {...RENDER_SPEC};
+}
 function fitPreview(){
   const area=$("previewArea");
   const maxWidth=Math.max(0,area.clientWidth-24);
   const maxHeight=Math.max(0,area.clientHeight-24);
-  const scale=Math.min(maxWidth/1280,maxHeight/1080);
+  const scale=Math.min(maxWidth/RENDER_SPEC.width,maxHeight/RENDER_SPEC.height);
   const shell=$("previewShell");
-  shell.style.width=Math.round(1280*scale)+"px";
-  shell.style.height=Math.round(1080*scale)+"px";
+  shell.style.width=Math.round(RENDER_SPEC.width*scale)+"px";
+  shell.style.height=Math.round(RENDER_SPEC.height*scale)+"px";
   $("renderPreview").style.transform=`scale(${scale})`;
 }
 function addLocalFiles(fileList){
@@ -935,6 +874,7 @@ document.querySelectorAll(".filter").forEach(button=>button.addEventListener("cl
 document.querySelectorAll(".modeButton").forEach(button=>button.addEventListener("click",()=>setMode(button.dataset.mode)));
 $("overlayLeadIn").addEventListener("change",event=>setLeadIn(event.currentTarget.checked));
 function moveShotSelection(delta){
+  if(!shots.length)return;
   const activeId=[...selectedShots][0]||shots[0].id;
   const currentIndex=Math.max(0,shots.findIndex(shot=>shot.id===activeId));
   const next=shots[Math.max(0,Math.min(shots.length-1,currentIndex+delta))];
@@ -1133,6 +1073,7 @@ refreshSelection();
 new ResizeObserver(fitPreview).observe($("previewArea"));
 fitPreview();
 window.wireframeApi={
+  setRenderSpec,
   replaceAssets,
   replaceShots,
   applyShotMappings,

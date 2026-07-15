@@ -3,270 +3,9 @@
 <head>
 <meta charset="utf-8">
 <title>1280 Primary Timeline Template - 24fps Video + 60fps UI</title>
-<!--
-  ============================================================
-  Paged Timeline Replay Template — white / mono-accent edition
-  ------------------------------------------------------------
-  사용법 요약 (H 키로 화면에서도 확인 가능)
-
-  1) 크롬에서 열면 내장 데모 데이터로 바로 재생 가능.
-  2) 프리미어: 시퀀스 → 파일 → 내보내기 → Final Cut Pro XML →
-     .xml 파일을 이 창에 드래그&드랍하면 PRIMARY 타임라인 교체.
-  3) Space 재생 / R 리셋 / D 디버그 / H 도움말
-  4) 녹화 권장: OBS "브라우저 소스", 너비 1280 / 높이 1080.
-     일반 화면 녹화 시 ?scale=1 로 1:1 렌더 강제.
-  5) 재생 화면은 영상과 PRIMARY/FULL 타임라인만 표시.
-  6) 구간만 쓰기: CONFIG.range = { in:"00:00:05:00", out:"00:00:15:00" }
-     (타임코드 또는 초 숫자). null이면 전체 시퀀스.
-     CONFIG.useWorkArea = true 로 두면 프리미어 작업 영역(Work Area)을
-     자동으로 읽어 그 구간만 사용 (수동 range가 있으면 그게 우선).
-  ============================================================
--->
-<style>
-:root{
-  --bg:#e9eaec;
-  --panel:#fbfbfa;
-  --surface:#ffffff;
-  --card-line:#e6e7e5;
-  --ink:#17191c;
-  --txt:#45494f;
-  --txt-dim:#92989e;
-  --accent:#31b88a;
-  --accent-soft:#e9f8f2;
-  --purple:#7655d8;
-  --mono:"Cascadia Mono","Consolas",monospace;
-  --sans:"Inter","Segoe UI","Malgun Gothic",system-ui,sans-serif;
-  --shadow-soft:0 8px 24px rgba(25,28,31,.07);
-}
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;
-  font-family:var(--sans);color:var(--txt)}
-button{font:inherit}
-#fitWrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
-#stage{position:relative;width:1280px;background:var(--panel);transform-origin:center center;
-  overflow:hidden;box-shadow:0 20px 80px rgba(0,0,0,.18)}
-
-#videoZone{display:none;position:relative;width:1280px;height:720px;background:#0d0e10}
-#stage.mode-full #videoZone{display:block}
-#mainVideo{width:100%;height:100%;object-fit:contain;background:#0d0e10}
-#thumbnailVideo{display:none}
-#videoHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  color:#777;font-size:15px;letter-spacing:.5px;pointer-events:none}
-#videoHint.hidden{display:none}
-#videoCallout{position:absolute;left:34px;top:54px;z-index:4;display:grid;grid-template-columns:4px auto;gap:18px;
-  align-items:stretch;opacity:0;transform:translate3d(-22px,0,0);pointer-events:none;will-change:opacity,transform}
-.videoCalloutRule{width:4px;min-height:81px;border-radius:2px;background:var(--accent);transform:scaleY(.25);
-  transform-origin:center bottom;box-shadow:0 0 18px rgba(32,169,121,.36);will-change:transform}
-.videoCalloutCopy{align-self:center;min-width:0;padding:3px 0;text-shadow:0 1px 8px rgba(0,0,0,.72)}
-.videoCalloutEyebrow{display:block;margin-bottom:7px;color:#7de1bd;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:0}
-#videoCalloutTitle{display:block;max-width:620px;overflow:hidden;color:#fff;font-size:28px;font-weight:650;line-height:1.15;
-  letter-spacing:0;text-overflow:ellipsis;white-space:nowrap}
-.videoCalloutMeta{display:block;margin-top:7px;color:rgba(255,255,255,.8);font-family:var(--sans);font-size:13px;
-  font-weight:600;letter-spacing:0;text-shadow:0 2px 7px rgba(0,0,0,.98),0 0 2px rgba(0,0,0,.9)}
-#videoCallout[data-position="right"]{left:auto;right:34px;grid-template-columns:auto 4px}
-#videoCallout[data-position="right"] .videoCalloutRule{order:2}
-#videoCallout[data-position="right"] .videoCalloutCopy{text-align:right}
-#videoCallout[data-style="label"],#videoCallout[data-style="minimal"]{grid-template-columns:auto}
-#videoCallout[data-style="label"] .videoCalloutRule,#videoCallout[data-style="minimal"] .videoCalloutRule{display:none}
-#videoCallout[data-style="label"] .videoCalloutCopy{padding:15px 20px;border-left:4px solid #7de1bd;border-radius:3px;
-  background:rgba(10,29,23,.78);box-shadow:0 8px 24px rgba(0,0,0,.18)}
-#videoCallout[data-position="right"][data-style="label"] .videoCalloutCopy{border-left:0;border-right:4px solid #7de1bd}
-#videoCallout[data-style="minimal"] .videoCalloutEyebrow{display:none}
-#videoCallout[data-style="minimal"] .videoCalloutMeta{margin-top:6px}
-
-#panel{position:relative;width:1280px;padding:24px 28px 26px;background:var(--panel)}
-#workspace{position:relative;width:100%;height:100%;display:flex;flex-direction:column;gap:14px}
-.section{position:relative;z-index:2;background:rgba(255,255,255,.94);border:1px solid var(--card-line);
-  border-radius:14px;box-shadow:0 2px 12px rgba(30,32,35,.035)}
-.sectionTitle{height:32px;display:flex;align-items:center;gap:8px;padding:0 14px;
-  font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;color:#555a60}
-.sectionTitle .mark{color:var(--accent);font-size:13px}
-
-#referenceSection{flex:0 0 184px;padding:0 12px 12px}
-#referenceGrid{height:136px;display:grid;grid-template-columns:2.35fr 1fr 1.2fr;gap:12px}
-.referenceGroup{min-width:0;display:flex;flex-direction:column;gap:7px}
-.groupLabel{font-family:var(--mono);font-size:9px;letter-spacing:.8px;color:#777d84}
-#imageReferences{flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.referenceSlot{position:relative;min-width:0;overflow:hidden;border:1px solid var(--card-line);
-  border-radius:9px;background:#f7f8f7}
-#videoReference{flex:1}
-.referenceSlot img,.referenceSlot video{display:block;width:100%;height:100%}
-.referenceSlot img{object-fit:contain;background:#fff}
-.referenceSlot video{object-fit:cover}
-.mediaPlaceholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:6px;color:#a7acb0;background:linear-gradient(135deg,#fafafa,#f2f3f2)}
-.mediaPlaceholder b{font-family:var(--mono);font-size:18px;font-weight:400;color:#c0c4c7}
-.mediaPlaceholder span{font-family:var(--mono);font-size:8px;letter-spacing:.8px}
-.slotBadge{position:absolute;left:7px;top:7px;padding:3px 6px;border-radius:5px;background:rgba(18,20,22,.65);
-  color:#fff;font-family:var(--mono);font-size:8px;z-index:2}
-.promptBox{height:100%;padding:13px;background:#fafafa;border:1px solid var(--card-line);
-  border-radius:9px;font-size:11px;line-height:1.55;color:#686d73;overflow:hidden}
-.promptBox.empty{display:flex;align-items:center;justify-content:center;font-family:var(--mono);
-  font-size:9px;letter-spacing:1px;color:#abb0b4}
-
-#timelineSection{flex:1;min-height:0;padding:0 12px 12px;display:flex;flex-direction:column}
-.timelineHeader{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 2px}
-#tcMain{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);letter-spacing:1px}
-#timelineInfo{max-width:74%;display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}
-#pageStatus{flex:none;font-family:var(--mono);font-size:8px;color:var(--purple)}
-#thumbnailStatus{flex:none;font-family:var(--mono);font-size:8px;color:var(--txt-dim)}
-#thumbnailStatus.ready{color:var(--accent)}
-#thumbnailStatus.warn{color:#c87924}
-#sequenceMeta{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-family:var(--mono);font-size:9px;color:var(--txt-dim)}
-#timelineViewport{position:relative;flex:1;min-height:0;overflow:hidden;border:1px solid #e8e9e7;
-  border-radius:10px;background:#fbfbfb}
-#timeRuler{position:relative;height:28px;margin-left:94px;border-bottom:1px solid #eceeec;
-  background:linear-gradient(#fff,#fafafa)}
-.timeTick{position:absolute;top:0;bottom:0;border-left:1px solid #d9dcda}
-.timeTick span{position:absolute;top:7px;left:5px;transform:none;font-family:var(--mono);font-size:7px;line-height:7px;color:#9ca1a6}
-.timeTick:last-child span{left:auto;right:5px;white-space:nowrap}
-#trackRows{position:absolute;left:0;right:0;top:28px;bottom:0;overflow:hidden}
-.trackRow{height:0;opacity:0;overflow:hidden;display:grid;grid-template-columns:94px minmax(0,1fr);
-  border-bottom:1px solid transparent;transform:translateY(-4px);
-  transition:height .34s ease,opacity .24s ease,transform .34s ease,border-color .24s ease}
-.trackRow.revealed{height:34px;opacity:1;transform:none;border-bottom-color:#eff0ef}
-.trackLabel{display:flex;align-items:center;gap:7px;padding:0 10px;border-right:1px solid #e4e6e4;
-  background:#fff;font-family:var(--mono);font-size:9px;color:#666c72}
-.trackDot{width:7px;height:7px;border-radius:50%;background:var(--purple)}
-.trackLane{position:relative;min-width:0;overflow:hidden;background:linear-gradient(90deg,#fff,#fafafa)}
-.timelineClip{position:absolute;top:3px;height:28px;min-width:7px;overflow:hidden;border:1px solid #dcd8ef;
-  border-radius:5px;background:#f0edfb;color:#fff;font-family:var(--sans);font-size:8px;font-weight:600;
-  opacity:0;pointer-events:none;transform:translateY(4px) scaleX(.18);transform-origin:left center;
-  transition:opacity .32s ease,transform .36s cubic-bezier(.2,.75,.2,1),filter .32s ease}
-.timelineClip.revealed{opacity:1;transform:none;pointer-events:auto}
-.timelineClip.historyNear{opacity:.52;filter:saturate(.72)}
-.timelineClip.historyFar{opacity:.18;filter:saturate(.45) grayscale(.25)}
-.clipThumbnail{position:absolute;left:0;top:0;width:var(--clip-thumb-width,100%);height:100%;
-  object-fit:cover;opacity:.9}
-.clipShade{position:absolute;left:0;top:0;bottom:0;width:var(--clip-thumb-width,100%);
-  background:linear-gradient(90deg,rgba(20,18,30,.6),rgba(20,18,30,.08) 72%)}
-.clipName{position:absolute;left:6px;right:4px;bottom:4px;z-index:2;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.timelineClip.thumbLimited .clipName{left:calc(var(--clip-thumb-width) + 6px);color:#64588a;text-shadow:none}
-.timelineClip.labelHidden .clipName{display:none}
-.timelineClip.active{border-color:var(--ink);box-shadow:0 1px 8px rgba(20,22,24,.18);z-index:4}
-.timelineClip.outsidePage{visibility:hidden}
-.timelineClip.flushLeft{border-top-left-radius:0;border-bottom-left-radius:0}
-#timelinePlayhead{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);z-index:8;pointer-events:none}
-#timelinePlayhead::before{content:"";position:absolute;top:0;left:-4px;width:9px;height:9px;
-  background:var(--accent);clip-path:polygon(0 0,100% 0,50% 100%)}
-#timeRuler.pageSwitch,#trackRows.pageSwitch{animation:pageIn .38s cubic-bezier(.2,.75,.2,1)}
-@keyframes pageIn{from{opacity:.2;transform:translateX(20px)}to{opacity:1;transform:none}}
-
-#overviewTimeline{position:relative;flex:0 0 38px;display:grid;grid-template-columns:94px minmax(0,1fr);
-  margin-top:6px;overflow:hidden;border:1px solid #e2e5e3;border-radius:7px;background:#f7f8f7}
-#overviewLabel{display:flex;align-items:center;padding:0 10px;border-right:1px solid #dfe2df;
-  background:#fff;font-family:var(--mono);font-size:8px;color:#666c72}
-#overviewLane{position:relative;min-width:0;overflow:hidden;background:#dfe4e1}
-#overviewFrames{position:absolute;inset:0;display:grid;grid-template-columns:repeat(14,minmax(0,1fr))}
-#overviewFrames canvas{display:block;width:100%;height:100%;object-fit:cover;filter:saturate(.82);opacity:.88}
-#overviewCuts{position:absolute;inset:0;pointer-events:none}
-.overviewCut{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.38)}
-#overviewWindow{position:absolute;top:0;bottom:0;border:2px solid var(--accent);
-  background:rgba(49,184,138,.05);box-shadow:0 0 0 9999px rgba(255,255,255,.48);
-  transition:left .36s ease,width .36s ease;pointer-events:none}
-#overviewPlayhead{position:absolute;top:0;bottom:0;width:1px;background:var(--ink);z-index:3;pointer-events:none}
-#overviewPlayhead::before{content:"";position:absolute;top:0;left:-3px;border-left:3px solid transparent;
-  border-right:3px solid transparent;border-top:5px solid var(--ink)}
-
-#referenceConnectors,#selectionConnector{position:absolute;inset:0;width:100%;height:100%;overflow:visible;
-  pointer-events:none}
-#referenceConnectors{z-index:3}
-#selectionConnector{z-index:5}
-
-#slate,#flash{display:none!important}
-#dropHint{position:absolute;inset:0;z-index:70;display:none;align-items:center;justify-content:center;
-  background:color-mix(in srgb,var(--accent) 7%,rgba(255,255,255,.94));border:2px dashed var(--accent);
-  font-size:19px;color:var(--accent)}
-#dropHint.on{display:flex}
-#debug{position:absolute;left:14px;bottom:14px;z-index:65;display:none;background:rgba(23,25,28,.9);
-  border-radius:10px;padding:12px 16px;font-family:var(--mono);font-size:11px;line-height:1.7;
-  color:#9fe08d;white-space:pre}
-#debug.on{display:block}
-#help{position:absolute;inset:0;z-index:80;display:none;background:rgba(255,255,255,.98);
-  padding:44px 90px;overflow:auto}
-#help.on{display:block}
-#help h1{font-size:20px;margin-bottom:20px;color:var(--ink)}
-#help h2{font-size:12.5px;margin:18px 0 6px;color:var(--accent);letter-spacing:1px}
-#help p,#help li{font-size:13px;line-height:1.8;color:#4a4f56}
-#help code{font-family:var(--mono);background:#f1f2f4;padding:1px 7px;border-radius:4px;
-  color:#c0392b;font-size:11.5px}
-#help .keys{font-family:var(--mono);color:var(--ink)}
-
-@media (max-height:680px){
-  #panel{padding:14px 20px}
-  #workspace{gap:8px}
-  #referenceSection{flex-basis:145px;padding-bottom:8px}
-  #referenceGrid{height:101px;gap:8px}
-  #timelineSection{padding:0 8px 8px}
-  #overviewTimeline{flex-basis:32px;margin-top:5px}
-}
-@media (max-height:560px){
-  #panel{padding:10px 16px}
-  #workspace{gap:6px}
-  #referenceSection{flex-basis:115px;padding-bottom:6px}
-  #referenceGrid{height:77px;gap:6px}
-  .trackRow.revealed{height:27px}
-  .timelineClip{top:2px;height:23px}
-  #timelineSection{padding:0 6px 6px}
-  #overviewTimeline{flex-basis:28px;margin-top:4px}
-}
-
-/* ============ 1280 native video + PRIMARY workflow ============ */
-#stage{width:1280px;height:1080px;min-width:1280px;flex:none;display:grid;grid-template-columns:1280px;
-  grid-template-rows:720px 360px;background:#f4f5f4}
-#videoZone{grid-column:1;grid-row:1;display:block!important;width:1280px;height:720px}
-#panel{grid-column:1;grid-row:2;width:1280px;height:360px!important;padding:12px 18px 18px;
-  background:var(--panel)}
-#workspace{display:flex;width:100%;height:100%;flex-direction:column;gap:8px}
-#referenceCard{flex:0 0 110px;width:calc(100% - 24px);margin:0 12px;padding:10px 12px;
-  display:grid;grid-template-columns:142px minmax(0,1fr);gap:9px;align-items:center;
-  border:1px solid #e2e5e3;border-radius:7px;background:#fff;overflow:hidden}
-.referenceCardCopy{min-width:0;display:flex;flex-direction:column;gap:5px}
-#referenceCardLabel{font-family:var(--sans);font-size:13px;font-weight:600;color:#555c59;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#referenceDock{position:relative;height:88px;min-width:0;display:flex;align-items:center;gap:8px;overflow:hidden}
-.referenceDockItem{position:relative;width:var(--reference-item-width,176px);height:88px;
-  flex:0 0 var(--reference-item-width,176px);overflow:hidden;border:1px solid #dfe3e1;
-  border-radius:5px;background:#f7f8f7;opacity:0;
-  transform:translate3d(-18px,8px,0) scale(.9) rotate(-.6deg);transform-origin:left center;
-  backface-visibility:hidden;will-change:opacity,transform;
-  transition:opacity .2s ease-out,transform .42s cubic-bezier(.16,1.18,.3,1)}
-.referenceDockItem.revealed{opacity:1;transform:translate3d(0,0,0) scale(1)}
-.referenceDockItem.leadInEnter{opacity:1;transition:transform .42s cubic-bezier(.16,1.18,.3,1)}
-.referenceDockItem.leaving{position:absolute;left:var(--leaving-left,0);top:0;z-index:3;width:var(--leaving-width,176px);
-  height:88px;flex:0 0 auto;border-width:1px;opacity:1;transform:none;pointer-events:none;
-  transition:opacity .32s ease,transform .32s ease}
-.referenceDockItem.leaving.fadeOut{opacity:0;transform:translate3d(-8px,0,0) scale(.98)}
-.referenceDockItem:not(.revealed):not(.leaving){position:absolute;visibility:hidden;pointer-events:none}
-.referenceDockItem video,.referenceDockItem img{display:block;width:100%;height:100%}
-.referenceDockItem video{object-fit:cover}
-.referenceDockItem img{object-fit:contain;background:#fff}
-#referenceDock.cropOverflow .referenceDockItem img{object-fit:cover}
-.referenceDockLabel{position:absolute;left:6px;bottom:5px;padding:2px 5px;border-radius:4px;
-  background:rgba(18,20,22,.68);color:#fff;font-family:var(--sans);font-size:10px;font-weight:600;white-space:nowrap}
-#timelineSection{width:100%;height:212px;flex:0 0 212px;padding:0 12px 12px}
-#timelineInfo{max-width:82%}
-.timelineHeader{height:38px;display:grid;grid-template-columns:180px minmax(0,1fr) 270px}
-#projectTitle{justify-self:stretch;width:100%;max-width:none;overflow:hidden;text-align:center;text-overflow:ellipsis;font-family:var(--sans);font-size:11px;font-weight:600;color:#707774;white-space:nowrap}
-#timelineInfo{justify-self:stretch;max-width:none;justify-content:flex-end}
-#editStatus{font-family:var(--mono);font-size:10px;color:#727976;white-space:nowrap}
-#pageStatus,#thumbnailStatus,#sequenceMeta{display:none}
-#timelineViewport{height:114px;min-height:114px;flex:0 0 114px}
-#timeRuler{position:absolute;left:0;right:0;bottom:0;height:22px;margin-left:0;
-  border-top:1px solid #eceeec;border-bottom:0}
-#trackRows{top:0;bottom:22px}
-.trackRow{display:block;grid-template-columns:none}
-.trackLabel{display:none}
-.trackLane{width:100%;height:100%}
-.trackRow.focusPrimary.revealed{height:92px}
-.focusPrimary .timelineClip{top:5px;height:82px;font-size:10px}
-#overviewTimeline{display:block;grid-template-columns:none;flex-basis:44px;margin-top:4px}
-#overviewLane{width:100%;height:100%}
-#overviewFrames{grid-template-columns:repeat(14,minmax(0,1fr))}
-#referenceConnectors,#selectionConnector{display:none!important}
-</style>
+<!-- Classic output surface. The Electron shell owns Job import, persistence, editing, and Export. -->
+<link rel="stylesheet" href="./layouts/classic/tokens.css">
+<link rel="stylesheet" href="./layouts/classic/classic.css">
 </head>
 <body>
 <div id="fitWrap">
@@ -279,7 +18,7 @@ button{font:inherit}
         <span class="videoCalloutRule"></span>
         <span class="videoCalloutCopy">
           <span class="videoCalloutEyebrow">EDIT WORKFLOW</span>
-          <strong id="videoCalloutTitle">SEEDANCE 2.0</strong>
+          <strong id="videoCalloutTitle">UNTITLED PROJECT</strong>
           <span class="videoCalloutMeta" id="videoCalloutSubtitle">REFERENCE MAP · EDIT WORKFLOW</span>
         </span>
       </div>
@@ -295,7 +34,7 @@ button{font:inherit}
         <section id="timelineSection" class="section">
           <div class="timelineHeader">
             <span id="tcMain">00:00:00:00</span>
-            <span id="projectTitle">SEEDANCE 2.0</span>
+            <span id="projectTitle">UNTITLED PROJECT</span>
             <div id="timelineInfo">
               <span id="editStatus">EDIT 01 / 01 · 24 FPS</span>
               <span id="pageStatus">PAGE 01 / 01</span>
@@ -327,42 +66,36 @@ button{font:inherit}
     <div id="dropHint">여기에 XML 또는 영상 파일을 놓으세요</div>
     <div id="debug"></div>
     <div id="help">
-      <h1>1280 Primary Timeline — 24fps Video + 60fps UI</h1>
-      <h2>기본 흐름</h2>
-      <p>프리미어: 시퀀스 선택 → 파일 → 내보내기 → <code>Final Cut Pro XML</code> →
-       나온 .xml 파일을 이 창에 드래그&드랍. 현재 보이는 최상단 활성 클립을 기준으로 PRIMARY 타임라인이 자동 생성된다.
-      토탈 길이는 XML의 시퀀스 길이를 그대로 따른다 (10초든 30초든 자동).</p>
+      <h1>Classic Output Preview</h1>
+      <h2>Electron 앱 흐름</h2>
+      <p>앱 바깥 화면의 <code>LOAD XML</code> 드롭존에서 legacy xmeml을 불러오고,
+      기존 작업을 유지할 때는 <code>UPDATE XML</code>, 새로 시작할 때만 <code>NEW JOB</code>을 선택한다.
+      이어 <code>LOAD VIDEO</code>에 같은 시퀀스의 완성본 영상을 불러온다.</p>
+      <p>레퍼런스와 SHOT 매핑은 <code>EDIT PANEL</code>에서 설정하고, 결과 파일은 <code>OUTPUT</code>에서 H.264로 내보낸다.</p>
       <h2>단축키</h2>
       <p class="keys">Space 재생/일시정지 · R 리셋 · D 디버그 · H 도움말</p>
-      <h2>구간만 사용하기</h2>
-      <p>파일을 메모장으로 열고 <code>CONFIG.range</code>를 지정:
-      <code>range: { in: "00:00:05:00", out: "00:00:15:00" }</code> (타임코드 또는 초 숫자).
-      해당 구간만 잘라 0초부터 재정렬된다. 또는 <code>CONFIG.useWorkArea = true</code>로 두면
-      프리미어 작업 영역(시퀀스 메뉴 → 작업 영역 막대 표시) 구간을 자동으로 읽는다.
-      수동 range가 있으면 그게 우선.</p>
-      <h2>녹화 (권장: OBS 브라우저 소스)</h2>
-      <p>OBS에서 소스 추가 → 브라우저 → 로컬 파일 체크 후 이 html 선택 →
-       너비 1280 / 높이 1080.
-      Space 입력은 소스 우클릭 → <code>상호 작용</code> 창에서.
-      일반 화면 녹화 시엔 주소 뒤에 <code>?scale=1</code>.</p>
-      <h2>실제 영상 싱크</h2>
-      <p>완성 영상을 화면에 드롭하면 영상 시간이 타임라인의 기준 시계가 된다.
+      <h2>영상과 XML의 역할</h2>
+      <p>완성본 영상 시간이 타임라인의 기준 시계가 된다.
       XML 길이와 영상 길이가 1프레임 이상 다르면 영상 왼쪽 위에 <code>DURATION Δ</code>가 표시된다.
-      <code>D</code>를 누르면 video/virtual clock과 drift 값을 확인할 수 있다.</p>
+      XML은 컷 구조를 제공하며 Premiere의 effect, mask, 좌우반전, dissolve 화면은 재현하지 않는다.</p>
        <h2>Focus Timeline</h2>
        <p>상세 타임라인은 기본 7초 단위로 전환되고, 하단 <code>FULL</code> 바는 전체 영상 위치를 계속 표시한다.
-       XML에서 비활성화한 클립은 PRIMARY 계산에서 제외된다. 페이지 길이는 <code>CONFIG.timelinePaging.pageSeconds</code>에서 조정한다.</p>
+       XML에서 비활성화한 클립은 PRIMARY 계산에서 제외된다.</p>
        <h2>Mixed FPS Preview</h2>
        <p>영상은 XML의 원본 프레임 속도로 재생하고, UI는 <code>CONFIG.uiFps</code> 기준으로 갱신한다.
        둘은 프레임 번호가 아니라 동일한 재생 시간으로 연결되므로 영상·UI·오디오 길이는 변하지 않는다.</p>
-      <h2>스타일 조정</h2>
-      <p><code>CONFIG.panelHeight</code>로 패널 높이,
-      <code>CONFIG.showTimecode</code>로 타임코드 표시 여부를 바꿀 수 있다.</p>
+      <h2>개발자용 단독 열기</h2>
+      <p>이 HTML을 브라우저에서 직접 여는 방식은 비영구 개발 미리보기일 뿐이다.
+      Job 저장, 안전한 XML 교체와 공식 Export에는 Electron 앱을 사용한다.</p>
       <p style="margin-top:24px;color:#aaa">아무 곳이나 클릭하거나 H를 누르면 닫힘</p>
     </div>
   </div>
 </div>
 
+<script src="./core/xmeml-parser.js"></script>
+<script src="./core/primary-timeline.js"></script>
+<script src="./core/shot-model.js"></script>
+<script src="./core/reference-mapping.js"></script>
 <script>
 "use strict";
 /* ============ CONFIG (사용자 수정 영역) ============ */
@@ -370,7 +103,7 @@ const CONFIG = {
   accent: "#31b88a",
   panelHeight: 360,
   uiFps: 60,           // 최종 합성본과 UI 미리보기의 프레임 속도
-  projectTitle: "SEEDANCE 2.0",
+  projectTitle: "SYNTHETIC TIMELINE",
   sourceVideo: "",
   showTimecode: true,  // 우측 타임코드 표시
   slateSeconds: 0,     // MVP에서는 슬레이트와 SYNC 플래시를 숨김
@@ -386,24 +119,15 @@ const CONFIG = {
   references: {
     images: [],
     video: { label: "VIDEO REF", src: "", duration: "00:08" },
-    prompt: "A girl riding a jelly creature through a forest. Cinematic light, dynamic motion, detailed fantasy style.",
+    prompt: "Synthetic Premiere fixture for timeline and reference-layout verification.",
   },
   // match는 XML 클립 이름의 일부와 일치시킨다. thumbnail이 비어 있으면 placeholder가 표시된다.
 };
 let CALLOUT_CONFIG={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"REFERENCE MAP · EDIT WORKFLOW"};
+let RENDER_SPEC={width:1280,height:1080,fps:60,bitrateMbps:12};
 
-/* ============ 내장 데모 데이터 (qqq.xml에서 추출) ============ */
-const DEMO_DATA = {"fps": 24, "duration": 1171, "name": "Seedance 2_0 demo sequence", "clips": [{"track": 1, "name": "video_01 summer(1).mp4", "start": 0, "end": 40, "in": 0, "out": 40}, {"track": 1, "name": "video_01 summer.mp4", "start": 40, "end": 100, "in": 39, "out": 98}, {"track": 1, "name": "video_01 summer(1).mp4", "start": 100, "end": 119, "in": 81, "out": 100}, {"track": 1, "name": "video_01 summer(1).mp4", "start": 119, "end": 149, "in": 100, "out": 130}, {"track": 1, "name": "video_01 summer(1).mp4", "start": 149, "end": 162, "in": 87, "out": 99}, {"track": 1, "name": "video_01 summer(1).mp4", "start": 162, "end": 173, "in": 75, "out": 86}, {"track": 1, "name": "video_01 summer(1).mp4", "start": 173, "end": 191, "in": 171, "out": 189}, {"track": 1, "name": "video_01 summer(1).mp4", "start": 191, "end": 197, "in": 189, "out": 195}, {"track": 1, "name": "video_01 summer(1).mp4", "start": 197, "end": 205, "in": 195, "out": 203}, {"track": 1, "name": "video_01 summer.mp4", "start": 205, "end": 274, "in": 228, "out": 297}, {"track": 1, "name": "video_01 summer.mp4", "start": 274, "end": 285, "in": 198, "out": 209}, {"track": 1, "name": "video_01 summer.mp4", "start": 285, "end": 308, "in": 157, "out": 180}, {"track": 1, "name": "video_01 summer.mp4", "start": 934, "end": 972, "in": 6, "out": 43}, {"track": 2, "name": "챕터2_달리는장면좋음.mp4", "start": 304, "end": 328, "in": 3, "out": 26}, {"track": 2, "name": "챕터2_달리는장면좋음.mp4", "start": 328, "end": 383, "in": 33, "out": 88}, {"track": 2, "name": "챕터2_달리는장면좋음.mp4", "start": 386, "end": 435, "in": 56, "out": 105}, {"track": 2, "name": "챕터2_달리는장면좋음.mp4", "start": 441, "end": 450, "in": 130, "out": 139}, {"track": 2, "name": "챕터4_03.mp4", "start": 534, "end": 559, "in": 46, "out": 71}, {"track": 2, "name": "챕터4_01.mp4", "start": 565, "end": 576, "in": 156, "out": 167}, {"track": 2, "name": "챕터4_01.mp4", "start": 576, "end": 713, "in": 167, "out": 304}, {"track": 2, "name": "챕터4연결3.mp4", "start": 713, "end": 742, "in": 75, "out": 104}, {"track": 2, "name": "챕터4연결3.mp4", "start": 742, "end": 781, "in": 104, "out": 143}, {"track": 2, "name": "video_01 summer.mp4", "start": 934, "end": 966, "in": 5, "out": 36}, {"track": 3, "name": "챕터2_괜찮은데.mp4", "start": 435, "end": 438, "in": 220, "out": 223}, {"track": 3, "name": "챕터2_괜찮은데.mp4", "start": 507, "end": 534, "in": 348, "out": 374}, {"track": 3, "name": "챕터4_03.mp4", "start": 534, "end": 565, "in": 40, "out": 71}, {"track": 3, "name": "챕터4_01.mp4", "start": 690, "end": 713, "in": 291, "out": 314}, {"track": 3, "name": "챕터4연결3.mp4", "start": 742, "end": 772, "in": 70, "out": 99}, {"track": 3, "name": "video_01 summer(1).mp4", "start": 772, "end": 934, "in": 49, "out": 211}, {"track": 3, "name": "video_01 summer.mp4", "start": 934, "end": 956, "in": 24, "out": 45}, {"track": 4, "name": "챕터2_괜찮은데.mp4", "start": 378, "end": 435, "in": 127, "out": 184}, {"track": 4, "name": "챕터2_괜찮은데.mp4", "start": 477, "end": 507, "in": 265, "out": 295}, {"track": 4, "name": "챕터2_괜찮은데.mp4", "start": 507, "end": 548, "in": 295, "out": 336}, {"track": 4, "name": "챕터4_03.mp4", "start": 565, "end": 576, "in": 71, "out": 82}, {"track": 4, "name": "챕터4연결3.mp4", "start": 686, "end": 713, "in": 33, "out": 60}, {"track": 4, "name": "Seedance 2_0 - Duration 15s_ Aspect ratio 169_ Mode V2V extension with image refs_ One continuous sh (2).mp4", "start": 955, "end": 1171, "in": 145, "out": 361}, {"track": 5, "name": "무제4 연결 컴포지션/젤리걸끝내자좀.aep", "start": 370, "end": 430, "in": 3, "out": 63}, {"track": 5, "name": "챕터2_괜찮은데.mp4", "start": 430, "end": 477, "in": 218, "out": 265}, {"track": 5, "name": "챕터2_괜찮은데.mp4", "start": 507, "end": 619, "in": 590, "out": 702}, {"track": 6, "name": "video_01 choco.mp4", "start": 935, "end": 972, "in": 8, "out": 44}]};
-// 데모 XML에서 꺼 둔 클립도 실제 로드와 같은 방식으로 PRIMARY에서 제외한다.
-const DEMO_DISABLED_CLIPS=new Set([
-  "3|챕터4_01.mp4|690|713",
-  "4|챕터2_괜찮은데.mp4|507|548",
-  "4|챕터4_03.mp4|565|576",
-  "6|video_01 choco.mp4|935|972",
-]);
-DEMO_DATA.clips.forEach(clip=>{
-  clip.enabled=!DEMO_DISABLED_CLIPS.has([clip.track,clip.name,clip.start,clip.end].join("|"));
-});
+/* ============ 공개 synthetic fallback ============ */
+const DEMO_DATA={fps:24,duration:288,name:"synthetic-timeline",clips:[{track:1,name:"clip-a.mp4",start:0,end:72,in:0,out:72,enabled:true,fileId:"file-a",sourceId:"file:file-a"},{track:1,name:"clip-b.mp4",start:72,end:144,in:0,out:72,enabled:true,fileId:"file-b",sourceId:"file:file-b"},{track:1,name:"clip-a.mp4",start:144,end:216,in:0,out:72,enabled:true,fileId:"file-a",sourceId:"file:file-a"},{track:1,name:"clip-c.mp4",start:216,end:288,in:0,out:72,enabled:true,fileId:"file-c",sourceId:"file:file-c"},{track:2,name:"overlay-d.mp4",start:48,end:120,in:0,out:72,enabled:true,fileId:"file-d",sourceId:"file:file-d"},{track:2,name:"disabled-e.mp4",start:168,end:192,in:0,out:24,enabled:false,fileId:"file-e",sourceId:"file:file-e"}],warns:[],workArea:null};
 
 /* ============ 상태 ============ */
 const $ = id => document.getElementById(id);
@@ -429,80 +153,11 @@ let lastUiOutputFrame=-1, videoAnchorTime=0, videoAnchorWall=0;
 let lastVideoFrameWall=0, videoFrameCallbackId=0;
 let videoClockGeneration=0;
 let lastReportedShot=0;
-const PPRO_TICKS=254016000000; // pproTicks per second
-
-/* ============ FCP XML 파서 ============ */
-function childText(el, tag){
-  if(!el) return "";
-  for(const c of el.children){ if(c.tagName===tag) return c.textContent.trim(); }
-  return "";
-}
-function normalizeSourcePath(value){
-  let normalized=String(value||"").trim();
-  try{ normalized=decodeURI(normalized); }catch{}
-  return normalized.replace(/^file:\/\/localhost\//i,"/").replace(/\\/g,"/").toLowerCase();
-}
-function parseFCPXML(text){
-  const doc=new DOMParser().parseFromString(text,"application/xml");
-  if(doc.querySelector("parsererror")) throw new Error("XML 파싱 실패");
-  const seq=doc.querySelector("sequence");
-  if(!seq) throw new Error("sequence 노드 없음 (Final Cut XML인지 확인)");
-  const rateEl=[...seq.children].find(c=>c.tagName==="rate");
-  const tb=parseInt(childText(rateEl,"timebase"))||24;
-  const durAttr=parseInt(childText(seq,"duration"))||0;
-  const tpf=PPRO_TICKS/tb; // 작업 영역(ticks) 변환용
-  const clips=[]; const localWarns=[];
-  const fileSources=new Map();
-  doc.querySelectorAll("file[id]").forEach(file=>{
-    const fileId=file.getAttribute("id")||"";
-    const sourcePath=normalizeSourcePath(childText(file,"pathurl"));
-    // Premiere repeats <file id> references without pathurl, so resolve them through the full file node.
-    if(fileId&&sourcePath&&!fileSources.has(fileId)) fileSources.set(fileId,sourcePath);
-  });
-  let contentEnd=0;
-  const tracks=seq.querySelectorAll("media > video > track");
-  tracks.forEach((tr,idx)=>{
-    [...tr.children].forEach(node=>{
-      // 디졸브 끝점도 실제 콘텐츠 길이에 포함
-      if(node.tagName==="transitionitem"){
-        const te=parseInt(childText(node,"end"));
-        if(te>0) contentEnd=Math.max(contentEnd,te);
-        return;
-      }
-      if(node.tagName!=="clipitem") return;
-      const ci=node;
-      let s=parseInt(childText(ci,"start")), e=parseInt(childText(ci,"end"));
-      const cin=parseInt(childText(ci,"in"))||0, cout=parseInt(childText(ci,"out"))||0;
-      // start/end=-1 은 전환에 물린 클립 — pproTicks는 소스 기준이라 쓰면 안 되고,
-      // 소스 길이(out-in)로 타임라인 위치를 복원해야 함
-      if(s===-1&&e>0) s=e-(cout-cin);
-      if(e===-1&&s>=0) e=s+(cout-cin);
-       const name=childText(ci,"name")||"(unnamed)";
-       const enabled=childText(ci,"enabled").toUpperCase()!=="FALSE";
-       const fileNode=[...ci.children].find(c=>c.tagName==="file");
-       const fileId=fileNode?fileNode.getAttribute("id")||"":"";
-       const inlinePath=normalizeSourcePath(childText(fileNode,"pathurl"));
-       const sourcePath=inlinePath||fileSources.get(fileId)||"";
-       const sourceId=sourcePath?("path:"+sourcePath):(fileId?("file:"+fileId):"");
-       if(!(e>s)||s<0){ localWarns.push("skip: "+name); return; }
-       clips.push({track:idx+1,name,start:s,end:e,in:cin,out:cout,enabled,fileId,sourceId});
-      contentEnd=Math.max(contentEnd,e);
-    });
-  });
-  if(!clips.length) throw new Error("비디오 클립을 찾지 못함");
-  // 프리미어가 duration 태그를 실제 콘텐츠보다 짧게 기록하는 경우가 있어
-  // (샘플: 태그 972f vs 실제 1171f) 콘텐츠 끝점을 우선한다
-  const dur=Math.max(durAttr,contentEnd);
-  // 프리미어 작업 영역 (ticks) — useWorkArea 옵션용
-  let wa=null;
-  const wIn=seq.getAttribute("MZ.WorkInPoint"), wOut=seq.getAttribute("MZ.WorkOutPoint");
-  if(wIn&&wOut){
-    const a=Math.round(Number(wIn)/tpf), b=Math.min(Math.round(Number(wOut)/tpf),dur);
-    if(b>a&&a>=0) wa={in:a,out:b};
-  }
-  return {fps:tb,duration:dur,name:childText(seq,"name")||"sequence",clips,warns:localWarns,workArea:wa};
-}
-
+/* ============ 안정 코어 bridge ============ */
+const parseFCPXML=window.PortableXmeml.parseXmeml;
+const buildFocusSegments=window.PortablePrimaryTimeline.buildPrimarySegments;
+const inspectParsedXml=window.PortableShotModel.inspectTimeline;
+const resolveVisibleReferenceIds=window.PortableReferenceMapping.resolveVisibleReferenceIds;
 /* ============ 구간(range) 적용 : 잘라서 0프레임 기준으로 재정렬 ============ */
 function parseRangePoint(v,fps){
   if(typeof v==="number") return Math.round(v*fps);
@@ -733,11 +388,7 @@ function portableVisibleIdsForShot(shot){
   const globals=PORTABLE_REFERENCE_STATE?.globalReferenceIds||[];
   if(!shot) return globals;
   const mapping=PORTABLE_REFERENCE_STATE?.shotMappings?.[shot.id];
-  const mode=mapping?.mode||"INHERIT";
-  if(mode==="HIDE") return [];
-  if(mode==="REPLACE") return mapping?.refs||[];
-  if(mode==="ADD") return [...new Set([...globals,...(mapping?.refs||[])])];
-  return globals;
+  return resolveVisibleReferenceIds(globals,mapping);
 }
 function portableShotReferenceStartFrame(shot){
   if(!shot)return 0;
@@ -802,10 +453,7 @@ function positionReferenceDock(frame){
       &&frame<(Number(portableShot?.startFrame)||0);
     const cleanLeadInTransition=leadInTransition
       ||(portableShotChanged&&lastPortableShotUsedLeadIn);
-    if(portableMode==="HIDE") portableVisible=[];
-    else if(portableMode==="REPLACE") portableVisible=portableMapping?.refs||[];
-    else if(portableMode==="ADD") portableVisible=[...new Set([...globals,...(portableMapping?.refs||[])])];
-    else portableVisible=globals;
+    portableVisible=resolveVisibleReferenceIds(globals,portableMapping);
     if(lastPortableVisibleIds){
       const setChanged=portableVisible.join("|")!==lastPortableVisibleIds.join("|");
       additiveTransition=setChanged&&portableMode==="ADD"
@@ -880,22 +528,6 @@ function positionReferenceDock(frame){
   }
 }
 /* ============ 실제 XML의 최상단 활성 클립을 큰 PRIMARY 행으로 요약 ============ */
-function buildFocusSegments(data){
-  const boundaries=[...new Set([0,data.duration,...data.clips.flatMap(c=>[c.start,c.end])])]
-    .filter(frame=>Number.isFinite(frame)&&frame>=0&&frame<=data.duration).sort((a,b)=>a-b);
-  const segments=[];
-  for(let index=0;index<boundaries.length-1;index++){
-    const start=boundaries[index], end=boundaries[index+1];
-    if(end<=start) continue;
-    const active=data.clips.filter(c=>c.enabled!==false&&c.start<end&&c.end>start);
-    const primary=active.sort((a,b)=>b.track-a.track)[0];
-    if(!primary) continue;
-    const previous=segments[segments.length-1];
-    if(previous&&previous.clip===primary&&previous.end===start) previous.end=end;
-    else segments.push({start,end,clip:primary});
-  }
-  return segments;
-}
 let clipLabelProbe=null;
 function measureClipLabel(label,text){
   if(!clipLabelProbe){
@@ -1146,7 +778,7 @@ function build(rawData){
 }
 
 function setProjectTitle(value){
-  CONFIG.projectTitle=value===undefined||value===null?"SEEDANCE 2.0":String(value).replace(/\s+/g," ").trim().slice(0,40);
+  CONFIG.projectTitle=value===undefined||value===null?"UNTITLED PROJECT":String(value).replace(/\s+/g," ").trim().slice(0,40);
   $("projectTitle").textContent=CONFIG.projectTitle;
   $("videoCalloutTitle").textContent=CONFIG.projectTitle;
   updateVideoCallout(mainVideo.currentTime||0);
@@ -1360,12 +992,22 @@ function applyMode(){
   stage.classList.remove("mode-panel");
   fitScale();
 }
+function setRenderSpec(value={}){
+  const width=Math.max(1,Math.round(Number(value.width)||1280));
+  const height=Math.max(1,Math.round(Number(value.height)||1080));
+  const fps=Math.max(1,Math.round(Number(value.fps)||60));
+  const bitrateMbps=Math.max(1,Number(value.bitrateMbps)||12);
+  RENDER_SPEC={width,height,fps,bitrateMbps};
+  CONFIG.uiFps=fps;
+  fitScale();
+  return {...RENDER_SPEC};
+}
 function fitScale(){
   panel.style.height=CONFIG.panelHeight+"px";
-  stage.style.width="1280px";
-  stage.style.height="1080px";
+  stage.style.width=RENDER_SPEC.width+"px";
+  stage.style.height=RENDER_SPEC.height+"px";
   if(params.get("scale")==="1"){ stage.style.transform="none"; return; }
-  const s=Math.min(window.innerWidth/1280,window.innerHeight/1080,1);
+  const s=Math.min(window.innerWidth/RENDER_SPEC.width,window.innerHeight/RENDER_SPEC.height,1);
   stage.style.transform="scale("+s+")";
 }
 
@@ -1504,59 +1146,9 @@ applyMode();
 build(DEMO_DATA);
 if(CONFIG.sourceVideo) setVideoSource(CONFIG.sourceVideo);
 
-function portableFingerprint(prefix,value){
-  const text=String(value||"").normalize("NFKC").toLowerCase();
-  let left=0x811c9dc5,right=0x9e3779b9;
-  for(let index=0;index<text.length;index++){
-    const code=text.charCodeAt(index);
-    left=Math.imul(left^code,0x01000193)>>>0;
-    right=Math.imul(right^(code+index),0x85ebca6b)>>>0;
-  }
-  return prefix+"-"+left.toString(16).padStart(8,"0")+right.toString(16).padStart(8,"0");
-}
-function inspectParsedXml(parsed){
-  const segments=buildFocusSegments(parsed);
-  if(!segments.length)throw new Error("활성 비디오 구간을 찾지 못함");
-  const groups=new Map();
-  segments.forEach(segment=>{
-    const clip=segment.clip;
-    const sourceKey=clip.sourceId||[clip.name,clip.in,clip.out].join("|");
-    const identityKey=portableFingerprint("src",sourceKey);
-    const nameKey=portableFingerprint("name",clip.name);
-    if(!groups.has(sourceKey)){
-      groups.set(sourceKey,{
-        id:groups.size+1,
-        identityKey,
-        nameKey,
-        edits:0,
-        startFrame:segment.start,
-        endFrame:segment.end,
-        occurrences:[],
-      });
-    }
-    const group=groups.get(sourceKey);
-    const inFrame=clip.in+Math.max(0,segment.start-clip.start);
-    group.edits+=1;
-    group.startFrame=Math.min(group.startFrame,segment.start);
-    group.endFrame=Math.max(group.endFrame,segment.end);
-    group.occurrences.push({
-      startFrame:segment.start,
-      endFrame:segment.end,
-      inFrame,
-      outFrame:inFrame+(segment.end-segment.start),
-    });
-  });
-  return {
-    fps:parsed.fps,
-    durationFrames:parsed.duration,
-    name:parsed.name,
-    edits:segments.length,
-    shots:[...groups.values()],
-  };
-}
-
 /* RED ZONE: 기존 FCP XML 파서와 쇼 엔진은 유지하고 Electron에서는 이 브리지만 호출한다. */
 window.portablePreview={
+  setRenderSpec,
   inspectXml(text){ return inspectParsedXml(parseFCPXML(text)); },
   validateXml(text){
     return inspectParsedXml(parseFCPXML(text));
@@ -1639,7 +1231,7 @@ window.portablePreview={
   setCalloutConfig,
   getState(){
     return {
-      ready:Boolean(DATA),fps:DATA?.fps||0,edits:SEGS.length,phase,
+      ready:Boolean(DATA),fps:DATA?.fps||0,outputFps:RENDER_SPEC.fps,edits:SEGS.length,phase,
       currentTime:mainVideo.currentTime||0,duration:mainVideo.duration||0,
       paused:mainVideo.paused,readyState:mainVideo.readyState,
     };

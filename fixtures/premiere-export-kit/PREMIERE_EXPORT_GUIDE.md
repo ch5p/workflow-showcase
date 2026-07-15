@@ -1,17 +1,17 @@
 ﻿# Premiere Synthetic XML Export Guide
 
-이 키트는 공개 저장소의 실제 Premiere `xmeml` 통합 테스트 자료를 만들기 위한 중립 더미 소스입니다. 실제 프로젝트 파일이나 개인 미디어를 사용하지 않습니다.
+이 키트는 공개 저장소의 실제 Premiere `xmeml` 통합 테스트 자료를 재현하기 위한 중립 더미 소스입니다. 실제 프로젝트 파일이나 개인 미디어를 사용하지 않습니다.
 
 ## 만들어야 할 결과물
 
-Premiere에서 아래 두 파일을 출력해 Codex 대화에 첨부합니다.
+Premiere에서 아래 두 파일을 출력해 로컬 검증 자료로 보관합니다.
 
 - `premiere-synthetic.xml`
 - `premiere-synthetic-final.mp4`
 
-Premiere가 `FCP Translation Results` 로그를 만들었다면 그 로그도 함께 첨부합니다. 사용하는 Premiere의 정확한 버전도 메시지에 적습니다.
+Premiere가 `FCP Translation Results` 로그를 만들었다면 raw XML과 함께 로컬 검증 자료로 보관합니다. 공개 fixture를 제안할 때는 사용한 Premiere의 정확한 version/build를 `SOURCE_NOTES.md`에 기록합니다.
 
-`.prproj`와 원본 소스 MP4는 다시 첨부하지 않아도 됩니다.
+`.prproj`, raw XML, Translation Results 로그와 개인 소스 파일은 공개 저장소나 Issue에 첨부하지 않습니다.
 
 ## 제공된 소스
 
@@ -89,7 +89,7 @@ V1    [ A ]   [  B  ]      [  A  ]       [   C   ]
 3. 파일명을 `premiere-synthetic.xml`로 저장합니다.
 4. Premiere가 Translation Results 로그를 표시하면 함께 보관합니다.
 
-## 보내기 전 확인
+## 공개본 검증 전 확인
 
 - [ ] 최종 영상 길이가 12초인가
 - [ ] 최종 영상이 24 fps인가
@@ -100,7 +100,7 @@ V1    [ A ]   [  B  ]      [  A  ]       [   C   ]
 
 ## 공개 전 정리 원칙
 
-Premiere가 만든 raw XML에는 로컬 절대 경로, UUID, application-specific metadata가 포함될 수 있습니다. raw XML을 그대로 Git에 추가하지 않습니다. Codex가 다음 작업을 한 뒤 공개 fixture로 사용합니다.
+Premiere가 만든 raw XML에는 로컬 절대 경로, UUID, application-specific metadata가 포함될 수 있습니다. raw XML을 그대로 Git에 추가하지 않습니다. 공개 fixture를 제안하는 기여자와 maintainer가 다음 정리와 비교를 마친 뒤 공개본으로 사용합니다.
 
 - Project와 Sequence 이름 확인
 - clip 이름과 source identity 확인

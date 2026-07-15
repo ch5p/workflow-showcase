@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createExportController } = require("./exporter.cjs");
+const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
 const {
   inspectInputFile,
   prepareXmlCandidate,
@@ -23,7 +24,26 @@ const {
 } = require("./video-lifecycle.cjs");
 
 const APP_ROOT = __dirname;
-const JOB_ROOT = path.join(APP_ROOT, "current-job");
+const SMOKE_TEST = process.argv.includes("--smoke-test");
+const EXPORT_SMOKE = process.argv.includes("--export-smoke");
+const TEST_JOB_ROOT = process.env.PORTABLE_TEST_JOB_ROOT;
+if((SMOKE_TEST||EXPORT_SMOKE)&&!TEST_JOB_ROOT){
+  throw new Error("Smoke tests require an isolated PORTABLE_TEST_JOB_ROOT. Use npm run smoke.");
+}
+if(TEST_JOB_ROOT&&!(SMOKE_TEST||EXPORT_SMOKE)){
+  throw new Error("PORTABLE_TEST_JOB_ROOT is test-only.");
+}
+const JOB_ROOT = TEST_JOB_ROOT ? path.resolve(TEST_JOB_ROOT) : path.join(APP_ROOT, "current-job");
+if(TEST_JOB_ROOT){
+  const relativeToApp=path.relative(APP_ROOT,JOB_ROOT);
+  if(!path.isAbsolute(JOB_ROOT)||!relativeToApp||(!relativeToApp.startsWith("..")&&!path.isAbsolute(relativeToApp))){
+    throw new Error("Smoke Job root must be an absolute directory outside the app root.");
+  }
+  const testStateRoot=path.join(path.dirname(JOB_ROOT),"electron-state");
+  app.setPath("userData",path.join(testStateRoot,"user-data"));
+  app.setPath("sessionData",path.join(testStateRoot,"session-data"));
+  app.disableHardwareAcceleration();
+}
 const SOURCE_ROOT = path.join(JOB_ROOT, "source");
 const REFERENCES_ROOT = path.join(JOB_ROOT, "references");
 const OUTPUT_ROOT = path.join(JOB_ROOT, "output");
@@ -37,6 +57,7 @@ const DEFAULT_CALLOUT = {
   durationSeconds: 3.5,
   subtitle: "REFERENCE MAP · EDIT WORKFLOW",
 };
+const DEFAULT_PROJECT_TITLE = "UNTITLED PROJECT";
 const LOG_PATH = path.join(LOG_ROOT, "app.log");
 const VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
 const VIDEO_MAX_BYTES = 512 * 1024 * 1024 * 1024;
@@ -44,8 +65,6 @@ const REFERENCE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif",
 const REFERENCE_MAX_BYTES = 64 * 1024 * 1024 * 1024;
 const PREPARED_XML_TTL_MS = 10 * 60 * 1000;
 const PREPARED_VIDEO_TTL_MS = 10 * 60 * 1000;
-const SMOKE_TEST = process.argv.includes("--smoke-test");
-const EXPORT_SMOKE = process.argv.includes("--export-smoke");
 const preparedXmlImports = new Map();
 const preparedVideoImports = new Map();
 let recoveryRequired = false;
@@ -84,10 +103,10 @@ function emptyJob(){
     shotMappings: {},
     timelineShots: [],
     orphanedShotMappings: [],
-    projectTitle: "SEEDANCE 2.0",
+    projectTitle: DEFAULT_PROJECT_TITLE,
     callout: { ...DEFAULT_CALLOUT },
     ui: { scale: 1.25 },
-    output: { codec: "h264", bitrateMbps: 12, fps: 60 },
+    output: { codec: CLASSIC_RENDER_SPEC.codec, bitrateMbps: CLASSIC_RENDER_SPEC.bitrateMbps, fps: CLASSIC_RENDER_SPEC.fps },
   };
 }
 
@@ -199,7 +218,7 @@ function safeName(name){
 }
 
 function normalizeProjectTitle(value){
-  if(value === undefined || value === null) return "SEEDANCE 2.0";
+  if(value === undefined || value === null) return DEFAULT_PROJECT_TITLE;
   return String(value).replace(/\s+/g, " ").trim().slice(0, 40);
 }
 
@@ -519,19 +538,19 @@ let exportDialogContext = {};
 function exportSummary(){
   const job = hydrateJob(loadJob());
   const durationSeconds = Math.max(0, Number(exportDialogContext.durationSeconds) || 0);
-  const outputFps = Math.max(1, Number(job.output?.fps) || 60);
+  const spec = resolveRenderSpec(job.output);
   return {
     jobId: job.jobId,
     revision: job.revision,
     projectTitle: job.projectTitle,
     format: "H.264",
-    width: 1280,
-    height: 1080,
-    outputFps,
+    width: spec.width,
+    height: spec.height,
+    outputFps: spec.fps,
     sourceFps: Math.max(0, Number(exportDialogContext.sourceFps) || 0),
-    bitrateMbps: Math.max(1, Number(job.output?.bitrateMbps) || 12),
+    bitrateMbps: spec.bitrateMbps,
     durationSeconds,
-    totalFrames: durationSeconds ? Math.ceil(durationSeconds * outputFps) : 0,
+    totalFrames: durationSeconds ? Math.ceil(durationSeconds * spec.fps) : 0,
     editCount: Math.max(0, Number(exportDialogContext.editCount) || 0),
     outputFolder: OUTPUT_ROOT,
     videoName: job.video?.name || "NO VIDEO",
@@ -628,8 +647,8 @@ function createWindow(){
           const parsed = await window.webContents.executeJavaScript(
             `window.portableMvp.loadXmlText(${JSON.stringify(xmlText)})`
           );
-          if(!parsed?.edits || !parsed?.shots){
-            throw new Error("Real XML parser returned no edits or shots");
+          if(parsed?.fps!==24||parsed?.durationFrames!==288||parsed?.edits!==5||parsed?.shots!==4){
+            throw new Error("Public fixture contract changed: "+JSON.stringify(parsed));
           }
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -810,6 +829,7 @@ app.on("window-all-closed", () => {
 });
 
 ipcMain.handle("job:get", () => hydrateJob(loadJob()));
+ipcMain.handle("app:get-render-spec", () => publicRenderSpec(loadJob().output));
 
 ipcMain.handle("job:save", (_event, payload) => {
   requireRuntimeReady("job_save");
