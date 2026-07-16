@@ -47,6 +47,10 @@
             <div id="timeRuler"></div>
             <div id="trackRows"></div>
             <div id="timelinePlayhead"></div>
+            <div id="timelineLoading" role="status" aria-live="polite" hidden>
+              <strong id="timelineLoadingTitle">PREVIEW LOADING</strong>
+              <span id="timelineLoadingMessage">영상 프레임을 확인하는 중입니다.</span>
+            </div>
           </div>
           <div id="overviewTimeline" aria-label="Full sequence overview">
             <div id="overviewLane">
@@ -149,7 +153,8 @@ let phase="idle";       // idle | slate | show | end
 let t0=0, tPause=0, rafId=0;
 let debugOn=false, fullMode=true;
 let syncClock="virtual", videoObjectUrl=null;
-let thumbnailGeneration=0, timelineFrame=0, timelinePage=-1, timelineRevealFrame=-1;
+let thumbnailGeneration=0, thumbnailSeekToken=0, thumbnailRetryTimer=0, timelineFrame=0, timelinePage=-1, timelineRevealFrame=-1;
+let thumbnailFrameCache=new Map(), lastThumbnailSeekDiagnostic=null;
 let lastUiOutputFrame=-1, videoAnchorTime=0, videoAnchorWall=0;
 let lastVideoFrameWall=0, videoFrameCallbackId=0;
 let videoClockGeneration=0;
@@ -607,7 +612,7 @@ function renderTimeline(data){
 function renderOverview(data){
   $("overviewFrames").replaceChildren();
   const cuts=$("overviewCuts"); cuts.replaceChildren();
-  const starts=[...new Set(data.clips.filter(c=>c.enabled!==false).map(c=>c.start))]
+  const starts=[...new Set(SEGS.map(segment=>segment.start))]
     .filter(frame=>frame>0&&frame<data.duration);
   starts.forEach(frame=>{
     const cut=document.createElement("span"); cut.className="overviewCut";
@@ -702,43 +707,224 @@ function setPlayhead(frame){
   positionTimeline();
 }
 
+function clearTimelineThumbnails(){
+  SEGS.forEach(segment=>segment.el?.querySelector(".clipThumbnail")?.remove());
+  $("overviewFrames")?.replaceChildren();
+}
+function setTimelineLoading(state){
+  const overlay=$("timelineLoading");
+  if(!overlay)return;
+  const ready=state==="ready";
+  overlay.hidden=ready;
+  overlay.dataset.state=state;
+  $("timelineLoadingTitle").textContent=state==="retry"?"PREVIEW RETRY":"PREVIEW LOADING";
+  $("timelineLoadingMessage").textContent=state==="retry"
+    ?"프레임을 확인하지 못했습니다. 잘못된 이미지는 표시하지 않습니다."
+    :"영상 프레임을 확인하는 중입니다. 잠시 기다려 주세요.";
+}
+function logThumbnailEvent(event,detail={}){
+  window.parent.portableMvp?.logPreviewEvent?.(event,{
+    ...detail,
+    fps:Number(DATA?.fps)||0,
+    editCount:SEGS.length,
+    durationFrames:Number(DATA?.duration)||0,
+  });
+}
 function seekThumbnailFrame(time,generation){
   return new Promise(resolve=>{
-    if(generation!==thumbnailGeneration){ resolve(false); return; }
-    const target=Math.max(0,Math.min(time,Math.max(0,thumbnailVideo.duration-1/(DATA?.fps||24))));
-    if(Math.abs(thumbnailVideo.currentTime-target)<.001&&thumbnailVideo.readyState>=2){
-      resolve(true); return;
+    const fps=Math.max(1,Number(DATA?.fps)||24);
+    const target=Math.max(0,Math.min(time,Math.max(0,thumbnailVideo.duration-1/fps)));
+    if(generation!==thumbnailGeneration){
+      lastThumbnailSeekDiagnostic={ok:false,reason:"stale_generation",targetSeconds:target};
+      resolve(false); return;
     }
-    let settled=false;
-    const finish=ok=>{
+    const tolerance=1/fps;
+    const targetFrame=Math.round(target*fps);
+    const token=++thumbnailSeekToken;
+    let settled=false, callbackId=0;
+    let lastMediaTime=null;
+    const isCurrent=()=>generation===thumbnailGeneration&&token===thumbnailSeekToken;
+    const finish=(ok,reason,mediaTime=lastMediaTime)=>{
       if(settled) return;
-      settled=true; clearTimeout(timer); thumbnailVideo.removeEventListener("seeked",onSeeked); resolve(ok);
+      settled=true;
+      clearTimeout(timer);
+      thumbnailVideo.removeEventListener("seeked",onSeeked);
+      if(callbackId&&typeof thumbnailVideo.cancelVideoFrameCallback==="function")thumbnailVideo.cancelVideoFrameCallback(callbackId);
+      lastThumbnailSeekDiagnostic={
+        ok,reason,targetSeconds:target,
+        targetFrame,
+        mediaTime:Number.isFinite(mediaTime)?mediaTime:null,
+        mediaFrame:Number.isFinite(mediaTime)?Math.round(mediaTime*fps):null,
+        currentTime:Number.isFinite(thumbnailVideo.currentTime)?thumbnailVideo.currentTime:null,
+        readyState:thumbnailVideo.readyState,
+      };
+      resolve(ok);
     };
-    const onSeeked=()=>finish(generation===thumbnailGeneration);
-    const timer=setTimeout(()=>finish(false),4000);
+    const onVideoFrame=(_now,metadata)=>{
+      callbackId=0;
+      if(!isCurrent()){ finish(false,"stale_request"); return; }
+      const mediaTime=Number(metadata?.mediaTime);
+      lastMediaTime=Number.isFinite(mediaTime)?mediaTime:null;
+      const mediaFrame=Number.isFinite(mediaTime)?Math.round(mediaTime*fps):NaN;
+      // P0 thumbnail contract: never draw a frame that does not prove it belongs to this seek target.
+      // Chromium can report the preceding presentation timestamp at an exact frame boundary.
+      if(Number.isFinite(mediaFrame)&&Math.abs(mediaFrame-targetFrame)<=1){
+        finish(true,"matched",mediaTime); return;
+      }
+      requestDecodedFrame();
+    };
+    const requestDecodedFrame=()=>{
+      if(!isCurrent()||typeof thumbnailVideo.requestVideoFrameCallback!=="function"){
+        finish(false,isCurrent()?"frame_callback_unavailable":"stale_request"); return;
+      }
+      callbackId=thumbnailVideo.requestVideoFrameCallback(onVideoFrame);
+    };
+    const onSeeked=()=>{
+      if(!isCurrent()) return;
+      if(Math.abs(thumbnailVideo.currentTime-target)>tolerance+1e-6){ finish(false,"seek_position_mismatch"); return; }
+      if(!callbackId)requestDecodedFrame();
+    };
+    const timer=setTimeout(()=>finish(false,"timeout"),1500);
     thumbnailVideo.addEventListener("seeked",onSeeked,{once:true});
+    requestDecodedFrame();
+    if(settled)return;
+    // Assign even when currentTime already matches so Electron presents a fresh decoded-frame callback.
     thumbnailVideo.currentTime=target;
   });
 }
 
+async function seekThumbnailFrameWithRetry(time,generation,context,maxAttempts=2){
+  for(let attempt=1;attempt<=maxAttempts;attempt++){
+    const ok=await seekThumbnailFrame(time,generation);
+    if(ok)return true;
+    logThumbnailEvent("thumbnail_seek_retry",{
+      ...context,...(lastThumbnailSeekDiagnostic||{}),attempt,maxAttempts,
+    });
+    if(generation!==thumbnailGeneration)return false;
+    if(attempt<maxAttempts)await new Promise(resolve=>setTimeout(resolve,120*attempt));
+  }
+  return false;
+}
+
+function thumbnailCacheKey(frame){
+  return (Number(DATA?.fps)||24)+":"+Math.max(0,Math.floor(Number(frame)||0));
+}
+function captureThumbnailSourceCanvas(){
+  const canvas=document.createElement("canvas");
+  canvas.width=320; canvas.height=180;
+  canvas.getContext("2d",{alpha:false}).drawImage(thumbnailVideo,0,0,canvas.width,canvas.height);
+  return canvas;
+}
+async function getValidatedThumbnailCanvas(frame,generation,context){
+  const normalizedFrame=Math.max(0,Math.floor(Number(frame)||0));
+  const key=thumbnailCacheKey(normalizedFrame);
+  const cached=thumbnailFrameCache.get(key);
+  if(cached)return cached;
+  const ok=await seekThumbnailFrameWithRetry(normalizedFrame/DATA.fps,generation,{...context,frame:normalizedFrame});
+  if(!ok||generation!==thumbnailGeneration)return null;
+  const canvas=captureThumbnailSourceCanvas();
+  thumbnailFrameCache.set(key,canvas);
+  if(thumbnailFrameCache.size>96)thumbnailFrameCache.delete(thumbnailFrameCache.keys().next().value);
+  return canvas;
+}
+function resetThumbnailFrameCache(){
+  thumbnailFrameCache.clear();
+  clearTimeout(thumbnailRetryTimer); thumbnailRetryTimer=0;
+  thumbnailGeneration++; thumbnailSeekToken++;
+}
+
+function overviewCoverSourceRect(sourceWidth,sourceHeight,targetWidth,targetHeight){
+  const sourceAspect=sourceWidth/sourceHeight;
+  const targetAspect=targetWidth/targetHeight;
+  if(sourceAspect>targetAspect){
+    const width=sourceHeight*targetAspect;
+    return {x:(sourceWidth-width)/2,y:0,width,height:sourceHeight};
+  }
+  const height=sourceWidth/targetAspect;
+  return {x:0,y:(sourceHeight-height)/2,width:sourceWidth,height};
+}
+function drawOverviewThumbnailCover(sourceCanvas,canvas){
+  const sourceWidth=sourceCanvas.videoWidth||sourceCanvas.width;
+  const sourceHeight=sourceCanvas.videoHeight||sourceCanvas.height;
+  const rect=overviewCoverSourceRect(sourceWidth,sourceHeight,canvas.width,canvas.height);
+  canvas.getContext("2d",{alpha:false}).drawImage(
+    sourceCanvas,rect.x,rect.y,rect.width,rect.height,0,0,canvas.width,canvas.height
+  );
+}
+function overviewFilmstripSlices(segmentStart,segmentEnd,segmentPixelWidth,thumbnailPixelWidth){
+  const duration=Math.max(0,segmentEnd-segmentStart);
+  const width=Math.max(1,segmentPixelWidth);
+  const tileWidth=Math.max(1,thumbnailPixelWidth);
+  const count=Math.max(1,Math.ceil(width/tileWidth));
+  return Array.from({length:count},(_,index)=>{
+    const pixelStart=Math.min(width,index*tileWidth);
+    const pixelEnd=index===count-1?width:Math.min(width,(index+1)*tileWidth);
+    return {
+      start:segmentStart+duration*(pixelStart/width),
+      end:index===count-1?segmentEnd:segmentStart+duration*(pixelEnd/width),
+      pixelWidth:pixelEnd-pixelStart,
+    };
+  });
+}
 async function generateOverviewThumbnails(generation){
   const root=$("overviewFrames"); root.replaceChildren();
-  const count=14;
-  for(let index=0;index<count;index++){
+  const ordered=[...SEGS].sort((left,right)=>left.start-right.start);
+  const pixelRatio=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+  const laneWidth=Math.max(1,root.clientWidth);
+  const laneHeight=Math.max(1,root.clientHeight);
+  const thumbnailPixelWidth=laneHeight*(16/9);
+  for(const segment of ordered){
     if(generation!==thumbnailGeneration) return false;
-    const time=thumbnailVideo.duration*((index+.5)/count);
-    const ok=await seekThumbnailFrame(time,generation);
-    if(!ok||generation!==thumbnailGeneration) return false;
-    const canvas=document.createElement("canvas"); canvas.width=160; canvas.height=90;
-    canvas.getContext("2d",{alpha:false}).drawImage(thumbnailVideo,0,0,canvas.width,canvas.height);
-    root.appendChild(canvas);
+    const segmentPixelWidth=laneWidth*((segment.end-segment.start)/DATA.duration);
+    const slices=overviewFilmstripSlices(segment.start,segment.end,segmentPixelWidth,thumbnailPixelWidth);
+    for(const slice of slices){
+      if(generation!==thumbnailGeneration) return false;
+      const frame=(slice.start+slice.end)/2;
+      const sourceCanvas=await getValidatedThumbnailCanvas(frame,generation,{
+        phase:"overview",shotNumber:segment.shotNumber,
+        sliceStartFrame:slice.start,sliceEndFrame:slice.end,
+      });
+      if(!sourceCanvas)return false;
+      const item=document.createElement("div");
+      item.className="overviewSegment";
+      item.style.left=(slice.start/DATA.duration*100)+"%";
+      item.style.width=((slice.end-slice.start)/DATA.duration*100)+"%";
+      item.title=segment.shotLabel+" · "+tc(slice.start,DATA.fps)+" - "+tc(slice.end,DATA.fps);
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.max(1,Math.round(slice.pixelWidth*pixelRatio));
+      canvas.height=Math.max(1,Math.round(laneHeight*pixelRatio));
+      drawOverviewThumbnailCover(sourceCanvas,canvas);
+      item.appendChild(canvas); root.appendChild(item);
+    }
   }
   return true;
 }
 
-async function generateTimelineThumbnails(){
+function failThumbnailGeneration(status,generation,batchAttempt,context={}){
+  if(generation!==thumbnailGeneration)return;
+  clearTimelineThumbnails();
+  setTimelineLoading("retry");
+  status.className="warn"; status.textContent="THUMBS RETRY";
+  const willRetry=batchAttempt<1;
+  logThumbnailEvent(willRetry?"thumbnail_generation_retry":"thumbnail_generation_failed",{
+    ...context,batchAttempt,maxBatchAttempts:2,
+  });
+  if(willRetry){
+    thumbnailRetryTimer=setTimeout(()=>{
+      thumbnailRetryTimer=0;
+      if(generation===thumbnailGeneration)generateTimelineThumbnails(batchAttempt+1);
+    },600);
+  }else{
+    warns.push("타임라인 썸네일 검증 실패: current-job/logs/app.log 확인");
+  }
+}
+async function generateTimelineThumbnails(batchAttempt=0){
+  batchAttempt=Number.isInteger(batchAttempt)&&batchAttempt>=0?batchAttempt:0;
   const status=$("thumbnailStatus");
+  clearTimeout(thumbnailRetryTimer); thumbnailRetryTimer=0;
   const generation=++thumbnailGeneration;
+  clearTimelineThumbnails();
+  setTimelineLoading("loading");
   if(!DATA||!SEGS.length||thumbnailVideo.readyState<1||!Number.isFinite(thumbnailVideo.duration)){
     status.className=""; status.textContent="THUMBS WAITING"; return;
   }
@@ -749,23 +935,34 @@ async function generateTimelineThumbnails(){
     for(const seg of ordered){
       if(generation!==thumbnailGeneration) return;
       const frame=Math.floor((seg.start+seg.end)/2);
-      const ok=await seekThumbnailFrame(frame/DATA.fps,generation);
-      if(!ok||generation!==thumbnailGeneration) return;
+      const sourceCanvas=await getValidatedThumbnailCanvas(frame,generation,{
+        phase:"timeline",shotNumber:seg.shotNumber,
+        segmentStartFrame:seg.start,segmentEndFrame:seg.end,
+      });
+      if(!sourceCanvas){
+        failThumbnailGeneration(status,generation,batchAttempt,{phase:"timeline",shotNumber:seg.shotNumber,frame});
+        return;
+      }
       const old=seg.el.querySelector(".clipThumbnail");
       if(old) old.remove();
       const canvas=document.createElement("canvas");
-      canvas.className="clipThumbnail"; canvas.width=160; canvas.height=90;
-      canvas.getContext("2d",{alpha:false}).drawImage(thumbnailVideo,0,0,canvas.width,canvas.height);
+      canvas.className="clipThumbnail"; canvas.width=320; canvas.height=180;
+      canvas.getContext("2d",{alpha:false}).drawImage(sourceCanvas,0,0,canvas.width,canvas.height);
       seg.el.prepend(canvas);
       completed++;
       status.textContent="THUMBS "+completed+"/"+SEGS.length;
     }
     status.textContent="BUILDING OVERVIEW";
-    if(!await generateOverviewThumbnails(generation)) return;
+    if(!await generateOverviewThumbnails(generation)){
+      failThumbnailGeneration(status,generation,batchAttempt,{phase:"overview"});
+      return;
+    }
+    setTimelineLoading("ready");
     status.className="ready"; status.textContent="THUMBS READY";
+    if(batchAttempt>0)logThumbnailEvent("thumbnail_generation_recovered",{batchAttempt,cacheSize:thumbnailFrameCache.size});
   }catch(err){
-    warns.push("타임라인 썸네일 실패: "+err.message);
-    status.className="warn"; status.textContent="THUMBS ERROR";
+    logThumbnailEvent("thumbnail_generation_exception",{message:err.message,batchAttempt});
+    failThumbnailGeneration(status,generation,batchAttempt,{phase:"exception",message:err.message});
   }
 }
 
@@ -1066,6 +1263,7 @@ function routeDroppedFiles(files){
   return true;
 }
 function setVideoSource(src,openFull=false){
+  resetThumbnailFrameCache();
   mainVideo.src=src;
   thumbnailVideo.src=src;
   mainVideo.load();
@@ -1141,6 +1339,7 @@ async function clearVideoSource(){
   syncClock="virtual";
   tPause=0;
   document.body.classList.remove("running");
+  resetThumbnailFrameCache();
   await Promise.all([mainVideo,thumbnailVideo].map(unloadVideoElement));
   if(videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
   videoObjectUrl=null;
@@ -1198,7 +1397,7 @@ mainVideo.addEventListener("error",()=>{
   updateDurationDelta();
 });
 mainVideo.addEventListener("emptied",updateDurationDelta);
-thumbnailVideo.addEventListener("loadedmetadata",generateTimelineThumbnails);
+thumbnailVideo.addEventListener("loadedmetadata",()=>generateTimelineThumbnails());
 thumbnailVideo.addEventListener("error",()=>{
   $("thumbnailStatus").className="warn";
   $("thumbnailStatus").textContent="THUMBS VIDEO ERROR";

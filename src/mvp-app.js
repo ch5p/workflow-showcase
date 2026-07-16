@@ -115,6 +115,9 @@
   async function safeRendererLog(event,detail={}){
     try{await bridge?.log(event,detail)}catch{}
   }
+  function logPreviewEvent(event,detail={}){
+    return safeRendererLog(event,detail);
+  }
   async function performSaveJobPatch(patch,retry=true){
     if(!bridge||!job||transitioning||runtimeBlocked)return job;
     const expectedJobId=job.jobId;
@@ -643,7 +646,7 @@
 
   window.portableMvp={
     loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
-    addReferences,addDroppedReferences,deleteReference,loadXmlText,syncActiveShot,exportVideo,reloadCurrentJob,
+    addReferences,addDroppedReferences,deleteReference,loadXmlText,syncActiveShot,exportVideo,reloadCurrentJob,logPreviewEvent,
   };
   bridge?.onProjectTitleUpdated(projectTitle=>{if(!transitioning&&!runtimeBlocked)applyProjectTitle(projectTitle)});
   window.addEventListener("wireframechange",scheduleSave);
