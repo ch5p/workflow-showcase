@@ -895,14 +895,17 @@ function moveShotSelection(delta){
   const next=shots[Math.max(0,Math.min(shots.length-1,currentIndex+delta))];
   selectOnlyShot(next.id);seekPreview(next);
 }
-function isShortcutControl(target){
+function isTextEntryControl(target){
   return target instanceof HTMLElement&&(
-    target.isContentEditable||Boolean(target.closest("button,[role=button],input,textarea,select,a[href]"))
+    target.isContentEditable||Boolean(target.closest("input,textarea,select"))
   );
 }
 document.addEventListener("keydown",event=>{
   const target=event.target;
-  if(isShortcutControl(target))return;
+  // Guard: yield shortcuts only to text-entry controls. A focused button must not swallow Space
+  // (stale focus after a mouse click made Space re-click the button instead of toggling playback).
+  // Elements that handle Space themselves (asset cards) call preventDefault, so defaultPrevented yields to them.
+  if(event.defaultPrevented||isTextEntryControl(target))return;
   if(event.code==="Space"||event.key===" "){
     event.preventDefault();event.stopPropagation();
     try{$("renderPreview").contentWindow.portablePreview?.playPause()}catch(error){}
@@ -915,11 +918,17 @@ document.addEventListener("keydown",event=>{
 });
 document.addEventListener("keyup",event=>{
   const target=event.target;
-  if(isShortcutControl(target))return;
+  if(isTextEntryControl(target))return;
   if(event.code==="Space"||event.key===" "){
     event.preventDefault();event.stopPropagation();
   }
 },true);
+document.addEventListener("click",event=>{
+  // Drop stale focus after a mouse click so the next Space always reaches playback. Keyboard activation (detail 0) keeps focus.
+  if(event.detail===0)return;
+  const control=event.target instanceof HTMLElement?event.target.closest("button,[role=button]"):null;
+  if(control)control.blur();
+});
 $("applySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
 $("resetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
 $("overlayApplySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));

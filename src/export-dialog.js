@@ -22,7 +22,7 @@
     updateTitleCount();
     $("formatValue").textContent = next.format;
     $("frameValue").textContent = next.width + " × " + next.height + " · " + next.outputFps + " FPS";
-    $("bitrateValue").textContent = next.bitrateMbps + " Mbps TARGET";
+    $("bitrateSelect").value = String(next.bitrateMbps);
     $("durationValue").textContent = next.durationSeconds
       ? clock(next.durationSeconds) + " · " + next.totalFrames.toLocaleString() + " FRAMES"
       : "CALCULATED ON START";
@@ -78,8 +78,22 @@
   function setRunning(next){
     running = next;
     $("projectTitle").disabled = next;
+    $("bitrateSelect").disabled = next;
     $("startButton").disabled = next || !summary?.ready;
     $("cancelButton").textContent = next ? "CANCEL EXPORT" : "CANCEL";
+  }
+
+  async function changeBitrate(event){
+    const previous = String(summary?.bitrateMbps || 12);
+    if(running){ event.target.value = previous; return; }
+    try{
+      const next = await api.setBitrate(Number(event.target.value), summary?.jobId, summary?.revision);
+      renderSummary(next);
+      setMessage("비트레이트를 " + next.bitrateMbps + " Mbps로 저장했습니다.");
+    }catch(error){
+      event.target.value = previous;
+      setMessage(error.message, true);
+    }
   }
 
   function showComplete(result){
@@ -132,6 +146,7 @@
   }
 
   $("startButton").addEventListener("click", startExport);
+  $("bitrateSelect").addEventListener("change", changeBitrate);
   $("cancelButton").addEventListener("click", cancelOrClose);
   $("openFolderButton").addEventListener("click", () => api.openOutput());
   api.onProgress(setProgress);

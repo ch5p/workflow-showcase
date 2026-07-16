@@ -14,6 +14,11 @@ button{font:inherit}
 #videoHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   color:#777;font-size:15px;letter-spacing:.5px;pointer-events:none}
 #videoHint.hidden{display:none}
+#durationDelta{position:absolute;top:14px;left:14px;z-index:5;padding:5px 9px;border-radius:4px;
+  background:rgba(24,17,5,.85);border:1px solid #a56a15;color:#f5c46c;
+  font-family:var(--mono);font-size:13px;letter-spacing:.04em;pointer-events:none}
+#durationDelta[hidden]{display:none}
+body.running #durationDelta{display:none}
 #videoCallout{position:absolute;left:34px;top:54px;z-index:4;display:grid;grid-template-columns:4px auto;gap:18px;
   align-items:stretch;opacity:0;transform:translate3d(-22px,0,0);pointer-events:none;will-change:opacity,transform}
 .videoCalloutRule{width:4px;min-height:81px;border-radius:2px;background:var(--accent);transform:scaleY(.25);

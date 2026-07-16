@@ -41,6 +41,7 @@ for(const relative of ["src/index.html","src/output-preview.html","src/export-di
   scripts.forEach((source,index)=>new vm.Script(source,{filename:relative+"#inline-"+(index+1)}));
 }
 const preview=fs.readFileSync(path.join(root,"src/output-preview.html"),"utf8");
+const classicCss=fs.readFileSync(path.join(root,"src/layouts/classic/classic.css"),"utf8");
 for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./core/primary-timeline.js","./core/shot-model.js","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","preflightVideo","routeDroppedFiles","id=\"videoCallout\"","class=\"videoCalloutEyebrow\"","function updateVideoCallout","setCalloutConfig"]){
   if(!preview.includes(marker))throw new Error("Parser bridge marker missing: "+marker);
 }
@@ -63,7 +64,10 @@ for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","write
 }
 if(!main.includes("await runSecondarySmoke()")||main.includes("const secondary = spawnSync"))throw new Error("Single-instance smoke must keep the primary event loop available");
 if(!main.includes("readyMessage")||!main.includes("mustExist: true"))throw new Error("Export readiness file check missing");
-if(preview.includes("DURATION Δ"))throw new Error("Unimplemented duration warning returned to help text");
+for(const marker of ['id="durationDelta"',"function updateDurationDelta()","mainVideo.duration-xmlSeconds",'badge.textContent="DURATION Δ "']){
+  if(!preview.includes(marker))throw new Error("Duration-delta help contract missing: "+marker);
+}
+if(!classicCss.includes("body.running #durationDelta"))throw new Error("Duration-delta help must stay out of Export output");
 const renderer=fs.readFileSync(path.join(root,"src/mvp-app.js"),"utf8");
 for(const marker of ["expectedJobId","expectedRevision","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
   if(!renderer.includes(marker))throw new Error("Renderer lifecycle marker missing: "+marker);

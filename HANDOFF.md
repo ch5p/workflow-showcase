@@ -59,7 +59,7 @@ The English-default / Korean `.ko.md` documentation pass and a fresh public-tree
 - Reference file deletion is performed only in the Main IPC, and cleans up `references`, GLOBAL, the active SHOT mapping, and the orphan mappings together. The actual file-deletion target must be inside `current-job/references`.
 - The `IMAGE 01`, `VIDEO 01` numbers in REFERENCE FILES are display values based on the overall file list order, and are re-pulled by type after deletion. GLOBAL BASE and SHOT REFERENCES show separate numbers by the left-to-right order placed on each screen. Do not change the connection contract of `id`, `relativePath`, and the actual file name.
 - The optional SHOT mapping field `leadInSeconds` currently allows only `1`. An enabled shot does not change the video/SHOT selection position; it applies only the reference mapping from 1 second before the actual shot start. When the field is absent or `0`, the existing cut-start behavior is kept.
-- When entering or leaving a SHOT with LEAD-IN on, clean up the previous card immediately, and apply only a transform pop without opacity blending on the new card. Keep the 0.35s crossfade of a normal cut transition.
+- When entering the 1-second pre-roll of a SHOT with LEAD-IN on, clean up the previous card immediately, and apply only a transform pop without opacity blending on the new card. When leaving a LEAD-IN SHOT, clear its card immediately (a 0.35s crossfade stacks the old card above the next one as a ghost) but let the next shot's cards play the normal revealed entrance animation. Do not restore the old shot-exit pop path, which removed the entrance animation. Normal cuts keep the 0.35s crossfade.
 
 Search keywords: `RED ZONE`, `window.portablePreview`, `JOB_ROOT`, `job_saved`, `export_started`, `export_completed`.
 
@@ -78,7 +78,7 @@ Key events: `app_started`, `second_instance_rejected`, `current_job_reload_reque
 
 For reference-transition gaps or flicker, check `positionReferenceDock`, `fadeOutgoingReferences`, `immediatePortableIds`, `.referenceDockItem.leaving` in order. Also check whether the first GLOBAL's 0.15s entry state is restored when moving back or resetting.
 If LEAD-IN timing is misaligned, confirm that `leadInSeconds: 1` is saved on the target SHOT in `job.json`, and check the `portableReferenceShotAtFrame`, `portableShotReferenceStartFrame` calculations in order.
-If other images mix into the LEAD-IN enter/exit cards, check `leadInTransition`, `lastPortableShotUsedLeadIn`, `clearOutgoingReferences`, `prepareLeadInEntries`, `.leadInEnter` in order.
+If other images mix into the LEAD-IN enter/exit cards, or a ghost card lingers when leaving a LEAD-IN SHOT, check `leadInTransition`, `leavingLeadInShot`, `lastPortableShotUsedLeadIn`, `clearOutgoingReferences`, `prepareLeadInEntries`, `.leadInEnter` in order.
 If a SHOT click intermittently hides references, check whether `job_saved` is recorded right after a simple selection. If it is, a navigation event wrongly fired `wireframechange`.
 If the EDIT PANEL closes during internal operation, first check whether the `previewShell` `pointerdown` target passes the `#editOverlay,#shotRail,#editPanelHandle` guard.
 For reference-deletion issues, first check the `reference_deleted`, `reference_file_delete_failed` events and whether the deleted ID remains in `job.json`. Even if file cleanup fails, the mapping is removed; clean up only the orphaned file manually.

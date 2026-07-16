@@ -14,6 +14,7 @@
       <video id="mainVideo" playsinline></video>
       <video id="thumbnailVideo" muted preload="metadata" playsinline aria-hidden="true"></video>
       <div id="videoHint">XML 또는 완성본 영상을 여기에 놓으세요</div>
+      <div id="durationDelta" hidden></div>
       <div id="videoCallout" data-position="left" data-style="line" aria-hidden="true">
         <span class="videoCalloutRule"></span>
         <span class="videoCalloutCopy">
@@ -448,11 +449,12 @@ function positionReferenceDock(frame){
     portableMode=portableMapping?.mode||"INHERIT";
     const portableShotId=portableShot==null?null:String(portableShot.id);
     const currentShotUsesLeadIn=Number(portableMapping?.leadInSeconds)===1;
-    const portableShotChanged=lastPortableShotId!==null&&lastPortableShotId!==portableShotId;
+    // RED ZONE leadInTransition: LEAD-IN pre-roll entry replaces cards instantly with a pop.
+    // Leaving a LEAD-IN SHOT clears the old card instantly but must keep the next cards' normal entrance animation:
+    // a crossfade here stacks the old card above the next one (ghost), and the old clean path killed the entrance.
+    const leavingLeadInShot=lastPortableShotId!==null&&lastPortableShotId!==portableShotId&&lastPortableShotUsedLeadIn;
     leadInTransition=currentShotUsesLeadIn
       &&frame<(Number(portableShot?.startFrame)||0);
-    const cleanLeadInTransition=leadInTransition
-      ||(portableShotChanged&&lastPortableShotUsedLeadIn);
     portableVisible=resolveVisibleReferenceIds(globals,portableMapping);
     if(lastPortableVisibleIds){
       const setChanged=portableVisible.join("|")!==lastPortableVisibleIds.join("|");
@@ -463,10 +465,13 @@ function positionReferenceDock(frame){
       if(instantReplacement){
         previousPositions=captureReferencePositions();
         immediatePortableIds=portableMode==="ADD"?new Set(globals):new Set(portableVisible);
-        if(cleanLeadInTransition){
-          // RED ZONE: entering or leaving a LEAD-IN SHOT must not retain the previous card above the next card.
+        if(leadInTransition){
+          // RED ZONE: entering a LEAD-IN pre-roll must not retain the previous card above the next card.
           clearOutgoingReferences(portableVisible);
           prepareLeadInEntries(portableVisible);
+        }else if(leavingLeadInShot){
+          // RED ZONE: no crossfade ghost when leaving a LEAD-IN SHOT; incoming cards keep the revealed entrance transition.
+          clearOutgoingReferences(portableVisible);
         }else fadeOutgoingReferences(portableVisible);
       }
     }
@@ -857,6 +862,19 @@ function hasSyncVideo(){
     Number.isFinite(mainVideo.duration)&&mainVideo.duration>0&&mainVideo.readyState>=1;
 }
 function formatSeconds(seconds){ return Number.isFinite(seconds)?seconds.toFixed(3)+"s":"--"; }
+function updateDurationDelta(){
+  // Help contract: when XML and video lengths differ by 1+ frame, show DURATION Δ at the video's top-left.
+  // Visible only while not running, so the offscreen Export capture (body.running) never bakes it into output.
+  const badge=$("durationDelta");
+  if(!badge)return;
+  const xmlSeconds=DATA&&Number(DATA.fps)>0?DATA.duration/DATA.fps:null;
+  if(xmlSeconds===null||!hasSyncVideo()){ badge.hidden=true; return; }
+  const delta=mainVideo.duration-xmlSeconds;
+  if(Math.abs(delta)<1/DATA.fps-1e-6){ badge.hidden=true; return; }
+  badge.textContent="DURATION Δ "+(delta>0?"+":"-")+Math.abs(delta).toFixed(2)
+    +"s · XML "+xmlSeconds.toFixed(2)+"s / VIDEO "+mainVideo.duration.toFixed(2)+"s";
+  badge.hidden=false;
+}
 function play(){
   if(phase==="show"){ pause(); return; }
   if(phase==="end") resetShow();
@@ -901,6 +919,7 @@ function resetShow(){
   setPlayhead(0);
   $("tcMain").textContent=tc(0,DATA?DATA.fps:24);
   updateVideoCallout(0);
+  updateDurationDelta();
   if(mainVideo.getAttribute("src")){ mainVideo.pause(); mainVideo.currentTime=0; }
   lastReportedShot=0;
   const firstShot=SEGS.find(segment=>segment.start<=0&&0<segment.end)?.shotNumber||SEGS[0]?.shotNumber;
@@ -1143,6 +1162,8 @@ function releaseReferenceMedia(){
   PORTABLE_REFERENCE_STATE=null;
   lastPortableVisibleIds=null;
   immediatePortableIds.clear();
+  lastPortableShotId=null;
+  lastPortableShotUsedLeadIn=false;
   portableRunStartCache.clear();
   $("referenceDock").replaceChildren();
 }
@@ -1174,7 +1195,9 @@ mainVideo.addEventListener("loadedmetadata",()=>{
 });
 mainVideo.addEventListener("error",()=>{
   warns.push("영상 로드 실패");
+  updateDurationDelta();
 });
+mainVideo.addEventListener("emptied",updateDurationDelta);
 thumbnailVideo.addEventListener("loadedmetadata",generateTimelineThumbnails);
 thumbnailVideo.addEventListener("error",()=>{
   $("thumbnailStatus").className="warn";

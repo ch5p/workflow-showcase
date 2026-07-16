@@ -1397,6 +1397,17 @@ ipcMain.handle("app:log", (_event, event, detail) => {
 
 ipcMain.handle("export:open-dialog", (event, context) => openExportWindow(event.sender, context));
 ipcMain.handle("export:get-summary", () => exportSummary());
+ipcMain.handle("export:set-bitrate", (_event, payload) => {
+  // Export popup may change only output.bitrateMbps. The bumped revision is safe:
+  // the editor's stale-save path adopts the new revision and retries when jobId is unchanged.
+  if(exportController.isRunning()) throw new Error("렌더링 중에는 비트레이트를 변경할 수 없습니다.");
+  const bitrateMbps = Number(payload?.bitrateMbps);
+  if(bitrateMbps !== 12 && bitrateMbps !== 24) throw new Error("지원하지 않는 비트레이트입니다.");
+  const job = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "export_set_bitrate");
+  writeJob({ ...job, output: { ...(job.output || {}), bitrateMbps } });
+  logEvent("export_bitrate_updated", { bitrateMbps });
+  return exportSummary();
+});
 ipcMain.handle("export:start", async (event, payload) => {
   const job = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "export_start");
   const window = BrowserWindow.fromWebContents(event.sender);
