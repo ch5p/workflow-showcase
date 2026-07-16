@@ -124,6 +124,13 @@
       await safeRendererLog("renderer_stale_save_ignored",{expectedJobId});
       const {saveRejected,...current}=next;
       job=current;
+      const sameJob=current.jobId===expectedJobId;
+      if(!sameJob){
+        lifecycleGeneration++;
+        clearSaveTimers();
+        await blockRuntime("CURRENT JOB CHANGED · USE ↻",new Error("Current Job identity changed on disk"));
+        return current;
+      }
       if(retry&&generation===lifecycleGeneration&&!transitioning&&!runtimeBlocked){
         return performSaveJobPatch(patch,false);
       }
@@ -447,17 +454,34 @@
     let prepared=null;
     let committed=false;
     let viewReleased=false;
+    let preflightPassed=false;
     const previousJob=job;
     try{
       prepared=await prepareVideo();
       if(!prepared)return false;
+      const target=await waitForPreview();
+      if(!prepared.candidateUrl||typeof target?.preflightVideo!=="function"){
+        throw new Error("Video preflight is unavailable");
+      }
+      try{
+        const metadata=await target.preflightVideo(prepared.candidateUrl);
+        preflightPassed=true;
+        await safeRendererLog("video_import_preflight_passed",{
+          durationSeconds:metadata.duration,
+          width:metadata.width,
+          height:metadata.height,
+        });
+      }catch(error){
+        await safeRendererLog("video_import_preflight_failed",{message:error.message});
+        error.toastMessage="VIDEO REJECTED · CURRENT VIDEO KEPT";
+        throw error;
+      }
       const expectedJobId=job.jobId;
       const expectedRevision=job.revision;
       transitioning=true;
       initialized=false;
       lifecycleGeneration++;
       clearSaveTimers();
-      const target=await waitForPreview();
       if(target?.releaseMedia)await target.releaseMedia({references:false});
       else await target?.clearVideo?.();
       viewReleased=true;
@@ -469,7 +493,7 @@
       return true;
     }catch(error){
       if(prepared&&!committed){
-        try{await bridge.discardPreparedVideo(prepared.token,"commit-failed")}catch{}
+        try{await bridge.discardPreparedVideo(prepared.token,preflightPassed?"commit-failed":"preflight-failed")}catch{}
       }
       const recoveryRequired=/JOB_RECOVERY_REQUIRED|rollback failed/i.test(error?.message||"");
       if(recoveryRequired){
@@ -579,6 +603,23 @@
       });
     }catch(error){await reportError(error)}
   }
+  async function reloadCurrentJob(){
+    if(transitioning||activeInputOperation){
+      ui.showToast("WAIT FOR CURRENT ACTION");
+      return false;
+    }
+    clearSaveTimers();
+    lifecycleGeneration++;
+    initialized=false;
+    try{
+      await bridge?.reloadCurrentJob();
+      return true;
+    }catch(error){
+      initialized=!runtimeBlocked;
+      await reportError(error,"CURRENT JOB RELOAD FAILED");
+      return false;
+    }
+  }
   function syncActiveShot(id){ ui.syncShotSelection(Number(id)); }
   async function initialize(){
     if(!bridge){ui.showToast("OPEN WITH ELECTRON");return}
@@ -600,7 +641,7 @@
 
   window.portableMvp={
     loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
-    addReferences,addDroppedReferences,deleteReference,loadXmlText,syncActiveShot,exportVideo,
+    addReferences,addDroppedReferences,deleteReference,loadXmlText,syncActiveShot,exportVideo,reloadCurrentJob,
   };
   bridge?.onProjectTitleUpdated(projectTitle=>{if(!transitioning&&!runtimeBlocked)applyProjectTitle(projectTitle)});
   window.addEventListener("wireframechange",scheduleSave);

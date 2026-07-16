@@ -22,7 +22,7 @@
     updateTitleCount();
     $("formatValue").textContent = next.format;
     $("frameValue").textContent = next.width + " × " + next.height + " · " + next.outputFps + " FPS";
-    $("bitrateValue").textContent = next.bitrateMbps + " Mbps TARGET";
+    $("bitrateSelect").value = String(next.bitrateMbps);
     $("durationValue").textContent = next.durationSeconds
       ? clock(next.durationSeconds) + " · " + next.totalFrames.toLocaleString() + " FRAMES"
       : "CALCULATED ON START";
@@ -32,7 +32,10 @@
     $("startButton").disabled = !next.ready;
     if(!next.ready){
       $("stateValue").textContent = "NOT READY";
-      setMessage("XML과 완성본 영상을 먼저 불러와야 합니다.", true);
+      setMessage(next.readyMessage || "XML과 완성본 영상을 먼저 불러와야 합니다.", true);
+    }else{
+      $("stateValue").textContent = "READY";
+      setMessage("START EXPORT를 누르면 렌더링을 시작합니다.");
     }
   }
 
@@ -75,8 +78,22 @@
   function setRunning(next){
     running = next;
     $("projectTitle").disabled = next;
+    $("bitrateSelect").disabled = next;
     $("startButton").disabled = next || !summary?.ready;
     $("cancelButton").textContent = next ? "CANCEL EXPORT" : "CANCEL";
+  }
+
+  async function changeBitrate(event){
+    const previous = String(summary?.bitrateMbps || 12);
+    if(running){ event.target.value = previous; return; }
+    try{
+      const next = await api.setBitrate(Number(event.target.value), summary?.jobId, summary?.revision);
+      renderSummary(next);
+      setMessage("비트레이트를 " + next.bitrateMbps + " Mbps로 저장했습니다.");
+    }catch(error){
+      event.target.value = previous;
+      setMessage(error.message, true);
+    }
   }
 
   function showComplete(result){
@@ -129,6 +146,7 @@
   }
 
   $("startButton").addEventListener("click", startExport);
+  $("bitrateSelect").addEventListener("change", changeBitrate);
   $("cancelButton").addEventListener("click", cancelOrClose);
   $("openFolderButton").addEventListener("click", () => api.openOutput());
   api.onProgress(setProgress);

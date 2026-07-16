@@ -1,21 +1,21 @@
-﻿## Summary
+## Summary
 
 ## Stable contracts touched
 
 - [ ] XML parser
-- [ ] PRIMARY timeline 또는 SHOT identity
+- [ ] PRIMARY timeline or SHOT identity
 - [ ] Reference mapping
-- [ ] Job path 또는 schema
+- [ ] Job path or schema
 - [ ] IPC
-- [ ] Export와 encoder fallback
+- [ ] Export or encoder fallback
 - [ ] Presentation only
 
 ## Validation
 
-- [ ] npm run check
-- [ ] npm run smoke
-- [ ] npm run smoke:export, Export 변경 시
-- [ ] Screenshot 또는 output 비교, presentation 변경 시
+- [ ] `npm run check`
+- [ ] `npm run smoke`
+- [ ] `npm run smoke:export` when Export changes
+- [ ] Screenshot or output comparison when presentation changes
 
 ## Risk
 

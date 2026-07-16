@@ -12,6 +12,7 @@ const fixtureXml=path.join(fixtureRoot,"premiere-synthetic.xml");
 const fixtureVideo=path.join(fixtureRoot,"premiere-synthetic-final.mp4");
 const temporaryRoot=fs.mkdtempSync(path.join(os.tmpdir(),"character-workflow-smoke-"));
 const jobRoot=path.join(temporaryRoot,"current-job");
+const invalidVideo=path.join(temporaryRoot,"invalid-video.mp4");
 const exportMode=process.argv.includes("--export");
 
 function prepareExportJob(){
@@ -57,12 +58,15 @@ function safeCleanup(){
 
 let result;
 try{
+  fs.writeFileSync(invalidVideo,"not a playable video","utf8");
   if(exportMode)prepareExportJob();
   const electronPath=require("electron");
   const env={
     ...process.env,
     PORTABLE_TEST_JOB_ROOT:jobRoot,
     PORTABLE_SMOKE_XML:fixtureXml,
+    PORTABLE_SMOKE_VIDEO:fixtureVideo,
+    PORTABLE_SMOKE_INVALID_VIDEO:invalidVideo,
   };
   if(exportMode)env.PORTABLE_EXPORT_TEST_SECONDS=process.env.PORTABLE_EXPORT_TEST_SECONDS||"1";
   result=spawnSync(electronPath,[root,exportMode?"--export-smoke":"--smoke-test"],{

@@ -1,68 +1,75 @@
-﻿# Customizing
+# Customizing
 
-이 프로젝트는 여러 레이아웃을 런타임에서 선택하는 제품이 아닙니다. 공식 베타는 classic 1280 × 1080 하나를 제공하며, 다른 화면비가 필요한 기여자는 포크에서 자신의 고정 레이아웃을 설계합니다.
+`English` · [`한국어 →`](./CUSTOMIZING.ko.md)
+
+This project is not a product that selects layouts at runtime. The official beta ships one layout, classic 1280 × 1080. If you need a different aspect ratio, design your own fixed layout in a fork.
+
+> If you want to change things through an LLM (Codex, Claude, etc.) without reading code, start with [Customizing with AI](docs/CUSTOMIZING_WITH_AI.md).
 
 ## Safe customization surface
 
-레이아웃 작업에서 먼저 보는 파일은 세 곳입니다.
+For layout work, start with these three files:
 
-- render-spec.cjs: 고정 canvas width, height, output fps, bitrate
-- src/layouts/classic/tokens.css: 색상, 글꼴, 그림자 토큰
-- src/layouts/classic/classic.css: video, callout, references, timeline, overview 배치
+- `render-spec.cjs`: fixed canvas width/height and default output fps/bitrate
+- `src/layouts/classic/tokens.css`: shared color, font, and shadow tokens
+- `src/layouts/classic/classic.css`: placement and region-specific values for video, callout, references, timeline, and overview
 
-HTML 영역은 src/output-preview.html에서 다음 ID로 찾을 수 있습니다.
+An existing Job's `output.fps` and `output.bitrateMbps` can override the code defaults. For an aspect-ratio fork, normally change only width/height; treat fps or bitrate changes as a separate Export-contract change.
 
-- videoZone
-- videoCallout
-- referenceCard와 referenceDock
-- timelineSection과 timelineViewport
-- overviewTimeline
-- stage
+You can find the HTML regions in `src/output-preview.html` by these IDs:
+
+- `videoZone`
+- `videoCallout`
+- `referenceCard` and `referenceDock`
+- `timelineSection` and `timelineViewport`
+- `overviewTimeline`
+- `stage`
 
 ## Stable core
 
-다음 파일은 presentation 변경을 위해 수정하지 않습니다.
+Do not modify these files for presentation changes:
 
-- src/core/xmeml-parser.js
-- src/core/primary-timeline.js
-- src/core/shot-model.js
-- src/core/reference-mapping.js
-- timeline-reconcile.cjs
-- job-lifecycle.cjs
-- video-lifecycle.cjs
+- `src/core/xmeml-parser.js`
+- `src/core/primary-timeline.js`
+- `src/core/shot-model.js`
+- `src/core/reference-mapping.js`
+- `timeline-reconcile.cjs`
+- `job-lifecycle.cjs`
+- `video-lifecycle.cjs`
 
-특히 XML parser, SHOT identity, reference mapping 의미, Job 상대경로, IPC, Export 취소와 encoder fallback은 안정 코어입니다.
+In particular, the XML parser, SHOT identity, reference mapping semantics, Job relative paths, IPC, and Export cancel / encoder fallback are the stable core.
 
 ## Making a fixed aspect-ratio fork
 
-1. 먼저 npm.cmd run check와 npm.cmd run smoke를 통과시킵니다.
-2. render-spec.cjs의 classic width와 height를 포크의 고정값으로 바꿉니다.
-3. classic.css에서 stage, videoZone, panel, reference, timeline 영역을 새 canvas에 맞게 직접 배치합니다.
-4. editor fit과 Export summary가 같은 render spec을 표시하는지 확인합니다.
-5. 공개 fixture를 불러와 같은 5 EDITS와 4 SHOTS가 유지되는지 확인합니다.
-6. npm.cmd run smoke:export 후 결과 MP4의 크기와 가독성을 직접 검수합니다.
+1. First make `npm.cmd run check` and `npm.cmd run smoke` pass.
+2. Change the classic width and height in `render-spec.cjs` to your fork's fixed values.
+3. In `classic.css`, re-lay-out the stage, videoZone, panel, reference, and timeline regions for the new canvas.
+4. Confirm the editor fit and the Export summary show the same render spec.
+5. Load the public fixture and confirm the same 5 EDITS and 4 SHOTS hold.
+6. Run `npm.cmd run smoke:export` to verify the automated Export path.
+7. Export through the real app's `EXPORT H.264` control and inspect the resulting MP4's size and legibility yourself.
 
-이 작업은 모바일 가독성이나 정보 밀도를 자동으로 보장하지 않습니다. 16:9, 9:16, 1:1, 4:5는 각각 별도의 디자인 문제입니다.
+This does not automatically guarantee mobile legibility or information density. 16:9, 9:16, 1:1, and 4:5 are each separate design problems.
 
 ## Callout contract
 
-기존 Job의 callout 필드는 다음 의미를 유지합니다.
+The callout fields of an existing Job keep these meanings:
 
-- enabled
-- position
-- style
-- startSeconds
-- durationSeconds
-- subtitle
+- `enabled`
+- `position`
+- `style`
+- `startSeconds`
+- `durationSeconds`
+- `subtitle`
 
-선택 필드를 추가할 때는 기존 Job이 같은 결과로 열리도록 기본값을 제공해야 합니다. 외부 텍스트는 innerHTML이 아니라 textContent로 삽입해야 합니다.
+When adding an optional field, provide defaults so existing Jobs open with the same result. Insert external text via `textContent`, not `innerHTML`.
 
 ## Do not add yet
 
-실제 공식 레이아웃이 두 개 이상 필요해지기 전에는 다음 구조를 추가하지 않습니다.
+Do not add the following structures until two or more official layouts are actually needed:
 
 - runtime preset selector
 - layout registry
 - plugin framework
 - Job layout ID
-- width와 height 사용자 입력 UI
+- width/height user-input UI

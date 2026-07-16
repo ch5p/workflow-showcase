@@ -37,8 +37,12 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
   font-size:10px;font-weight:700;background:var(--surface)}
 .brandText{min-width:0}
 .brandText strong{display:block;font-size:12px;letter-spacing:.4px}
-.brandText span{display:block;margin-top:2px;color:var(--muted);font-family:var(--mono);font-size:9px;
+.brandJobLine{display:flex;align-items:center;gap:4px;min-width:0}
+.brandText .jobName{display:block;min-width:0;margin-top:2px;color:var(--muted);font-family:var(--mono);font-size:9px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jobReload{width:18px;height:18px;flex:0 0 auto;display:grid;place-items:center;margin-top:2px;border-radius:4px;color:var(--muted)}
+.jobReload:hover{background:var(--surface-2);color:var(--text)}
+.jobReload svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .projectStatus{justify-self:center;display:flex;align-items:center;gap:16px;color:var(--muted);font-family:var(--mono);
   font-size:9px;white-space:nowrap}
 .statusReady{color:var(--accent)}
@@ -183,6 +187,12 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .scopeState.REPLACE{color:#b8a4eb}
 .scopeState.HIDE{color:#e4a1ae}
 .libraryScope{position:relative;padding:10px 4px 4px;border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background .15s}
+.libraryScope .scopeHeading{gap:7px}
+.libraryScope .scopeHeading span{margin-left:auto}
+.referenceAddButton{height:22px;padding:0 7px;border:1px solid rgba(255,255,255,.24);border-radius:4px;background:rgba(255,255,255,.07);
+  color:#d9f7eb;font-family:var(--mono);font-size:8px;letter-spacing:.35px}
+.referenceAddButton:hover{border-color:var(--accent);background:rgba(34,168,120,.2);color:#fff}
+.referenceAddButton:disabled{opacity:.55;cursor:progress}
 .libraryScope.dragOver{border-color:var(--accent);background:rgba(34,168,120,.12)}
 .libraryScope.dragOver::after{content:"DROP FILES TO IMPORT";position:absolute;inset:38px 4px 4px;z-index:5;display:grid;place-items:center;
   border:1px dashed var(--accent);border-radius:5px;background:rgba(11,18,15,.9);color:#d9f7eb;font-family:var(--mono);font-size:10px;pointer-events:none}
@@ -330,7 +340,12 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       <div class="brandMark">RM</div>
       <div class="brandText">
         <strong>REFERENCE MAP</strong>
-        <span id="jobName">CURRENT JOB / NO XML</span>
+        <div class="brandJobLine">
+          <span class="jobName" id="jobName">CURRENT JOB / NO XML</span>
+          <button class="jobReload" id="reloadCurrentJob" type="button" aria-label="Reload Current Job" title="Reload Current Job">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 5.6A5.7 5.7 0 1 0 13.5 10"/><path d="M13.2 2.8v2.8h-2.8"/></svg>
+          </button>
+        </div>
       </div>
     </div>
     <div class="projectStatus">
@@ -346,7 +361,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       <button class="command inputDropZone video" id="loadVideo" type="button" aria-label="Load source video. Click to choose or drop one MP4, MOV, or M4V file." aria-busy="false" title="Click to choose or drop one MP4, MOV, or M4V file">
         <strong>VIDEO</strong><span>MP4 · MOV · M4V</span>
       </button>
-      <button class="command" id="resetPreviewTop">RESET</button>
+      <button class="command" id="resetPreviewTop" title="Return preview to 00:00">TO START</button>
       <button class="command editPanelToggle" id="editPanelButton">EDIT PANEL</button>
       <button class="command" id="previewButton">OUTPUT</button>
       <button class="command primary" id="exportButton">EXPORT H.264</button>
@@ -432,8 +447,8 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
                 <div class="overlayLabel"><span>SHOT REFERENCES</span><span>DROP TO SHOT</span></div>
                 <div class="overlayAssigned" id="overlayAssignedList"></div>
               </section>
-              <section class="libraryScope" id="referenceLibraryDrop" title="Drop image or video files here">
-                <div class="scopeHeading"><strong>REFERENCE FILES</strong><span id="overlayAssetCount">0 FILES</span></div>
+              <section class="libraryScope" id="referenceLibraryDrop" title="Drop image or video files here, or choose Add Files">
+                <div class="scopeHeading"><strong>REFERENCE FILES</strong><span id="overlayAssetCount">0 FILES</span><button class="referenceAddButton" id="addReferenceFiles" type="button">ADD FILES</button></div>
                 <div class="overlayAssets" id="overlayAssetGrid"></div>
               </section>
             </div>
@@ -880,14 +895,22 @@ function moveShotSelection(delta){
   const next=shots[Math.max(0,Math.min(shots.length-1,currentIndex+delta))];
   selectOnlyShot(next.id);seekPreview(next);
 }
-function isShortcutControl(target){
+function moveShotSelectionToBoundary(last){
+  const next=last?shots.at(-1):shots[0];
+  if(!next)return;
+  selectOnlyShot(next.id);seekPreview(next);
+}
+function isTextEntryControl(target){
   return target instanceof HTMLElement&&(
-    target.isContentEditable||Boolean(target.closest("button,[role=button],input,textarea,select,a[href]"))
+    target.isContentEditable||Boolean(target.closest("input,textarea,select"))
   );
 }
 document.addEventListener("keydown",event=>{
   const target=event.target;
-  if(isShortcutControl(target))return;
+  // Guard: yield shortcuts only to text-entry controls. A focused button must not swallow Space
+  // (stale focus after a mouse click made Space re-click the button instead of toggling playback).
+  // Elements that handle Space themselves (asset cards) call preventDefault, so defaultPrevented yields to them.
+  if(event.defaultPrevented||isTextEntryControl(target))return;
   if(event.code==="Space"||event.key===" "){
     event.preventDefault();event.stopPropagation();
     try{$("renderPreview").contentWindow.portablePreview?.playPause()}catch(error){}
@@ -896,15 +919,25 @@ document.addEventListener("keydown",event=>{
     event.preventDefault();moveShotSelection(-1);
   }else if(["ArrowDown","ArrowRight"].includes(event.key)){
     event.preventDefault();moveShotSelection(1);
+  }else if(event.key==="Home"){
+    event.preventDefault();moveShotSelectionToBoundary(false);
+  }else if(event.key==="End"){
+    event.preventDefault();moveShotSelectionToBoundary(true);
   }
 });
 document.addEventListener("keyup",event=>{
   const target=event.target;
-  if(isShortcutControl(target))return;
+  if(isTextEntryControl(target))return;
   if(event.code==="Space"||event.key===" "){
     event.preventDefault();event.stopPropagation();
   }
 },true);
+document.addEventListener("click",event=>{
+  // Drop stale focus after a mouse click so the next Space always reaches playback. Keyboard activation (detail 0) keeps focus.
+  if(event.detail===0)return;
+  const control=event.target instanceof HTMLElement?event.target.closest("button,[role=button]"):null;
+  if(control)control.blur();
+});
 $("applySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
 $("resetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
 $("overlayApplySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
@@ -932,15 +965,40 @@ $("previewShell").addEventListener("pointerdown",event=>{
 });
 $("overlayClose").addEventListener("click",()=>setOverlayOpen(false));
 $("previewButton").addEventListener("click",async()=>{
-  const error=await window.portableApi?.openOutput?.();
-  showToast(error?"OUTPUT FOLDER ERROR":"OUTPUT FOLDER OPENED");
+  try{
+    const error=await window.portableApi?.openOutput?.();
+    showToast(error?"OUTPUT FOLDER ERROR":"OUTPUT FOLDER OPENED");
+  }catch(error){showToast("OUTPUT FOLDER ERROR")}
 });
 $("exportButton").addEventListener("click",()=>window.portableMvp?.exportVideo());
+$("reloadCurrentJob").addEventListener("click",()=>window.portableMvp?.reloadCurrentJob());
 $("resetPreviewTop").addEventListener("click",()=>{
   try{$("renderPreview").contentWindow.portablePreview?.reset()}catch(error){}
   showToast("RETURNED TO 00:00");
 });
-$("fileInput").addEventListener("change",event=>addLocalFiles(event.target.files));
+$("addReferenceFiles").addEventListener("click",async event=>{
+  event.stopPropagation();
+  const button=event.currentTarget;
+  if(button.disabled)return;
+  button.disabled=true;
+  button.setAttribute("aria-busy","true");
+  try{
+    const handler=window.portableMvp?.addReferences;
+    if(typeof handler==="function"){
+      await handler();
+      return;
+    }
+    $("fileInput").value="";
+    $("fileInput").click();
+  }finally{
+    button.disabled=false;
+    button.setAttribute("aria-busy","false");
+  }
+});
+$("fileInput").addEventListener("change",event=>{
+  addLocalFiles(event.target.files);
+  event.target.value="";
+});
 const globalDrop=$("globalDrop");
 globalDrop.addEventListener("dragover",event=>{
   if(!event.dataTransfer.types.includes("text/reference-id"))return;

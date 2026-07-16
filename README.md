@@ -1,84 +1,102 @@
-﻿# Character Workflow Portable
+# Character Workflow Portable
 
-Premiere Pro에서 내보낸 legacy Final Cut Pro 7 XML (xmeml)과 완성본 영상을 이용해, SHOT별 레퍼런스 맵이 포함된 1280 × 1080 H.264 영상을 만드는 Windows용 Electron 소스 베타입니다.
+`English` · [`한국어 →`](./README.ko.md)
 
-현재 공식 레이아웃은 classic 하나입니다. 16:9, 9:16, 1:1을 자동으로 지원하지 않으며, 필요한 사람은 안정 코어를 유지한 채 classic presentation과 render spec을 포크하여 수정할 수 있습니다.
+A Windows Electron source beta that turns a legacy Final Cut Pro 7 XML (xmeml) exported from Premiere Pro, plus your finished video, into a 1280 × 1080 H.264 showcase clip with a per-SHOT reference map.
+
+There is currently one official layout, `classic`. It does not automatically support 16:9, 9:16, or 1:1; if you need those, fork the classic presentation and render spec while keeping the stable core intact.
+
+## Why this exists
+
+Most AI-generated clips (for example, from Seedance-class models) look great on their own, but the interesting part — which references drove each shot, and how the cut was assembled — is invisible. This tool takes the timeline you already edited in Premiere and the finished video, and renders a single "process reveal": your video on top, the reference map and the PRIMARY-based cut breakdown underneath. It is meant as a ready-to-post showcase for feeds like X, with no extra compositing work.
+
+It is built so that non-coders can remix it. Changing callouts, reference cards, or the cut board to your taste is meant to be driven through an LLM (Codex, Claude, etc.) rather than by editing code by hand. See [Customizing with AI](docs/CUSTOMIZING_WITH_AI.md).
 
 ## Beta scope
 
-- 지원: xmeml sequence와 video-track timing
-- 주 검증 환경: Adobe Premiere Pro 2026 v26.2.2 (Build 3)의 Final Cut Pro XML export
-- 출력: 1280 × 1080, 60 fps, H.264, 12 Mbps
-- 저장: current-job 폴더 안의 상대경로 기반 단일 Job
-- 배포 형태: Windows source beta
-- 미지원: modern FCPXML, CapCut 프로젝트, Premiere 효과·마스크 재현
+- Supported: xmeml sequences and video-track timing
+- Primary validation: Final Cut Pro XML export from Adobe Premiere Pro 2026 v26.2.2 (Build 3)
+- Default output: 1280 × 1080, 60 fps, H.264, 12 Mbps
+- Storage: a single Job under `current-job`, addressed by relative paths
+- Distribution: Windows source beta
+- Not supported: modern FCPXML, CapCut projects, reproduction of Premiere effects/masks
 
-자세한 경계는 [XML Compatibility](docs/XML_COMPATIBILITY.md)를 확인하세요.
+See [XML Compatibility](docs/XML_COMPATIBILITY.md) for the exact boundaries.
 
 ## Requirements
 
-- Windows 10 또는 11
-- Node.js 22.12 이상
+- Windows 10 or 11
+- Node.js 22.12 or later
 - npm
-- FFmpeg가 PATH에 등록되어 있거나 프로젝트의 ffmpeg/ffmpeg.exe에 존재해야 Export 가능
+- FFmpeg — required for Export. If WinGet is available, install it with the command below.
 
-이 저장소는 FFmpeg 바이너리를 포함하지 않습니다.
+This repository does not bundle the FFmpeg binary. On a Windows 10/11 system with WinGet, paste this into Command Prompt or PowerShell. If setup is unfamiliar, you can ask an LLM to run the command for you.
+
+    winget install -e --id Gyan.FFmpeg
+
+Fully quit and restart the app after installation so it can see the updated `PATH`. You can also place a downloaded `ffmpeg.exe` in the project's `ffmpeg/` folder.
 
 ## Quick start
 
     npm.cmd ci
     npm.cmd start
 
-또는 설치 후 START_APP.cmd를 실행할 수 있습니다.
+Or run `START_APP.cmd` after installing.
 
-처음 검수할 때는 다음 공개 fixture를 사용하세요.
+For your first check, use the bundled public fixture:
 
-- XML: fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml
-- Video: fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4
+- XML: `fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml`
+- Video: `fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4`
 
-앱에서 XML을 드롭하고 NEW JOB을 선택한 다음 같은 fixture의 MP4를 드롭합니다. 기대 결과는 24 fps, 12초, 5 EDITS, 4 SHOTS이며 PRIMARY 순서는 A → D → B → A → C입니다.
+Drop the XML on the `XML` click/drop zone, choose the middle `새 Job으로 불러오기` (`Load as a new Job`) option, then drop the MP4 from the same sequence on the `VIDEO` zone. The expected result is 24 fps, 12 seconds, 5 EDITS, 4 SHOTS, with a PRIMARY order of A → D → B → A → C.
 
 ## Job safety
 
-LOAD XML에는 두 목적이 있습니다.
+- The app opens the Current Job from a single process at a time; a second launch returns to the existing window.
+- Ordinary `job.json` saves fsync a unique staging file and retry Windows file locks. If the replace ultimately fails, both the existing Job and the completed staging file are preserved.
+- Symlinks/junctions inside `current-job` are rejected to prevent reading, deleting, or writing files outside the Job.
+- UPDATE XML: keeps the existing video, references, GLOBAL/SHOT mappings, title, and output settings, and refreshes only the timeline.
+- NEW JOB: resets source, video, references, mappings, title, and callout only when the user explicitly chooses it.
+- A video is committed to the Current Job only after Electron actually reads its metadata and first frame.
+- If the final rename after a completed render fails, the finished `.part.mp4` is not deleted.
 
-- UPDATE XML: 기존 영상, 레퍼런스, GLOBAL/SHOT 매핑, 제목과 출력 설정을 유지하고 타임라인만 갱신합니다.
-- NEW JOB: 사용자가 명시적으로 선택했을 때만 source, video, references, mappings, title, callout을 초기화합니다.
-
-Job은 current-job 아래에 저장됩니다. 앱 폴더 전체를 복사하면 내부 상대경로를 이용해 다른 위치에서도 다시 열 수 있습니다. current-job의 사용자 데이터는 Git에서 제외됩니다.
+Jobs live under `current-job`. Copy the whole app folder and it reopens elsewhere via internal relative paths. User data in `current-job` is excluded from Git.
 
 ## Tests
 
-모든 자동 검사는 실제 current-job 대신 OS 임시 폴더를 사용합니다.
+Regression fixtures and smoke runs use an OS temp folder instead of the real `current-job`. To verify that tests did not mutate user data, `check` locally compares only the before/after SHA-256 of `current-job/job.json`; it does not print or modify its contents.
 
     npm.cmd run check
     npm.cmd run smoke
     npm.cmd run smoke:export
 
-smoke:export는 FFmpeg가 필요하며 1초짜리 임시 출력만 생성합니다. 임시 Job과 출력은 검사 종료 후 삭제됩니다.
+`smoke:export` requires FFmpeg, creates a 1-second temporary output, and then deletes it. For visual QA, make a separate file with the real app's `EXPORT H.264` control and inspect that result.
 
 ## Customizing
 
-- 고정 출력 크기·fps·bitrate: render-spec.cjs
-- classic 디자인 토큰: src/layouts/classic/tokens.css
-- classic 배치와 스타일: src/layouts/classic/classic.css
-- 파서와 PRIMARY 계산: src/core/ — 레이아웃 작업에서 수정하지 않음
+- Fixed output width/height and default fps/bitrate: `render-spec.cjs`
+- Shared classic color/font tokens: `src/layouts/classic/tokens.css`
+- Classic placement, region sizing, and style: `src/layouts/classic/classic.css`
+- Parser and PRIMARY calculation: `src/core/` — do not modify for layout work
 
-새 화면비를 만드는 방법과 안전선을 [CUSTOMIZING.md](CUSTOMIZING.md)와 [Classic Layout](docs/CLASSIC_LAYOUT.md)에 정리했습니다.
+To customize via an LLM without reading code, see [Customizing with AI](docs/CUSTOMIZING_WITH_AI.md). For a fixed aspect-ratio fork and the safety lines, see [CUSTOMIZING.md](CUSTOMIZING.md) and [Classic Layout](docs/CLASSIC_LAYOUT.md).
 
 ## Known limitations
 
-- XML은 편집 구조 데이터이며 Premiere의 필터, 좌우 반전, Transform, Crop, mask, keyframe, 색보정 등을 재현하지 않습니다.
-- transition은 일부 경계 계산에만 사용하며 시각 효과를 렌더링하지 않습니다.
-- final visual truth는 XML이 아니라 함께 불러온 완성본 영상입니다.
-- editor UI는 반응형 제품 UI가 아니며 classic 출력은 1280 × 1080 하나만 제공합니다.
-- 현재 source beta는 Windows에서만 검증했습니다.
-- frame-accurate mastering tool이 아니며 부하가 큰 환경에서는 중복 paint frame이 생길 수 있습니다.
+- XML is edit-structure data; it does not reproduce Premiere filters, horizontal flips, Transform, Crop, masks, keyframes, or color grading.
+- Transitions are used only for some boundary calculations and are not rendered as visual effects.
+- The final visual truth is the finished video you load, not the XML.
+- The editor UI is not a responsive product UI, and classic output is 1280 × 1080 only.
+- This source beta has been validated on Windows only.
+- It is not a frame-accurate mastering tool; duplicate paint frames may appear under heavy load.
+- UPDATE XML preserves SHOT mappings that cannot be matched unambiguously for a later UPDATE, but this beta has no screen to list, manually reattach, or individually discard those orphaned mappings.
+- Export copies source audio without transcoding. Some MOV/M4V files whose audio codec is incompatible with MP4 may fail to export.
+- Video and reference imports do not show copy progress or check free disk space in advance. Very large files may appear stalled or fail when space runs out.
 
 ## Contributing and security
 
-기여 절차는 [CONTRIBUTING.md](CONTRIBUTING.md), 보안 제보는 [SECURITY.md](SECURITY.md)를 확인하세요.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution process and [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 
 ## License
 
-코드와 저장소에 포함된 synthetic fixture는 별도 표기가 없는 한 [MIT License](LICENSE)를 따릅니다. Adobe, Premiere Pro, Final Cut Pro, CapCut은 각 소유자의 상표이며 이 프로젝트는 해당 회사들과 제휴하지 않습니다.
+The code and the synthetic fixtures included in this repository are under the [MIT License](LICENSE) unless noted otherwise. Adobe, Premiere Pro, Final Cut Pro, and CapCut are trademarks of their respective owners; this project is not affiliated with those companies.
