@@ -99,6 +99,13 @@ const appHtml=fs.readFileSync(path.join(root,"src","index.html"),"utf8");
 if(!appHtml.includes("<title>Workflow Showcase</title>")||!appHtml.includes('<div class="brandMark">WS</div>')||!appHtml.includes("<strong>WORKFLOW SHOWCASE</strong>")){
   throw new Error("Workflow Showcase app identity is incomplete");
 }
+const mainSource=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
+for(const marker of ["createBundledDemoJob","starter_demo_seeded","starter_demo_replacement_selected",'demo: true']){
+  if(!mainSource.includes(marker))throw new Error("Bundled starter demo contract is incomplete: "+marker);
+}
+const mvpSource=fs.readFileSync(path.join(root,"src","mvp-app.js"),"utf8");
+if(!mvpSource.includes('"SAMPLE JOB / "'))throw new Error("Starter demo label is missing");
+if(!preview.includes("상단 XML과 VIDEO에서 파일을 불러오세요"))throw new Error("Preview input guidance is inaccurate");
 if(packageJson.devDependencies?.electron!=="43.1.1")throw new Error("Electron must stay pinned to the tested version");
 if(!String(packageJson.scripts?.smoke||"").includes("run-smoke.cjs"))throw new Error("Smoke is not routed through the isolated runner");
 const workflow=fs.readFileSync(path.join(root,".github","workflows","check.yml"),"utf8");

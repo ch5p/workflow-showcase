@@ -8,7 +8,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createExportController } = require("./exporter.cjs");
 const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
-const { cleanupSiblingStagingFiles, writeTextAtomically } = require("./durable-file.cjs");
+const { cleanupSiblingStagingFiles, fsyncExistingFile, replaceByRenameWithRetry, writeTextAtomically } = require("./durable-file.cjs");
 const { ensureDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
 const {
   inspectInputFile,
@@ -54,6 +54,9 @@ const REFERENCES_ROOT = path.join(JOB_ROOT, "references");
 const OUTPUT_ROOT = path.join(JOB_ROOT, "output");
 const LOG_ROOT = path.join(JOB_ROOT, "logs");
 const JOB_PATH = path.join(JOB_ROOT, "job.json");
+const BUNDLED_DEMO_ROOT = path.join(APP_ROOT, "fixtures", "premiere-export-kit", "public-fixture");
+const BUNDLED_DEMO_XML = path.join(BUNDLED_DEMO_ROOT, "premiere-synthetic.xml");
+const BUNDLED_DEMO_VIDEO = path.join(BUNDLED_DEMO_ROOT, "premiere-synthetic-final.mp4");
 const DEFAULT_CALLOUT = {
   enabled: true,
   position: "left",
@@ -117,6 +120,39 @@ function emptyJob(){
   };
 }
 
+function installBundledDemoFile(sourcePath, destinationPath, label){
+  const inspected = inspectInputFile(
+    sourcePath,
+    path.extname(sourcePath).toLowerCase() === ".xml" ? [".xml"] : VIDEO_EXTENSIONS,
+    path.extname(sourcePath).toLowerCase() === ".xml" ? 64 * 1024 * 1024 : VIDEO_MAX_BYTES,
+  );
+  if(fs.existsSync(destinationPath)){
+    const existing = fs.lstatSync(destinationPath);
+    if(existing.isSymbolicLink() || !existing.isFile()) throw new Error(label + " destination is unsafe");
+    fs.unlinkSync(destinationPath);
+  }
+  const stagedPath = path.join(SOURCE_ROOT, ".bundled-demo-" + randomUUID() + ".tmp");
+  fs.copyFileSync(inspected.absolutePath, stagedPath, fs.constants.COPYFILE_EXCL);
+  fsyncExistingFile(stagedPath);
+  replaceByRenameWithRetry(stagedPath, destinationPath, { label });
+  return inspected;
+}
+
+function createBundledDemoJob(){
+  ensureJobFolders();
+  const xml = installBundledDemoFile(BUNDLED_DEMO_XML, path.join(SOURCE_ROOT, "timeline.xml"), "Bundled demo XML");
+  const video = installBundledDemoFile(BUNDLED_DEMO_VIDEO, path.join(SOURCE_ROOT, "video.mp4"), "Bundled demo video");
+  const next = writeJob({
+    ...emptyJob(),
+    demo: true,
+    xml: { name: xml.name, relativePath: "source/timeline.xml" },
+    video: { name: video.name, relativePath: "source/video.mp4" },
+    projectTitle: "SYNTHETIC TIMELINE",
+  }, { preserveDemo: true });
+  logEvent("starter_demo_seeded", { jobId: next.jobId, xmlName: xml.name, videoName: video.name });
+  return next;
+}
+
 function isPlainObject(value){
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -169,6 +205,7 @@ function validateJobShape(job){
   }
   if(job.projectTitle !== undefined && typeof job.projectTitle !== "string") throw new Error("projectTitle must be a string");
   if(job.callout !== undefined && !isPlainObject(job.callout)) throw new Error("callout must be an object");
+  if(job.demo !== undefined && typeof job.demo !== "boolean") throw new Error("demo must be a boolean");
   if(!isPlainObject(job.ui) || !isPlainObject(job.output)) throw new Error("ui and output must be objects");
   return job;
 }
@@ -176,8 +213,12 @@ function validateJobShape(job){
 function loadJob(){
   ensureJobFolders();
   if(!fs.existsSync(JOB_PATH)){
-    const job = emptyJob();
-    return writeJob(job);
+    try{
+      return createBundledDemoJob();
+    }catch(error){
+      logEvent("starter_demo_seed_failed", { code: error.code || "DEMO_SEED_FAILED", message: error.message });
+      return writeJob(emptyJob());
+    }
   }
   try{
     const parsed = validateJobShape(JSON.parse(fs.readFileSync(JOB_PATH, "utf8")));
@@ -196,13 +237,15 @@ function loadJob(){
   }
 }
 
-function writeJob(job){
+function writeJob(job, { preserveDemo = false } = {}){
   ensureJobFolders();
+  const jobToWrite = { ...job };
+  if(!preserveDemo) delete jobToWrite.demo;
   const next = {
-    ...job,
+    ...jobToWrite,
     version: 1,
-    jobId: typeof job?.jobId === "string" && job.jobId ? job.jobId : randomUUID(),
-    revision: (Number.isSafeInteger(job?.revision) && job.revision >= 0 ? job.revision : 0) + 1,
+    jobId: typeof jobToWrite.jobId === "string" && jobToWrite.jobId ? jobToWrite.jobId : randomUUID(),
+    revision: (Number.isSafeInteger(jobToWrite.revision) && jobToWrite.revision >= 0 ? jobToWrite.revision : 0) + 1,
     updatedAt: new Date().toISOString(),
   };
   validateJobShape(next);
@@ -762,6 +805,16 @@ function createWindow(){
           }));
         }
         await new Promise(resolve => setTimeout(resolve, 1200));
+        const starterJob = loadJob();
+        const starterDemo = {
+          enabled: starterJob.demo === true,
+          hasXml: starterJob.xml?.relativePath === "source/timeline.xml",
+          hasVideo: starterJob.video?.relativePath === "source/video.mp4",
+          title: starterJob.projectTitle,
+        };
+        if(!starterDemo.enabled || !starterDemo.hasXml || !starterDemo.hasVideo || starterDemo.title !== "SYNTHETIC TIMELINE"){
+          throw new Error("Bundled starter demo contract failed: " + JSON.stringify(starterDemo));
+        }
         const smokeXmlPath = process.env.PORTABLE_SMOKE_XML;
         if(smokeXmlPath && fs.existsSync(smokeXmlPath)){
           const xmlText = fs.readFileSync(smokeXmlPath, "utf8");
@@ -784,11 +837,16 @@ function createWindow(){
           calloutSettingsOpen: document.getElementById("calloutSettings")?.open,
           previewState: document.getElementById("renderPreview")?.contentWindow?.portablePreview?.getState(),
           shotItems: document.querySelectorAll("#shotRailList .shotRailItem").length,
-          editStatus: document.getElementById("editCountStatus")?.textContent
+          editStatus: document.getElementById("editCountStatus")?.textContent,
+          jobName: document.getElementById("jobName")?.textContent
         })`);
         if(!result.hasApi || !result.hasWireframe || !result.hasPreview || !result.shotRail || !result.editOverlay || !result.calloutSettingsOpen){
           throw new Error("Smoke contract failed: " + JSON.stringify(result));
         }
+        if(!String(result.jobName || "").startsWith("SAMPLE JOB / ")){
+          throw new Error("Starter demo label is missing: " + JSON.stringify(result));
+        }
+        result.starterDemo = starterDemo;
         if(process.env.PORTABLE_SMOKE_XML && (!result.shotItems || result.editStatus==="0 EDITS")){
           throw new Error("XML did not reach the parent SHOT rail: " + JSON.stringify(result));
         }
@@ -872,6 +930,36 @@ function createWindow(){
         await new Promise(resolve => setTimeout(resolve, 180));
         const image = await window.webContents.capturePage();
         fs.writeFileSync(path.join(OUTPUT_ROOT, "mvp-smoke.png"), image.toPNG());
+        if(smokeXmlPath && fs.existsSync(smokeXmlPath)){
+          const demoReplacement = await window.webContents.executeJavaScript(`(async()=>{
+            const api=window.portableApi;
+            const preview=document.getElementById("renderPreview").contentWindow.portablePreview;
+            const before=await api.getJob();
+            const prepared=await api.prepareDroppedXml(${JSON.stringify(smokeXmlPath)});
+            const candidate=preview.inspectXml(prepared.text);
+            const mode=await api.chooseXmlImportMode(prepared.token);
+            await preview.releaseMedia({references:true});
+            const result=await api.commitXmlImport({
+              token:prepared.token,
+              expectedJobId:before.jobId,
+              expectedRevision:before.revision,
+              previousTimelineShots:[],
+              nextTimelineShots:candidate.shots,
+            });
+            return {
+              mode,
+              previousJobId:before.jobId,
+              nextJobId:result.job.jobId,
+              demo:result.job.demo===true,
+              video:result.job.video,
+            };
+          })()`);
+          if(demoReplacement.mode!=="new" || demoReplacement.demo || demoReplacement.video!==null ||
+              demoReplacement.previousJobId===demoReplacement.nextJobId){
+            throw new Error("Starter demo replacement contract failed: "+JSON.stringify(demoReplacement));
+          }
+          result.demoReplacement=demoReplacement;
+        }
         logEvent("smoke_passed", result);
         console.log("SMOKE_OK " + JSON.stringify(result));
         app.exit(0);
@@ -1072,6 +1160,14 @@ ipcMain.handle("job:choose-xml-mode", async (event, token) => {
   requireRuntimeReady("xml_choose_mode");
   const entry = preparedXmlEntry(event, token);
   if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a new XML.");
+  const current = loadJob();
+  if(current.demo === true){
+    entry.mode = "new";
+    entry.expiresAt = Date.now() + PREPARED_XML_TTL_MS;
+    logEvent("starter_demo_replacement_selected", { transactionId: entry.token, xmlName: entry.name });
+    logEvent("job_xml_mode_selected", { transactionId: entry.token, mode: entry.mode, replacedDemo: true });
+    return entry.mode;
+  }
   const owner = BrowserWindow.fromWebContents(event.sender);
   const options = {
     type: "warning",
@@ -1201,8 +1297,9 @@ ipcMain.handle("job:commit-video", (event, payload) => {
   const entry = preparedVideoEntry(event, payload?.token);
   if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a video.");
   const current = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "video_import_commit");
+  const { demo: _discardDemoMarker, ...currentUserJob } = current;
   const nextJob = {
-    ...current,
+    ...currentUserJob,
     revision: current.revision + 1,
     updatedAt: new Date().toISOString(),
     video: {

@@ -43,12 +43,12 @@ Fully quit and restart the app after installation so it can see the updated `PAT
 
 Or run `START_APP.cmd` after installing.
 
-For your first check, use the bundled public fixture:
+The first launch opens the bundled public fixture as a ready-to-play `SAMPLE JOB`:
 
 - XML: `fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml`
 - Video: `fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4`
 
-Drop the XML on the `XML` click/drop zone, choose the middle `새 Job으로 불러오기` (`Load as a new Job`) option, then drop the MP4 from the same sequence on the `VIDEO` zone. The expected result is 24 fps, 12 seconds, 5 EDITS, 4 SHOTS, with a PRIMARY order of A → D → B → A → C.
+The sample is 24 fps and 12 seconds, with 5 EDITS, 4 SHOTS, and a PRIMARY order of A → D → B → A → C. To start your own project, click or drop your XML on the top `XML` zone. A valid XML automatically replaces the disposable sample as a new Job; then load the matching finished video from the top `VIDEO` zone. Existing non-sample Jobs still show the safe UPDATE XML / NEW JOB choice.
 
 ## Job safety
 
@@ -56,7 +56,7 @@ Drop the XML on the `XML` click/drop zone, choose the middle `새 Job으로 불�
 - Ordinary `job.json` saves fsync a unique staging file and retry Windows file locks. If the replace ultimately fails, both the existing Job and the completed staging file are preserved.
 - Symlinks/junctions inside `current-job` are rejected to prevent reading, deleting, or writing files outside the Job.
 - UPDATE XML: keeps the existing video, references, GLOBAL/SHOT mappings, title, and output settings, and refreshes only the timeline.
-- NEW JOB: resets source, video, references, mappings, title, and callout only when the user explicitly chooses it.
+- NEW JOB: resets source, video, references, mappings, title, and callout only when the user explicitly chooses it. The bundled first-run sample is the only exception: the first valid user XML replaces that disposable sample automatically.
 - A video is committed to the Current Job only after Electron actually reads its metadata and first frame.
 - If the final rename after a completed render fails, the finished `.part.mp4` is not deleted.
 

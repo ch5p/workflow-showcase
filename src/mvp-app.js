@@ -33,7 +33,9 @@
     return [hh,mm,ss,ff].map(value=>String(value).padStart(2,"0")).join(":");
   }
   function setStatus(){
-    document.getElementById("jobName").textContent=job?.xml?"CURRENT JOB / "+job.xml.name:"CURRENT JOB / NO XML";
+    document.getElementById("jobName").textContent=job?.demo
+      ?"SAMPLE JOB / "+(job.xml?.name||"NO XML")
+      :(job?.xml?"CURRENT JOB / "+job.xml.name:"CURRENT JOB / NO XML");
     document.getElementById("xmlStatus").textContent=timeline?"XML READY":"XML NEEDED";
     document.getElementById("fpsStatus").textContent=timeline?timeline.fps+" FPS":"-- FPS";
     document.getElementById("editCountStatus").textContent=(timeline?.edits||0)+" EDITS";
