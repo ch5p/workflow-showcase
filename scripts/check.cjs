@@ -12,7 +12,7 @@ const required=[
   "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
   "src/core/xmeml-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
-  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
+  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
   "current-job/source","current-job/references","current-job/output","current-job/logs",
@@ -28,7 +28,7 @@ for(const relative of [
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs",
   "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
   "src/core/xmeml-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
-  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/mvp-app.js","src/export-dialog.js",
 ]){
   const result=spawnSync(process.execPath,["--check",path.join(root,relative)],{encoding:"utf8"});
@@ -55,6 +55,11 @@ if(!editor.includes('id="reloadCurrentJob"'))throw new Error("Current Job reload
 if(!editor.includes('id="addReferenceFiles"')||!editor.includes("portableMvp?.addReferences"))throw new Error("Reference file picker control missing");
 if(editor.includes('id="addFilesTop"'))throw new Error("Removed top add-files control returned");
 if(/id="overlay(?:LoadXml|Play|Reset)"/.test(editor))throw new Error("Removed overlay transport control returned");
+for(const marker of ['class="shotRail closed" id="shotRail"','class="editOverlay closed" id="editOverlay"','aria-label="Open edit panel" aria-expanded="false"','if(shot.mode==="INHERIT"||shot.mode==="HIDE")shot.mode="ADD"']){
+  if(!editor.includes(marker))throw new Error("Editor default-state contract missing: "+marker);
+}
+if((editor.match(/class="modeButton active" data-mode="ADD"/g)||[]).length<2)throw new Error("ADD must be the visible default for SHOT reference modes");
+if(editor.includes('class="modeButton active" data-mode="REPLACE"'))throw new Error("REPLACE returned as the visible SHOT reference default");
 for(const marker of ['class="command inputDropZone"','class="command inputDropZone video"',"./core/reference-mapping.js","loadDroppedXml","loadDroppedVideo","function replaceShots(nextShots,mappings={},emitChange=true)"]){
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }
@@ -68,7 +73,19 @@ for(const marker of ['id="durationDelta"',"function updateDurationDelta()","main
   if(!preview.includes(marker))throw new Error("Duration-delta help contract missing: "+marker);
 }
 if(!classicCss.includes("body.running #durationDelta"))throw new Error("Duration-delta help must stay out of Export output");
+for(const marker of ["thumbnailSeekToken","requestVideoFrameCallback","metadata?.mediaTime","seekThumbnailFrameWithRetry","getValidatedThumbnailCanvas","thumbnailFrameCache","thumbnail_generation_failed","clearTimelineThumbnails","setTimelineLoading","PREVIEW LOADING","THUMBS RETRY"]){
+  if(!preview.includes(marker))throw new Error("P0 thumbnail-frame contract missing: "+marker);
+}
+for(const marker of ["Math.abs(mediaFrame-targetFrame)<=1","maxAttempts=2","timeout\"),1500","Number.isInteger(batchAttempt)",'loadedmetadata",()=>generateTimelineThumbnails()']){
+  if(!preview.includes(marker))throw new Error("Bounded thumbnail retry contract missing: "+marker);
+}
+if(!classicCss.includes("#timelineLoading[data-state=\"retry\"]"))throw new Error("P0 thumbnail loading gate styles missing");
+for(const marker of ["SEGS.map(segment=>segment.start)","overviewSegment","overviewFilmstripSlices","slice.start/DATA.duration*100","thumbnailPixelWidth=laneHeight*(16/9)","overviewCoverSourceRect","drawOverviewThumbnailCover(sourceCanvas"]){
+  if(!preview.includes(marker))throw new Error("Frame-accurate overview contract missing: "+marker);
+}
+if(preview.includes("const count=14")||classicCss.includes("repeat(14"))throw new Error("Sample-cell overview returned");
 const renderer=fs.readFileSync(path.join(root,"src/mvp-app.js"),"utf8");
+if(!renderer.includes("logPreviewEvent")||!renderer.includes("safeRendererLog(event,detail)"))throw new Error("Thumbnail diagnostics must reach current-job/logs/app.log");
 for(const marker of ["expectedJobId","expectedRevision","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
   if(!renderer.includes(marker))throw new Error("Renderer lifecycle marker missing: "+marker);
 }
@@ -83,6 +100,7 @@ for(const [script,successMarker] of [
   ["check-video-lifecycle.cjs","VIDEO_LIFECYCLE_CHECK_OK"],
   ["check-timeline-reconcile.cjs","TIMELINE_RECONCILE_OK"],
   ["check-runtime-safety.cjs","RUNTIME_SAFETY_CHECK_OK"],
+  ["check-thumbnail-frame-gate.cjs","THUMBNAIL_FRAME_GATE_OK"],
 ]){
   const lifecycleCheck=spawnSync(process.execPath,[path.join(root,"scripts",script)],{encoding:"utf8"});
   if(lifecycleCheck.status!==0)throw new Error(script+" failed\n"+lifecycleCheck.stdout+"\n"+lifecycleCheck.stderr);
