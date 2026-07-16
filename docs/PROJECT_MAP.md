@@ -5,7 +5,7 @@
 - `main.cjs`: Electron window, file selection, the XML UPDATE/NEW JOB decision boundary, portable copy, `job.json` CAS save, app log
 - `durable-file.cjs`: UUID staging, fsync, Windows rename retry, and preservation of failed staging for ordinary Jobs and completed Exports
 - `owned-path.cjs`: lexical, lstat, and realpath no-follow checks for the Current Job owned root
-- `strings.cjs`: EN/KR user-facing strings for the Main process and the exporter, plus the `ui.language` → OS-locale resolution rule
+- `strings.cjs`: EN/KR user-facing strings for the Main process and the exporter, plus the `ui.language` → preferred OS UI-language resolution rule
 - `preload.cjs`: the minimal local file API exposed to the screen, plus restricted IPC for XML/video/reference drop
 - `job-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for XML UPDATE/NEW JOB
 - `video-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for source video replacement
@@ -30,7 +30,7 @@
 - `current-job` and `source`, `references`, `output`, `logs` must be real directories; symlinks/junctions are not allowed. Stored files are re-checked all the way to the real path, inside the owned root, immediately before use.
 - `projectTitle`: an optional field of up to 40 characters that is reflected in the preview as soon as it is typed in the edit panel and auto-saved. If the field is absent, `UNTITLED PROJECT` is used; an explicit empty string is used as an empty title.
 - `callout`: an optional field with `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`, used identically by the output preview and the offscreen render.
-- `ui.language`: optional `"en"` or `"ko"`. Absent means follow the OS locale. Toggled by the editor's EN/KR button and saved through the normal `job:save` ui merge; the Export popup reads it from the summary `language` field.
+- `ui.language`: optional `"en"` or `"ko"`. Absent means use the first OS preferred UI language, with system/application locale only as fallbacks. Toggled by the editor's EN/KR button and saved through the normal `job:save` ui merge; the Export popup reads it from the summary `language` field. Startup records `storedLanguage`, the detected locale candidates, and `resolved` in `ui_language_resolved`.
 - `shotMappings.<shotId>`: may add the optional field `leadInSeconds: 1` to the existing `mode`, `refs`; when absent it is treated as `0`.
 - `timelineShots`: rematching descriptors that store only `identityKey`, `nameKey`, and timeline/source in-out occurrence, without original names or paths
 - `orphanedShotMappings`: existing mappings that did not clearly match the new timeline 1:1. Only `descriptor`, `mapping`, and `reason` are stored, and they can be reattached in the next UPDATE.
@@ -45,7 +45,7 @@ All stored paths are relative to the app folder. Internal identifiers and JSON k
 
 ## Import Contract
 
-- The `XML` click/drop zone uses one prepare/commit path. The current dialog labels are `타임라인만 업데이트` (`Update timeline only`, default), `새 Job으로 불러오기` (`Load as a new Job`), and `취소` (`Cancel`).
+- The `XML` click/drop zone uses one prepare/commit path. The dialog buttons remain `UPDATE XML` (default), `NEW JOB`, and `CANCEL` in both UI languages; the explanatory message and detail follow `ui.language`.
 - XML validation, UPDATE, NEW JOB, preview, and Export all exclude Premiere Adjustment Layers before PRIMARY/SHOT inspection. Adjustment filter data is neither rendered nor stored in the Job.
 - When `current-job/job.json` does not exist, Main copies the existing public fixture XML/MP4 into `current-job/source`, creates a `demo: true` sample Job, and logs `starter_demo_seeded`. It never seeds over an existing Job. If fixture seeding fails, it logs `starter_demo_seed_failed` and falls back to the empty Job contract.
 - A valid XML selected while `demo: true` bypasses the UPDATE choice and enters the existing NEW JOB transaction, so the disposable sample XML/video are removed while output/logs remain. The candidate is parsed before this decision. Ordinary Jobs keep the normal UPDATE/NEW JOB dialog.

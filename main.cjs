@@ -10,7 +10,7 @@ const { createExportController } = require("./exporter.cjs");
 const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
 const { cleanupSiblingStagingFiles, fsyncExistingFile, replaceByRenameWithRetry, writeTextAtomically } = require("./durable-file.cjs");
 const { ensureDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
-const { resolveLanguage, mainText } = require("./strings.cjs");
+const { resolvePreferredLanguage, mainText } = require("./strings.cjs");
 const { createJobBackup } = require("./job-backup.cjs");
 const {
   inspectInputFile,
@@ -209,6 +209,7 @@ function validateJobShape(job){
   if(job.callout !== undefined && !isPlainObject(job.callout)) throw new Error("callout must be an object");
   if(job.demo !== undefined && typeof job.demo !== "boolean") throw new Error("demo must be a boolean");
   if(!isPlainObject(job.ui) || !isPlainObject(job.output)) throw new Error("ui and output must be objects");
+  if(job.ui.language !== undefined && !["en", "ko"].includes(job.ui.language)) throw new Error("ui.language must be en or ko");
   return job;
 }
 
@@ -239,13 +240,27 @@ function loadJob(){
   }
 }
 
-function currentLanguage(){
-  let preferred = null;
-  try{ preferred = loadJob().ui?.language; }catch{}
-  let osLocale = "";
-  try{ osLocale = app.getLocale(); }catch{}
-  return resolveLanguage(preferred, osLocale);
+function currentLanguageState(){
+  let storedLanguage = null;
+  try{ storedLanguage = loadJob().ui?.language ?? null; }catch{}
+  let preferredSystemLanguages = [];
+  try{
+    const detected = app.getPreferredSystemLanguages();
+    if(Array.isArray(detected)) preferredSystemLanguages = detected.filter(value => typeof value === "string" && value.trim());
+  }catch{}
+  let systemLocale = "";
+  try{ systemLocale = app.getSystemLocale(); }catch{}
+  let appLocale = "";
+  try{ appLocale = app.getLocale(); }catch{}
+  return {
+    storedLanguage,
+    preferredSystemLanguages,
+    systemLocale,
+    appLocale,
+    resolved: resolvePreferredLanguage(storedLanguage, preferredSystemLanguages, systemLocale, appLocale),
+  };
 }
+function currentLanguage(){ return currentLanguageState().resolved; }
 const T = key => mainText(currentLanguage(), key);
 
 function writeJob(job, { preserveDemo = false } = {}){
@@ -381,7 +396,7 @@ function discardPreparedXmlForOwner(ownerId){
 
 function prepareXmlImport(event, sourcePath, inputMethod){
   requireRuntimeReady("xml_prepare");
-  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a new XML.");
+  if(exportController.isRunning()) throw new Error(T("export_block_xml"));
   prunePreparedXmlImports();
   discardPreparedXmlForOwner(event.sender.id);
   const preparation = prepareXmlCandidate({ sourcePath, logRoot: LOG_ROOT, inputMethod });
@@ -513,7 +528,7 @@ function discardPreparedVideoForOwner(ownerId){
 
 function prepareVideoImport(event, sourcePath, inputMethod){
   requireRuntimeReady("video_prepare");
-  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a video.");
+  if(exportController.isRunning()) throw new Error(T("export_block_video"));
   prunePreparedVideoImports();
   discardPreparedVideoForOwner(event.sender.id);
   const preparation = prepareVideoCandidate({
@@ -1066,6 +1081,14 @@ if(SINGLE_INSTANCE_LOCK){
     return;
   }
   logEvent("app_started", { appRoot: APP_ROOT });
+  const languageState = currentLanguageState();
+  logEvent("ui_language_resolved", {
+    storedLanguage: languageState.storedLanguage,
+    preferredSystemLanguage: languageState.preferredSystemLanguages[0] || null,
+    systemLocale: languageState.systemLocale || null,
+    appLocale: languageState.appLocale || null,
+    resolved: languageState.resolved,
+  });
   createWindow();
   app.on("activate", () => {
     if(BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -1083,7 +1106,7 @@ ipcMain.handle("job:get", () => hydrateJob(loadJob()));
 ipcMain.handle("app:get-render-spec", () => publicRenderSpec(loadJob().output));
 ipcMain.handle("app:get-language", () => currentLanguage());
 ipcMain.handle("app:reload-current-job", event => {
-  if(exportController.isRunning()) throw new Error("Finish or cancel Export before reloading the Current Job.");
+  if(exportController.isRunning()) throw new Error(T("export_block_reload"));
   const ownerId = event.sender.id;
   discardPreparedXmlForOwner(ownerId);
   discardPreparedVideoForOwner(ownerId);
@@ -1131,6 +1154,7 @@ ipcMain.handle("job:save", (_event, payload) => {
   logEvent("job_saved", {
     globalCount: next.globalReferenceIds.length,
     shotMappingCount: Object.keys(next.shotMappings || {}).length,
+    uiLanguage: next.ui?.language || null,
   });
   return hydrateJob(next);
 });
@@ -1154,7 +1178,7 @@ ipcMain.handle("job:prepare-xml-path", (event, sourcePath) => prepareXmlImport(e
 ipcMain.handle("job:choose-xml-mode", async (event, token) => {
   requireRuntimeReady("xml_choose_mode");
   const entry = preparedXmlEntry(event, token);
-  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a new XML.");
+  if(exportController.isRunning()) throw new Error(T("export_block_xml"));
   const current = loadJob();
   if(current.demo === true){
     entry.mode = "new";
@@ -1190,8 +1214,8 @@ ipcMain.handle("job:choose-xml-mode", async (event, token) => {
 
 ipcMain.handle("job:commit-xml", (event, payload) => {
   const entry = preparedXmlEntry(event, payload?.token);
-  if(!["update", "new"].includes(entry.mode)) throw new Error("Choose how to import XML before committing it.");
-  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a new XML.");
+  if(!["update", "new"].includes(entry.mode)) throw new Error(T("xml_mode_required"));
+  if(exportController.isRunning()) throw new Error(T("export_block_xml"));
   const current = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "job_xml_commit");
   const nextTimelineShots = normalizeTimelineShots(payload?.nextTimelineShots);
   let reconciliation = {
@@ -1287,7 +1311,7 @@ ipcMain.handle("job:prepare-video-path", (event, sourcePath) => prepareVideoImpo
 
 ipcMain.handle("job:commit-video", (event, payload) => {
   const entry = preparedVideoEntry(event, payload?.token);
-  if(exportController.isRunning()) throw new Error("Finish or cancel Export before loading a video.");
+  if(exportController.isRunning()) throw new Error(T("export_block_video"));
   const current = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "video_import_commit");
   const { demo: _discardDemoMarker, ...currentUserJob } = current;
   const nextJob = {

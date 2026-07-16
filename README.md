@@ -43,6 +43,8 @@ Fully quit and restart the app after installation so it can see the updated `PAT
 
 Or run `START_APP.cmd` after installing.
 
+When no language has been chosen for the Current Job, the first preferred Windows UI language selects Korean or English automatically. The `EN` / `KR` control in the header switches immediately and saves that choice with the Current Job.
+
 The first launch opens the bundled public fixture as a ready-to-play `SAMPLE JOB`:
 
 - XML: `fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml`

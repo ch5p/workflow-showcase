@@ -960,8 +960,12 @@ $("overlayBackupJob").addEventListener("click",()=>{
 $("overlayResetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
 $("languageToggle").addEventListener("click",async()=>{
   const next=editorLanguage==="ko"?"en":"ko";
-  if(window.portableMvp?.setLanguage)await window.portableMvp.setLanguage(next);
-  else window.applyEditorLanguage(next);
+  try{
+    if(window.portableMvp?.setLanguage)await window.portableMvp.setLanguage(next);
+    else window.applyEditorLanguage(next);
+  }catch(error){
+    showToast(editorLanguage==="ko"?"언어 설정 변경 실패 · 앱 로그 확인":"LANGUAGE CHANGE FAILED · CHECK APP LOG");
+  }
 });
 $("loadXml").addEventListener("click",()=>window.portableMvp?.loadXml()||showToast("XML INPUT READY"));
 $("loadVideo").addEventListener("click",()=>window.portableMvp?.loadVideo()||showToast("VIDEO INPUT READY"));

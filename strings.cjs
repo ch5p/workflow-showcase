@@ -3,11 +3,18 @@
 // User-facing strings for the Main process and the exporter.
 // Contract: the UI skeleton (buttons, feature names like UPDATE XML / NEW JOB) stays English
 // in both languages; sentences that people read are localized.
-// job.json ui.language: "en" | "ko" | absent = follow the OS locale.
+// job.json ui.language: "en" | "ko" | absent = follow the OS preferred UI language.
 
 function resolveLanguage(preferred, osLocale){
   if(preferred === "en" || preferred === "ko") return preferred;
   return String(osLocale || "").toLowerCase().startsWith("ko") ? "ko" : "en";
+}
+
+function resolvePreferredLanguage(preferred, preferredSystemLanguages = [], systemLocale = "", appLocale = ""){
+  const preferredSystemLanguage = Array.isArray(preferredSystemLanguages)
+    ? preferredSystemLanguages.find(value => typeof value === "string" && value.trim()) || ""
+    : "";
+  return resolveLanguage(preferred, preferredSystemLanguage || systemLocale || appLocale);
 }
 
 const MAIN = {
@@ -32,6 +39,10 @@ const MAIN = {
     rollback_block_title: "Current Job recovery required",
     rollback_block_xml: "Saving and Export are blocked because the XML replacement rollback could not be completed. Restart the app and check current-job/logs/app.log.",
     rollback_block_video: "Saving and Export are blocked because the video replacement rollback could not be completed. Restart the app and check current-job/logs/app.log.",
+    export_block_xml: "Finish or cancel Export before loading a new XML.",
+    export_block_video: "Finish or cancel Export before loading a video.",
+    export_block_reload: "Finish or cancel Export before reloading the Current Job.",
+    xml_mode_required: "Choose how to import XML before committing it.",
     bitrate_running: "The bitrate cannot be changed while rendering.",
     bitrate_invalid: "Unsupported bitrate.",
   },
@@ -56,6 +67,10 @@ const MAIN = {
     rollback_block_title: "Current Job recovery required",
     rollback_block_xml: "XML 교체 rollback을 완료하지 못해 저장과 Export를 차단했습니다. 앱을 다시 시작한 뒤 current-job/logs/app.log를 확인하세요.",
     rollback_block_video: "영상 교체 rollback을 완료하지 못해 저장과 Export를 차단했습니다. 앱을 다시 시작한 뒤 current-job/logs/app.log를 확인하세요.",
+    export_block_xml: "Export를 완료하거나 취소한 뒤 새 XML을 불러오세요.",
+    export_block_video: "Export를 완료하거나 취소한 뒤 영상을 불러오세요.",
+    export_block_reload: "Export를 완료하거나 취소한 뒤 Current Job을 다시 불러오세요.",
+    xml_mode_required: "XML을 반영할 방식을 선택한 뒤 적용하세요.",
     bitrate_running: "렌더링 중에는 비트레이트를 변경할 수 없습니다.",
     bitrate_invalid: "지원하지 않는 비트레이트입니다.",
   },
@@ -96,4 +111,4 @@ function pick(table, lang, key){
 function mainText(lang, key){ return pick(MAIN, lang, key); }
 function exporterText(lang, key){ return pick(EXPORTER, lang, key); }
 
-module.exports = { resolveLanguage, mainText, exporterText };
+module.exports = { resolveLanguage, resolvePreferredLanguage, mainText, exporterText };

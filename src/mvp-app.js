@@ -4,9 +4,10 @@
   const bridge=window.portableApi;
   const ui=window.wireframeApi;
   const iframe=document.getElementById("renderPreview");
+  const browserLanguage=()=>String(navigator.languages?.[0]||navigator.language||"").toLowerCase().startsWith("ko")?"ko":"en";
   let job=null;
   let timeline=null;
-  let language="en";
+  let language=browserLanguage();
   let initialized=false;
   let transitioning=false;
   let runtimeBlocked=false;
@@ -26,9 +27,21 @@
     try{preview()?.setLanguage?.(language)}catch{}
   }
   async function setLanguage(next){
-    applyLanguage(next);
-    await saveJobPatch({ui:{language:language}});
-    return language;
+    const previous=language;
+    const requested=next==="ko"?"ko":"en";
+    if(requested===previous)return language;
+    applyLanguage(requested);
+    if(!bridge)return language;
+    try{
+      const saved=await saveJobPatch({ui:{language:requested}});
+      if(saved?.ui?.language!==requested)throw new Error("Language preference was not saved");
+      return language;
+    }catch(error){
+      applyLanguage(previous);
+      ui.showToast(previous==="ko"?"언어 설정 저장 실패 · 앱 로그 확인":"LANGUAGE SAVE FAILED · CHECK APP LOG");
+      await safeRendererLog("ui_language_save_failed",{message:error?.message||String(error),requested,restored:previous});
+      return previous;
+    }
   }
   function waitForPreview(){
     if(preview())return Promise.resolve(preview());
@@ -125,6 +138,21 @@
   }
   async function safeRendererLog(event,detail={}){
     try{await bridge?.log(event,detail)}catch{}
+  }
+  async function readBootLanguage(){
+    const fallback=browserLanguage();
+    if(typeof bridge?.getLanguage!=="function"){
+      await safeRendererLog("ui_language_ipc_missing",{fallback});
+      return fallback;
+    }
+    try{
+      const resolved=await bridge.getLanguage();
+      if(resolved==="en"||resolved==="ko")return resolved;
+      await safeRendererLog("ui_language_invalid",{value:String(resolved),fallback});
+    }catch(error){
+      await safeRendererLog("ui_language_ipc_failed",{message:error?.message||String(error),fallback});
+    }
+    return fallback;
   }
   function logPreviewEvent(event,detail={}){
     return safeRendererLog(event,detail);
@@ -659,7 +687,7 @@
       const [current,renderSpec,bootLanguage]=await Promise.all([
         bridge.getJob(),
         bridge.getRenderSpec(),
-        bridge.getLanguage?.().catch(()=>"en")??"en",
+        readBootLanguage(),
       ]);
       const target=await waitForPreview();
       target?.setRenderSpec?.(renderSpec);
@@ -672,6 +700,7 @@
         hasXml:Boolean(job.xml),
         hasVideo:Boolean(job.video),
         referenceCount:job.references.length,
+        language,
       });
     }catch(error){reportError(error)}
   }

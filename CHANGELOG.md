@@ -2,6 +2,7 @@
 
 ## 0.1.0-beta.2
 
+- Added persistent EN/KR UI selection, preferred-OS-language first-run detection, localized failure messages, and language-resolution diagnostics
 - Excluded Premiere Adjustment Layers before PRIMARY EDIT/SHOT detection without exposing effect metadata
 - Seeded the bundled Premiere fixture as a disposable first-run `SAMPLE JOB` and made the first valid user XML replace it through NEW JOB
 - Replaced the inactive center-drop claim with guidance to the real top XML/VIDEO controls

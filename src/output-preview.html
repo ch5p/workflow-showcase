@@ -179,6 +179,10 @@ const PREVIEW_STRINGS={
     probeMetadata:"Could not read the video metadata or the first frame.",
     probePlayback:"This video cannot be played in Electron right now.",
     probeTimeout:"Video preflight timed out.",
+    xmlReadFailed:"Could not read the XML: ",
+    videoReadyTimeout:"Timed out while preparing the video.",
+    thumbnailReadyTimeout:"Timed out while preparing timeline thumbnails.",
+    thumbnailFailed:"Could not create timeline thumbnails.",
   },
   ko:{
     videoHint:"상단 XML과 VIDEO에서 파일을 불러오세요",
@@ -192,6 +196,10 @@ const PREVIEW_STRINGS={
     probeMetadata:"영상 메타데이터 또는 첫 프레임을 읽지 못했습니다.",
     probePlayback:"이 영상은 현재 Electron에서 재생할 수 없습니다.",
     probeTimeout:"영상 사전검증 시간이 초과되었습니다.",
+    xmlReadFailed:"XML 읽기 실패: ",
+    videoReadyTimeout:"영상 준비 시간이 초과되었습니다.",
+    thumbnailReadyTimeout:"타임라인 썸네일 준비 시간이 초과되었습니다.",
+    thumbnailFailed:"타임라인 썸네일을 만들지 못했습니다.",
   },
 };
 const ps=key=>{const dict=PREVIEW_STRINGS[LANG]||PREVIEW_STRINGS.en;return dict[key]??PREVIEW_STRINGS.en[key]??key;};
@@ -1448,7 +1456,7 @@ function loadFile(f){
       try{
         build(parseFCPXML(rd.result));
       }catch(err){
-        alert("XML 읽기 실패: "+err.message);
+        alert(ps("xmlReadFailed")+err.message);
   }
 };
     rd.readAsText(f);
@@ -1514,14 +1522,14 @@ window.portablePreview={
   async waitForVideoReady(timeoutMs=60000){
     const started=performance.now();
     while(mainVideo.readyState<2||!Number.isFinite(mainVideo.duration)||mainVideo.duration<=0){
-      if(performance.now()-started>timeoutMs)throw new Error("영상 준비 시간 초과");
+      if(performance.now()-started>timeoutMs)throw new Error(ps("videoReadyTimeout"));
       await new Promise(resolve=>setTimeout(resolve,50));
     }
     while(!/THUMBS READY|THUMBS (?:VIDEO )?ERROR/.test($("thumbnailStatus").textContent)){
-      if(performance.now()-started>timeoutMs)throw new Error("타임라인 썸네일 준비 시간 초과");
+      if(performance.now()-started>timeoutMs)throw new Error(ps("thumbnailReadyTimeout"));
       await new Promise(resolve=>setTimeout(resolve,50));
     }
-    if(/ERROR/.test($("thumbnailStatus").textContent))throw new Error("타임라인 썸네일을 만들지 못했습니다.");
+    if(/ERROR/.test($("thumbnailStatus").textContent))throw new Error(ps("thumbnailFailed"));
     return {duration:mainVideo.duration,readyState:mainVideo.readyState};
   },
   seekFrame(frame){

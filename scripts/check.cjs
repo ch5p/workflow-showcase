@@ -1,6 +1,7 @@
 "use strict";
 
 const fs=require("node:fs");
+const assert=require("node:assert/strict");
 const crypto=require("node:crypto");
 const path=require("node:path");
 const vm=require("node:vm");
@@ -68,7 +69,7 @@ for(const marker of ['class="command inputDropZone"','class="command inputDropZo
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }
 const main=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
-for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:reload-current-job","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed"]){
+for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:get-language","app:reload-current-job","getPreferredSystemLanguages","ui_language_resolved","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed"]){
   if(!main.includes(marker))throw new Error("Current Job lifecycle marker missing: "+marker);
 }
 if(!main.includes("await runSecondarySmoke()")||main.includes("const secondary = spawnSync"))throw new Error("Single-instance smoke must keep the primary event loop available");
@@ -92,6 +93,42 @@ const renderer=fs.readFileSync(path.join(root,"src/mvp-app.js"),"utf8");
 if(!renderer.includes("logPreviewEvent")||!renderer.includes("safeRendererLog(event,detail)"))throw new Error("Thumbnail diagnostics must reach current-job/logs/app.log");
 for(const marker of ["expectedJobId","expectedRevision","backupCurrentJob","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
   if(!renderer.includes(marker))throw new Error("Renderer lifecycle marker missing: "+marker);
+}
+for(const marker of ["browserLanguage","readBootLanguage","ui_language_ipc_failed","ui_language_save_failed","saveJobPatch({ui:{language:requested}})"]){
+  if(!renderer.includes(marker))throw new Error("Renderer language contract missing: "+marker);
+}
+if(!editor.includes('id="languageToggle"')||!editor.includes("window.applyEditorLanguage"))throw new Error("Editor language control missing");
+const preloadSource=fs.readFileSync(path.join(root,"preload.cjs"),"utf8");
+if(!preloadSource.includes('getLanguage: () => ipcRenderer.invoke("app:get-language")'))throw new Error("Language IPC bridge missing");
+const exporterSource=fs.readFileSync(path.join(root,"exporter.cjs"),"utf8");
+if(!exporterSource.includes("window.portablePreview.setLanguage"))throw new Error("Offscreen Export language propagation missing");
+for(const marker of ['xmlReadFailed:', 'videoReadyTimeout:', 'thumbnailReadyTimeout:', 'thumbnailFailed:']){
+  if((preview.match(new RegExp(marker,"g"))||[]).length!==2)throw new Error("Preview EN/KO string pair missing: "+marker);
+}
+if(preview.includes('throw new Error("영상 준비 시간 초과')||preview.includes('alert("XML 읽기 실패')){
+  throw new Error("Hard-coded Korean preview error returned");
+}
+const localizationSource=fs.readFileSync(path.join(root,"strings.cjs"),"utf8");
+const localizationContext={module:{exports:{}},exports:{}};
+new vm.Script(localizationSource+"\nmodule.exports.__tables={MAIN,EXPORTER};",{filename:"strings.cjs#contract"}).runInNewContext(localizationContext);
+const localization=localizationContext.module.exports;
+assert.equal(localization.resolvePreferredLanguage(undefined,["ko"],"en-US","en-US"),"ko");
+assert.equal(localization.resolvePreferredLanguage(undefined,[],"ko-KR","en-US"),"ko");
+assert.equal(localization.resolvePreferredLanguage(undefined,[],"","ko-KR"),"ko");
+assert.equal(localization.resolvePreferredLanguage("en",["ko"],"ko-KR","ko-KR"),"en");
+for(const [name,table] of Object.entries(localization.__tables)){
+  assert.deepEqual(Object.keys(table.en).sort(),Object.keys(table.ko).sort(),name+" EN/KO keys differ");
+}
+function readRendererDictionary(source,name,filename){
+  const match=source.match(new RegExp("const\\s+"+name+"\\s*=\\s*(\\{[\\s\\S]*?\\n\\s*\\};)"));
+  if(!match)throw new Error("Renderer dictionary missing: "+name);
+  return new vm.Script("("+match[1].slice(0,-1)+")",{filename}).runInNewContext();
+}
+const previewStrings=readRendererDictionary(preview,"PREVIEW_STRINGS","src/output-preview.html#PREVIEW_STRINGS");
+const dialogSource=fs.readFileSync(path.join(root,"src/export-dialog.js"),"utf8");
+const dialogStrings=readRendererDictionary(dialogSource,"DIALOG_STRINGS","src/export-dialog.js#DIALOG_STRINGS");
+for(const [name,table] of [["PREVIEW_STRINGS",previewStrings],["DIALOG_STRINGS",dialogStrings]]){
+  assert.deepEqual(Object.keys(table.en).sort(),Object.keys(table.ko).sort(),name+" EN/KO keys differ");
 }
 const currentJobPath=path.join(root,"current-job","job.json");
 function hashIfPresent(filePath){

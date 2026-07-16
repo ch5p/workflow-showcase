@@ -127,7 +127,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     };
   }
 
-  async function captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath }){
+  async function captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath, language }){
     const spec = resolveRenderSpec(job.output);
     const fps = spec.fps;
     const bitrateMbps = spec.bitrateMbps;
@@ -174,7 +174,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       await renderWindow.loadFile(path.join(appRoot, "src", "output-preview.html"), { query: { scale: "1" } });
       const videoUrl = pathToFileURL(videoPath).href;
       const parsed = await renderWindow.webContents.executeJavaScript(
-        `window.portablePreview.setRenderSpec(${JSON.stringify(spec)}); window.portablePreview.loadXml(${JSON.stringify(xmlText)})`
+        `window.portablePreview.setLanguage(${JSON.stringify(language)}); window.portablePreview.setRenderSpec(${JSON.stringify(spec)}); window.portablePreview.loadXml(${JSON.stringify(xmlText)})`
       );
       await renderWindow.webContents.executeJavaScript(
         `window.portablePreview.setVideo(${JSON.stringify(videoUrl)}); window.portablePreview.waitForVideoReady()`
@@ -248,8 +248,9 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
   }
 
   async function start(sender, job, language){
-    if(language === "en" || language === "ko") activeLanguage = language;
-    if(active) throw new Error(t("already_running"));
+    const requestedLanguage = language === "ko" ? "ko" : "en";
+    if(active) throw new Error(exporterText(requestedLanguage, "already_running"));
+    activeLanguage = requestedLanguage;
     if(!job.xml?.relativePath) throw new Error(t("xml_missing"));
     if(!job.video?.relativePath) throw new Error(t("video_missing"));
     sourceFile(job.xml.relativePath, "Export XML");
@@ -274,7 +275,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       let encoder = preferredEncoder;
       let result;
       try{
-        result = await captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath });
+        result = await captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath, language: requestedLanguage });
       }catch(error){
         if(active.cancelled || error.message === "EXPORT_CANCELLED") throw error;
         if(encoder !== "h264_nvenc") throw error;
@@ -282,7 +283,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
         encoder = "libx264";
         emit(sender, { state: "fallback", progress: 0, encoder });
         logEvent("export_encoder_fallback", { message: error.message });
-        result = await captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath });
+        result = await captureAttempt({ sender, job, ffmpegPath, encoder, temporaryPath, language: requestedLanguage });
       }
       encodingCompleted = true;
       try{
