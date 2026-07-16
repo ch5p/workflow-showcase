@@ -55,6 +55,11 @@ if(!editor.includes('id="reloadCurrentJob"'))throw new Error("Current Job reload
 if(!editor.includes('id="addReferenceFiles"')||!editor.includes("portableMvp?.addReferences"))throw new Error("Reference file picker control missing");
 if(editor.includes('id="addFilesTop"'))throw new Error("Removed top add-files control returned");
 if(/id="overlay(?:LoadXml|Play|Reset)"/.test(editor))throw new Error("Removed overlay transport control returned");
+for(const marker of ['class="shotRail closed" id="shotRail"','class="editOverlay closed" id="editOverlay"','aria-label="Open edit panel" aria-expanded="false"','if(shot.mode==="INHERIT"||shot.mode==="HIDE")shot.mode="ADD"']){
+  if(!editor.includes(marker))throw new Error("Editor default-state contract missing: "+marker);
+}
+if((editor.match(/class="modeButton active" data-mode="ADD"/g)||[]).length<2)throw new Error("ADD must be the visible default for SHOT reference modes");
+if(editor.includes('class="modeButton active" data-mode="REPLACE"'))throw new Error("REPLACE returned as the visible SHOT reference default");
 for(const marker of ['class="command inputDropZone"','class="command inputDropZone video"',"./core/reference-mapping.js","loadDroppedXml","loadDroppedVideo","function replaceShots(nextShots,mappings={},emitChange=true)"]){
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }

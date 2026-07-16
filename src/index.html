@@ -399,16 +399,16 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       <div class="previewArea" id="previewArea">
         <div class="previewShell" id="previewShell">
           <iframe id="renderPreview" src="output-preview.html?scale=1" title="Output preview"></iframe>
-          <button class="editPanelHandle" id="editPanelHandle" type="button" aria-label="Close edit panel" aria-expanded="true">›</button>
+          <button class="editPanelHandle" id="editPanelHandle" type="button" aria-label="Open edit panel" aria-expanded="false">‹</button>
           <div class="referenceHoverPreview" id="referenceHoverPreview" aria-hidden="true">
             <div class="referenceHoverMedia" id="referenceHoverMedia"></div>
             <span class="referenceHoverLabel" id="referenceHoverLabel"></span>
           </div>
-          <nav class="shotRail" id="shotRail">
+          <nav class="shotRail closed" id="shotRail">
             <div class="shotRailHeader"><strong>SHOTS</strong><span id="selectedCount">0 / 0</span></div>
             <div class="shotRailList" id="shotRailList"></div>
           </nav>
-          <aside class="editOverlay" id="editOverlay">
+          <aside class="editOverlay closed" id="editOverlay">
             <div class="overlayHeader">
               <div class="overlayTitleEditor">
                 <label for="overlayProjectTitle">PROJECT TITLE</label>
@@ -437,10 +437,10 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
                   <strong id="overlaySelectionTitle">NO SHOT</strong>
                   <span id="overlaySelectionMeta">0 EDITS</span>
                 </div>
-                <span class="scopeState REPLACE" id="overlayScopeState">GLOBAL OVERRIDDEN</span>
+                <span class="scopeState ADD" id="overlayScopeState">GLOBAL + SHOT</span>
                 <div class="overlayModes">
-                  <button class="modeButton" data-mode="ADD">ADD</button>
-                  <button class="modeButton active" data-mode="REPLACE">REPLACE</button>
+                  <button class="modeButton active" data-mode="ADD">ADD</button>
+                  <button class="modeButton" data-mode="REPLACE">REPLACE</button>
                   <button class="modeButton" data-mode="HIDE">HIDE</button>
                 </div>
                 <label class="leadInToggle"><span>LEAD-IN 1S</span><input id="overlayLeadIn" type="checkbox"></label>
@@ -476,8 +476,8 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
           <span class="fieldLabel">REFERENCE MODE</span>
           <div class="segmented" id="modeControls">
             <button class="modeButton" data-mode="INHERIT">INHERIT</button>
-            <button class="modeButton" data-mode="ADD">ADD</button>
-            <button class="modeButton active" data-mode="REPLACE">REPLACE</button>
+            <button class="modeButton active" data-mode="ADD">ADD</button>
+            <button class="modeButton" data-mode="REPLACE">REPLACE</button>
             <button class="modeButton" data-mode="HIDE">HIDE</button>
           </div>
         </div>
@@ -817,7 +817,7 @@ function assignReference(shotIds,assetId){
   if(!assets.has(assetId)) return;
   shots.filter(shot=>shotIds.includes(shot.id)).forEach(shot=>{
     if(!shot.refs.includes(assetId))shot.refs.push(assetId);
-    if(shot.mode==="INHERIT"||shot.mode==="HIDE")shot.mode="REPLACE";
+    if(shot.mode==="INHERIT"||shot.mode==="HIDE")shot.mode="ADD";
   });
   refreshSelection();showToast("REFERENCE APPLIED TO "+shotIds.length+" SHOT"+(shotIds.length===1?"":"S"));
 }
