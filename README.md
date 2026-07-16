@@ -83,7 +83,7 @@ To customize via an LLM without reading code, see [Customizing with AI](docs/CUS
 
 ## Known limitations
 
-- XML is edit-structure data; it does not reproduce Premiere filters, horizontal flips, Transform, Crop, masks, keyframes, or color grading.
+- XML is edit-structure data; it does not reproduce Premiere filters, horizontal flips, Transform, Crop, masks, keyframes, or color grading. Premiere Adjustment Layers are ignored before EDIT/SHOT detection rather than shown as timeline content.
 - Transitions are used only for some boundary calculations and are not rendered as visual effects.
 - The final visual truth is the finished video you load, not the XML.
 - The editor UI is not a responsive product UI, and classic output is 1280 × 1080 only.

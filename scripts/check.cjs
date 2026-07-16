@@ -10,9 +10,9 @@ const root=path.resolve(__dirname,"..");
 const required=[
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs","LICENSE","AGENTS.md","README.md","README.ko.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
   "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
-  "src/core/xmeml-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
+  "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
-  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
+  "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
   "current-job/source","current-job/references","current-job/output","current-job/logs",
@@ -27,8 +27,8 @@ for(const relative of required){
 for(const relative of [
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs",
   "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
-  "src/core/xmeml-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
-  "scripts/check-core-modules.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
+  "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/mvp-app.js","src/export-dialog.js",
 ]){
   const result=spawnSync(process.execPath,["--check",path.join(root,relative)],{encoding:"utf8"});
@@ -42,7 +42,7 @@ for(const relative of ["src/index.html","src/output-preview.html","src/export-di
 }
 const preview=fs.readFileSync(path.join(root,"src/output-preview.html"),"utf8");
 const classicCss=fs.readFileSync(path.join(root,"src/layouts/classic/classic.css"),"utf8");
-for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./core/primary-timeline.js","./core/shot-model.js","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","preflightVideo","routeDroppedFiles","id=\"videoCallout\"","class=\"videoCalloutEyebrow\"","function updateVideoCallout","setCalloutConfig"]){
+for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./adapters/xmeml-unsupported-layers.js","./core/primary-timeline.js","./core/shot-model.js","function parseSupportedFCPXML(text)","excludeUnsupportedXmemlLayers(text,parseFCPXML(text))","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","preflightVideo","routeDroppedFiles","id=\"videoCallout\"","class=\"videoCalloutEyebrow\"","function updateVideoCallout","setCalloutConfig"]){
   if(!preview.includes(marker))throw new Error("Parser bridge marker missing: "+marker);
 }
 if(/<style(?:\s|>)/i.test(preview))throw new Error("Classic preview CSS returned to inline HTML");
@@ -96,6 +96,7 @@ function hashIfPresent(filePath){
 const currentJobBefore=hashIfPresent(currentJobPath);
 for(const [script,successMarker] of [
   ["check-core-modules.cjs","CORE_MODULES_CHECK_OK"],
+  ["check-input-adapters.cjs","INPUT_ADAPTERS_CHECK_OK"],
   ["check-job-lifecycle.cjs","JOB_LIFECYCLE_CHECK_OK"],
   ["check-video-lifecycle.cjs","VIDEO_LIFECYCLE_CHECK_OK"],
   ["check-timeline-reconcile.cjs","TIMELINE_RECONCILE_OK"],

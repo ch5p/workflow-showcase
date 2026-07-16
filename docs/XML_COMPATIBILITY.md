@@ -11,6 +11,7 @@ Currently validated scope:
 - source in and out
 - PRIMARY timeline from track priority
 - exclusion of clips whose enabled is FALSE
+- exclusion of Premiere Adjustment Layers before PRIMARY timeline calculation
 - source identity from repeated file references
 - transitionitem end points included in the sequence content length
 - limited duration recovery for clips whose transition-bound start or end is -1
@@ -32,6 +33,8 @@ CapCut projects are not supported; this beta has no CapCut timeline adapter.
 
 Even when filter or effect metadata exists in the XML, this beta parser does not interpret or reproduce effects.
 
+Premiere Adjustment Layers are intentionally ignored before EDIT/SHOT detection. Their filter names and parameters are not exposed in the UI or stored in Job data, so a full-length Adjustment Layer cannot replace the actual edited video tracks as PRIMARY.
+
 Examples:
 
 - horizontal flip
@@ -45,4 +48,4 @@ transitionitem is used only for some clip boundary and content-length calculatio
 
 ## Contributions
 
-Propose FCPXML adapter contributions as a separate input adapter that normalizes into the common timeline model without modifying the existing xmeml parser. Synthetic fixtures and regression checks against the existing parser are required.
+Propose FCPXML or optional Adjustment Layer/effect support as a separate input adapter that normalizes into the common timeline model without modifying the existing xmeml parser or PRIMARY renderer. Synthetic fixtures and regression checks against the existing parser are required.
