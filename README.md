@@ -1,8 +1,8 @@
-# Character Workflow Portable
+# Workflow Showcase
 
 `English` · [`한국어 →`](./README.ko.md)
 
-A Windows Electron source beta that turns a legacy Final Cut Pro 7 XML (xmeml) exported from Premiere Pro, plus your finished video, into a 1280 × 1080 H.264 showcase clip with a per-SHOT reference map.
+A portable video-template source beta that turns a legacy Final Cut Pro 7 XML (xmeml) exported from Premiere Pro, plus your finished video, into a 1280 × 1080 H.264 showcase clip with a per-SHOT reference map. The tested desktop build currently targets Windows.
 
 There is currently one official layout, `classic`. It does not automatically support 16:9, 9:16, or 1:1; if you need those, fork the classic presentation and render spec while keeping the stable core intact.
 

@@ -7,7 +7,7 @@ const {spawnSync}=require("node:child_process");
 
 const root=path.resolve(__dirname,"..");
 const releaseRoot=path.join(root,"release");
-const target=path.resolve(process.argv[2]||path.join(releaseRoot,"character-workflow-portable"));
+const target=path.resolve(process.argv[2]||path.join(releaseRoot,"workflow-showcase"));
 const relativeTarget=path.relative(releaseRoot,target);
 if(!relativeTarget||relativeTarget.startsWith("..")||path.isAbsolute(relativeTarget)){
   throw new Error("Public tree target must be a dedicated directory inside release/.");

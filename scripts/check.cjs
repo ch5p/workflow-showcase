@@ -94,7 +94,11 @@ if(!currentJobUnchanged){
   throw new Error("Job lifecycle check touched current-job/job.json");
 }
 const packageJson=JSON.parse(fs.readFileSync(path.join(root,"package.json"),"utf8"));
-if(packageJson.version!=="0.1.0-beta.2"||packageJson.license!=="MIT")throw new Error("Public beta package metadata is incomplete");
+if(packageJson.name!=="workflow-showcase"||packageJson.version!=="0.1.0-beta.2"||packageJson.license!=="MIT")throw new Error("Public beta package metadata is incomplete");
+const appHtml=fs.readFileSync(path.join(root,"src","index.html"),"utf8");
+if(!appHtml.includes("<title>Workflow Showcase</title>")||!appHtml.includes('<div class="brandMark">WS</div>')||!appHtml.includes("<strong>WORKFLOW SHOWCASE</strong>")){
+  throw new Error("Workflow Showcase app identity is incomplete");
+}
 if(packageJson.devDependencies?.electron!=="43.1.1")throw new Error("Electron must stay pinned to the tested version");
 if(!String(packageJson.scripts?.smoke||"").includes("run-smoke.cjs"))throw new Error("Smoke is not routed through the isolated runner");
 const workflow=fs.readFileSync(path.join(root,".github","workflows","check.yml"),"utf8");

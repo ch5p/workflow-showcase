@@ -21,7 +21,7 @@ function timestampName(){
 }
 
 function availableExportPaths(outputRoot){
-  const baseName = "character_workflow_export_" + timestampName();
+  const baseName = "workflow_showcase_export_" + timestampName();
   for(let index = 0; index < 1000; index += 1){
     const suffix = index ? "_" + String(index + 1).padStart(2, "0") : "";
     const outputPath = path.join(outputRoot, baseName + suffix + ".mp4");

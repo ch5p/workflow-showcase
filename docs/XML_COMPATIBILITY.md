@@ -2,7 +2,7 @@
 
 ## Supported in this beta
 
-Character Workflow Portable reads xmeml, the legacy Final Cut Pro 7 XML Interchange Format.
+Workflow Showcase reads xmeml, the legacy Final Cut Pro 7 XML Interchange Format.
 
 Currently validated scope:
 

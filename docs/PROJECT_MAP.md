@@ -33,7 +33,7 @@
 - `current-job/source/timeline.xml`: the XML imported into the app
 - `current-job/source/video.*`: the finished video imported into the app
 - `current-job/references/`: copies of image/video references
-- `current-job/output/`: `character_workflow_export_*.mp4` and QA artifacts
+- `current-job/output/`: `workflow_showcase_export_*.mp4` and QA artifacts. Exports created by older builds keep their original filenames.
 - `current-job/logs/app.log`: diagnostic events as JSONL
 
 All stored paths are relative to the app folder. Internal identifiers and JSON keys are not changed.

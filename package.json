@@ -1,9 +1,9 @@
 {
-  "name": "character-workflow-portable",
+  "name": "workflow-showcase",
   "version": "0.1.0-beta.2",
   "private": true,
   "license": "MIT",
-  "description": "Portable single-job character workflow renderer",
+  "description": "Portable video workflow showcase template",
   "main": "main.cjs",
   "engines": {
     "node": ">=22.12.0"

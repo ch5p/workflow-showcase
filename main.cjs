@@ -60,7 +60,7 @@ const DEFAULT_CALLOUT = {
   style: "line",
   startSeconds: 0.08,
   durationSeconds: 3.5,
-  subtitle: "REFERENCE MAP · EDIT WORKFLOW",
+  subtitle: "WORKFLOW SHOWCASE · EDIT WORKFLOW",
 };
 const DEFAULT_PROJECT_TITLE = "UNTITLED PROJECT";
 const LOG_PATH = path.join(LOG_ROOT, "app.log");
@@ -866,7 +866,7 @@ function createWindow(){
         }
         await window.webContents.executeJavaScript(`(()=>{
           const bridge=document.getElementById("renderPreview").contentWindow.portablePreview;
-          bridge.setCalloutConfig({enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:30,subtitle:"REFERENCE MAP · EDIT WORKFLOW"});
+          bridge.setCalloutConfig({enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:30,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"});
           bridge.seekFrame(2*bridge.getState().fps);
         })()`);
         await new Promise(resolve => setTimeout(resolve, 180));
