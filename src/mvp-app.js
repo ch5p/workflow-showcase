@@ -594,6 +594,22 @@
       ui.showToast(result.warning?"REFERENCE REMOVED · FILE CLEANUP FAILED":"REFERENCE DELETED");
     }catch(error){reportError(error)}
   }
+  async function backupCurrentJob(){
+    if(transitioning||runtimeBlocked)return false;
+    if(!bridge?.backupCurrentJob){
+      ui.showToast("OPEN WITH ELECTRON");
+      return false;
+    }
+    try{
+      await flushPendingState();
+      const result=await bridge.backupCurrentJob(job?.jobId,job?.revision);
+      if(result)ui.showToast("BACKUP SAVED · "+result.backupName);
+      return result;
+    }catch(error){
+      await reportError(error,"BACKUP FAILED · CHECK APP LOG");
+      return false;
+    }
+  }
   async function exportVideo(){
     if(transitioning||runtimeBlocked)return;
     ui.setOverlayOpen(false);
@@ -646,7 +662,7 @@
 
   window.portableMvp={
     loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
-    addReferences,addDroppedReferences,deleteReference,loadXmlText,syncActiveShot,exportVideo,reloadCurrentJob,logPreviewEvent,
+    addReferences,addDroppedReferences,deleteReference,backupCurrentJob,loadXmlText,syncActiveShot,exportVideo,reloadCurrentJob,logPreviewEvent,
   };
   bridge?.onProjectTitleUpdated(projectTitle=>{if(!transitioning&&!runtimeBlocked)applyProjectTitle(projectTitle)});
   window.addEventListener("wireframechange",scheduleSave);

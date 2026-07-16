@@ -168,7 +168,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .calloutEnabled input{accent-color:var(--accent)}
 .overlayClose{width:24px;height:24px;color:#dce2df;font-size:17px;line-height:1;border-radius:4px}
 .overlayClose:hover{background:rgba(255,255,255,.1)}
-.overlayBody{min-height:0;overflow:auto;padding:8px}
+.overlayBody{min-height:0;overflow:auto;padding:8px;display:flex;flex-direction:column}
 .shotRailList,.overlayBody{scrollbar-width:thin;scrollbar-color:rgba(214,225,220,.42) transparent}
 .shotRailList::-webkit-scrollbar,.overlayBody::-webkit-scrollbar{width:7px;height:7px}
 .shotRailList::-webkit-scrollbar-track,.overlayBody::-webkit-scrollbar-track{background:transparent}
@@ -186,7 +186,8 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .scopeState.ADD{color:#84c5df}
 .scopeState.REPLACE{color:#b8a4eb}
 .scopeState.HIDE{color:#e4a1ae}
-.libraryScope{position:relative;padding:10px 4px 4px;border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background .15s}
+.libraryScope{position:relative;min-height:150px;flex:1 0 150px;display:flex;flex-direction:column;padding:10px 4px 4px;
+  border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background .15s}
 .libraryScope .scopeHeading{gap:7px}
 .libraryScope .scopeHeading span{margin-left:auto}
 .referenceAddButton{height:22px;padding:0 7px;border:1px solid rgba(255,255,255,.24);border-radius:4px;background:rgba(255,255,255,.07);
@@ -205,7 +206,9 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .overlayGlobal.dragOver{border-color:var(--accent);background:rgba(34,168,120,.14)}
 .overlayGlobal .globalRef{border-color:rgba(255,255,255,.2);background:#1c211f}
 .overlayGlobal .globalRef span{font-size:9px}
-.overlayAssets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.overlayAssets{min-height:0;flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:4px}
+.overlayAssets:empty{place-items:center;border:1px dashed rgba(255,255,255,.2);border-radius:5px}
+.overlayAssets:empty::before{content:"DROP FILES HERE";color:#aeb8b3;font-family:var(--mono);font-size:9px}
 .overlayAssets .asset{height:auto;border-color:rgba(255,255,255,.2);background:#1c211f}
 .overlayAssets .asset.selected{border-color:var(--accent)}
 .overlayAssets .assetName{font-size:9px}.overlayAssets .assetType{font-size:8px}
@@ -454,7 +457,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
             </div>
             <div class="overlayFooter">
               <button class="footerButton" id="overlayResetShot">USE DEFAULT</button>
-              <button class="footerButton apply" id="overlayApplySelected">APPLY ASSET</button>
+              <button class="footerButton apply backup" id="overlayBackupJob" type="button">BACKUP JOB</button>
             </div>
           </aside>
         </div>
@@ -940,7 +943,11 @@ document.addEventListener("click",event=>{
 });
 $("applySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
 $("resetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
-$("overlayApplySelected").addEventListener("click",()=>assignReference([...selectedShots],selectedAsset));
+$("overlayBackupJob").addEventListener("click",()=>{
+  const backup=window.portableMvp?.backupCurrentJob;
+  if(typeof backup!=="function"){showToast("OPEN WITH ELECTRON");return;}
+  backup();
+});
 $("overlayResetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
 $("loadXml").addEventListener("click",()=>window.portableMvp?.loadXml()||showToast("XML INPUT READY"));
 $("loadVideo").addEventListener("click",()=>window.portableMvp?.loadVideo()||showToast("VIDEO INPUT READY"));

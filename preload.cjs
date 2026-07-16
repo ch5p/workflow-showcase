@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("portableApi", {
   getPathForFile: file => webUtils.getPathForFile(file),
   addDroppedReferences: (paths, expectedJobId, expectedRevision) => ipcRenderer.invoke("job:add-reference-paths", { paths, expectedJobId, expectedRevision }),
   deleteReference: (id, expectedJobId, expectedRevision) => ipcRenderer.invoke("job:delete-reference", { id, expectedJobId, expectedRevision }),
+  backupCurrentJob: (expectedJobId, expectedRevision) => ipcRenderer.invoke("job:backup-current", { expectedJobId, expectedRevision }),
   readXml: () => ipcRenderer.invoke("job:read-xml"),
   openOutput: () => ipcRenderer.invoke("export:open-output"),
   openExportDialog: context => ipcRenderer.invoke("export:open-dialog", context),

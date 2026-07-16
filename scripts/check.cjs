@@ -9,10 +9,10 @@ const {spawnSync}=require("node:child_process");
 const root=path.resolve(__dirname,"..");
 const required=[
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs","LICENSE","AGENTS.md","README.md","README.ko.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
-  "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
-  "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
+  "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
   "current-job/source","current-job/references","current-job/output","current-job/logs",
@@ -26,9 +26,9 @@ for(const relative of required){
 }
 for(const relative of [
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs",
-  "durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
-  "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/mvp-app.js","src/export-dialog.js",
 ]){
   const result=spawnSync(process.execPath,["--check",path.join(root,relative)],{encoding:"utf8"});
@@ -53,6 +53,7 @@ if(editor.includes("calloutTool"))throw new Error("Removed callout tool tags ret
 if(!editor.includes('id="resetPreviewTop"'))throw new Error("Preview reset control missing");
 if(!editor.includes('id="reloadCurrentJob"'))throw new Error("Current Job reload control missing");
 if(!editor.includes('id="addReferenceFiles"')||!editor.includes("portableMvp?.addReferences"))throw new Error("Reference file picker control missing");
+if(!editor.includes('id="overlayBackupJob"')||editor.includes('id="overlayApplySelected"'))throw new Error("Manual Job backup control contract missing");
 if(editor.includes('id="addFilesTop"'))throw new Error("Removed top add-files control returned");
 if(/id="overlay(?:LoadXml|Play|Reset)"/.test(editor))throw new Error("Removed overlay transport control returned");
 for(const marker of ['class="shotRail closed" id="shotRail"','class="editOverlay closed" id="editOverlay"','aria-label="Open edit panel" aria-expanded="false"','if(shot.mode==="INHERIT"||shot.mode==="HIDE")shot.mode="ADD"']){
@@ -60,11 +61,14 @@ for(const marker of ['class="shotRail closed" id="shotRail"','class="editOverlay
 }
 if((editor.match(/class="modeButton active" data-mode="ADD"/g)||[]).length<2)throw new Error("ADD must be the visible default for SHOT reference modes");
 if(editor.includes('class="modeButton active" data-mode="REPLACE"'))throw new Error("REPLACE returned as the visible SHOT reference default");
+if(!/\.overlayBody\{[^}]*display:flex;flex-direction:column/.test(editor))throw new Error("Overlay body must own a stable vertical layout");
+if(!/\.libraryScope\{[^}]*min-height:150px;flex:1 0 150px;display:flex;flex-direction:column/.test(editor))throw new Error("Reference file drop zone must fill the available panel height");
+if(!/\.overlayAssets\{[^}]*min-height:0;flex:1;[^}]*align-content:start/.test(editor))throw new Error("Reference assets must use the full drop-zone height without stretching cards");
 for(const marker of ['class="command inputDropZone"','class="command inputDropZone video"',"./core/reference-mapping.js","loadDroppedXml","loadDroppedVideo","function replaceShots(nextShots,mappings={},emitChange=true)"]){
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }
 const main=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
-for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","app:get-render-spec","app:reload-current-job","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed"]){
+for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:reload-current-job","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed"]){
   if(!main.includes(marker))throw new Error("Current Job lifecycle marker missing: "+marker);
 }
 if(!main.includes("await runSecondarySmoke()")||main.includes("const secondary = spawnSync"))throw new Error("Single-instance smoke must keep the primary event loop available");
@@ -86,7 +90,7 @@ for(const marker of ["SEGS.map(segment=>segment.start)","overviewSegment","overv
 if(preview.includes("const count=14")||classicCss.includes("repeat(14"))throw new Error("Sample-cell overview returned");
 const renderer=fs.readFileSync(path.join(root,"src/mvp-app.js"),"utf8");
 if(!renderer.includes("logPreviewEvent")||!renderer.includes("safeRendererLog(event,detail)"))throw new Error("Thumbnail diagnostics must reach current-job/logs/app.log");
-for(const marker of ["expectedJobId","expectedRevision","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
+for(const marker of ["expectedJobId","expectedRevision","backupCurrentJob","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
   if(!renderer.includes(marker))throw new Error("Renderer lifecycle marker missing: "+marker);
 }
 const currentJobPath=path.join(root,"current-job","job.json");
@@ -97,6 +101,7 @@ const currentJobBefore=hashIfPresent(currentJobPath);
 for(const [script,successMarker] of [
   ["check-core-modules.cjs","CORE_MODULES_CHECK_OK"],
   ["check-input-adapters.cjs","INPUT_ADAPTERS_CHECK_OK"],
+  ["check-job-backup.cjs","JOB_BACKUP_CHECK_OK"],
   ["check-job-lifecycle.cjs","JOB_LIFECYCLE_CHECK_OK"],
   ["check-video-lifecycle.cjs","VIDEO_LIFECYCLE_CHECK_OK"],
   ["check-timeline-reconcile.cjs","TIMELINE_RECONCILE_OK"],

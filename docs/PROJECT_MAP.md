@@ -37,6 +37,7 @@
 - `current-job/references/`: copies of image/video references
 - `current-job/output/`: `workflow_showcase_export_*.mp4` and QA artifacts. Exports created by older builds keep their original filenames.
 - `current-job/logs/app.log`: diagnostic events as JSONL
+- `backup/<YYYY-MM-DD_HH-mm-ss>/`: manual settings snapshots containing `job.json`, recorded timeline XML, recorded references, and a hash manifest; only source video, exports, and logs are excluded
 
 All stored paths are relative to the app folder. Internal identifiers and JSON keys are not changed.
 

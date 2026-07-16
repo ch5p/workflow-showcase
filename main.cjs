@@ -10,6 +10,7 @@ const { createExportController } = require("./exporter.cjs");
 const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
 const { cleanupSiblingStagingFiles, fsyncExistingFile, replaceByRenameWithRetry, writeTextAtomically } = require("./durable-file.cjs");
 const { ensureDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
+const { createJobBackup } = require("./job-backup.cjs");
 const {
   inspectInputFile,
   prepareXmlCandidate,
@@ -1485,6 +1486,20 @@ ipcMain.handle("job:read-xml", () => {
     mustExist: true,
   });
   return fs.readFileSync(xmlPath, "utf8");
+});
+
+ipcMain.handle("job:backup-current", (_event, payload) => {
+  try{
+    const job=requireExpectedJob(payload?.expectedJobId,payload?.expectedRevision,"job_backup");
+    const result=createJobBackup({
+      appRoot:APP_ROOT,jobRoot:JOB_ROOT,sourceRoot:SOURCE_ROOT,referencesRoot:REFERENCES_ROOT,jobPath:JOB_PATH,job,
+    });
+    logEvent("job_backup_created",{...result,jobId:job.jobId,revision:job.revision});
+    return result;
+  }catch(error){
+    logEvent("job_backup_failed",{code:error.code||"BACKUP_FAILED",message:error.message});
+    throw error;
+  }
 });
 
 ipcMain.handle("app:log", (_event, event, detail) => {
