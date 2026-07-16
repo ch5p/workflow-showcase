@@ -7,6 +7,8 @@
 - `premiere-synthetic.xml`: 컷 타이밍, 비디오 트랙 순서, `enabled` 상태, 반복 소스 identity를 검증하는 구조 기준
 - `premiere-synthetic-final.mp4`: Premiere에서 보인 최종 화면을 확인하는 시각 기준
 
+앱에 기존 `current-job/job.json`이 없으면 이 두 파일을 최초 실행용 `SAMPLE JOB`으로 복사합니다. 일반 사용자 Job이나 기존 작업 위에는 자동으로 복사하지 않습니다.
+
 XML은 효과가 적용된 최종 화면의 완전한 표현이 아닙니다. 화면 판단은 MP4를 기준으로 합니다.
 
 ## 제작 정보

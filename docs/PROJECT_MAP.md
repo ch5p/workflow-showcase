@@ -22,6 +22,7 @@
 ## Current Job Contract
 
 - `current-job/job.json`: the reference file for references and SHOT mappings
+- `demo: true`: optional marker used only by the untouched bundled first-run sample. It is absent from ordinary user Jobs and removed when the sample is replaced or the user first saves a real edit/import.
 - `jobId`, `revision`: the new-Job identity and the change generation within the same Job. Every renderer mutation sends the two values it read, and Main rejects any stale save where even one differs.
 - Ordinary `job.json` changes are staged with a fsync'd UUID staging file rather than a fixed `.tmp`, then swapped in. Under a persistent file lock, the existing Job and the completed staging are preserved and an error is returned.
 - `current-job` and `source`, `references`, `output`, `logs` must be real directories; symlinks/junctions are not allowed. Stored files are re-checked all the way to the real path, inside the owned root, immediately before use.
@@ -41,9 +42,11 @@ All stored paths are relative to the app folder. Internal identifiers and JSON k
 ## Import Contract
 
 - The `XML` click/drop zone uses one prepare/commit path. The current dialog labels are `타임라인만 업데이트` (`Update timeline only`, default), `새 Job으로 불러오기` (`Load as a new Job`), and `취소` (`Cancel`).
+- When `current-job/job.json` does not exist, Main copies the existing public fixture XML/MP4 into `current-job/source`, creates a `demo: true` sample Job, and logs `starter_demo_seeded`. It never seeds over an existing Job. If fixture seeding fails, it logs `starter_demo_seed_failed` and falls back to the empty Job contract.
+- A valid XML selected while `demo: true` bypasses the UPDATE choice and enters the existing NEW JOB transaction, so the disposable sample XML/video are removed while output/logs remain. The candidate is parsed before this decision. Ordinary Jobs keep the normal UPDATE/NEW JOB dialog.
 - On selection cancel, file-pick cancel, or validation failure, the existing `job.json`, source, and references are unchanged.
 - UPDATE replaces only `source/timeline.xml` and preserves video/reference/GLOBAL/title/callout/`ui`/`output`. It prefers exact source identity, falls back only when there is unique name + source range/occurrence evidence, and keeps ambiguous/unmatched mappings as orphans.
-- NEW JOB cleans up the source XML/video and reference files only when explicitly chosen, and resets `references`, `globalReferenceIds`, previous `shotMappings`/orphans, `projectTitle`, and `callout`. It stores the new XML's anonymous descriptors in `timelineShots`, and preserves `current-job/output/`, `current-job/logs/`, existing `ui`, and `output`.
+- NEW JOB cleans up the source XML/video and reference files when explicitly chosen for an ordinary Job, or automatically after a valid XML is selected for `demo: true`. It resets `references`, `globalReferenceIds`, previous `shotMappings`/orphans, `projectTitle`, and `callout`. It stores the new XML's anonymous descriptors in `timelineShots`, and preserves `current-job/output/`, `current-job/logs/`, existing `ui`, and `output`.
 - The `VIDEO` click/drop zone uses one two-step transaction. A candidate releases the renderer media handle and commits only after a detached Electron video probe reads metadata and the first frame. A preflight failure discards only the candidate and does not change the existing video, Job, or revision. Main owns the existing video/Job backup, replacement, and rollback.
 - Every mutation compares `jobId + revision`, so an earlier debounced save arriving after an XML UPDATE or NEW JOB cannot overwrite the current state.
 - XML/video transactions retry Windows rename lock errors 4 times, and on persistent failure replace the manifest and Job files via durable copy, fsync, and SHA-256 verification. A valid primary manifest is always the reference; a staging manifest is used only when the primary is missing or corrupted.
@@ -59,7 +62,7 @@ All stored paths are relative to the app folder. Internal identifiers and JSON k
 
 The raw XML that Premiere first produced and the original attachments are not added to Git. When adding `tests/fixtures/`, do not duplicate the real Premiere integration fixture; keep only hand-written `xmeml` edge cases and Job-scoped fixtures.
 
-`scripts/run-smoke.cjs` creates a test-only Job root and Electron userData in an OS temp folder and reads the public XML via `PORTABLE_SMOKE_XML`. Main rejects a smoke that has no test root or points inside the app folder. `smoke:export` copies the public XML/MP4 into the same temp Job, produces 1 second of output, then deletes the entire temp folder.
+`scripts/run-smoke.cjs` creates a test-only Job root and Electron userData in an OS temp folder, verifies that first launch seeds the public XML/MP4 as a `SAMPLE JOB`, and reads the public XML via `PORTABLE_SMOKE_XML`. Main rejects a smoke that has no test root or points inside the app folder. `smoke:export` prepares its own explicit Job, produces 1 second of output, then deletes the entire temp folder.
 
 Lifecycle regression checks run only in an OS temp Job root and forcibly verify: persistent `EPERM` on manifest/Job backup/install/restore, valid primary + stale `.tmp`, corrupted primary + valid UUID fallback, locked fixed-staging bypass, cleanup interruption after rollback, candidate-install interruption when there was no prior timeline/video, re-recovery after a marker write failure, a valid `.partial` + a truncated Job backup final, and the identical-Job hash replace skip. Real `current-job` access is failed by a guard.
 

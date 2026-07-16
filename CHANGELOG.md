@@ -2,6 +2,8 @@
 
 ## 0.1.0-beta.2
 
+- Seeded the bundled Premiere fixture as a disposable first-run `SAMPLE JOB` and made the first valid user XML replace it through NEW JOB
+- Replaced the inactive center-drop claim with guidance to the real top XML/VIDEO controls
 - Unified the app, package, documentation, Export prefix, and public repository identity as `Workflow Showcase`
 - Hardened the single-instance guard and durable Current Job saving
 - Blocked symlink/junction escapes on stored paths
