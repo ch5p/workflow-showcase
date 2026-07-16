@@ -187,6 +187,12 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .scopeState.REPLACE{color:#b8a4eb}
 .scopeState.HIDE{color:#e4a1ae}
 .libraryScope{position:relative;padding:10px 4px 4px;border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background .15s}
+.libraryScope .scopeHeading{gap:7px}
+.libraryScope .scopeHeading span{margin-left:auto}
+.referenceAddButton{height:22px;padding:0 7px;border:1px solid rgba(255,255,255,.24);border-radius:4px;background:rgba(255,255,255,.07);
+  color:#d9f7eb;font-family:var(--mono);font-size:8px;letter-spacing:.35px}
+.referenceAddButton:hover{border-color:var(--accent);background:rgba(34,168,120,.2);color:#fff}
+.referenceAddButton:disabled{opacity:.55;cursor:progress}
 .libraryScope.dragOver{border-color:var(--accent);background:rgba(34,168,120,.12)}
 .libraryScope.dragOver::after{content:"DROP FILES TO IMPORT";position:absolute;inset:38px 4px 4px;z-index:5;display:grid;place-items:center;
   border:1px dashed var(--accent);border-radius:5px;background:rgba(11,18,15,.9);color:#d9f7eb;font-family:var(--mono);font-size:10px;pointer-events:none}
@@ -441,8 +447,8 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
                 <div class="overlayLabel"><span>SHOT REFERENCES</span><span>DROP TO SHOT</span></div>
                 <div class="overlayAssigned" id="overlayAssignedList"></div>
               </section>
-              <section class="libraryScope" id="referenceLibraryDrop" title="Drop image or video files here">
-                <div class="scopeHeading"><strong>REFERENCE FILES</strong><span id="overlayAssetCount">0 FILES</span></div>
+              <section class="libraryScope" id="referenceLibraryDrop" title="Drop image or video files here, or choose Add Files">
+                <div class="scopeHeading"><strong>REFERENCE FILES</strong><span id="overlayAssetCount">0 FILES</span><button class="referenceAddButton" id="addReferenceFiles" type="button">ADD FILES</button></div>
                 <div class="overlayAssets" id="overlayAssetGrid"></div>
               </section>
             </div>
@@ -952,7 +958,29 @@ $("resetPreviewTop").addEventListener("click",()=>{
   try{$("renderPreview").contentWindow.portablePreview?.reset()}catch(error){}
   showToast("RETURNED TO 00:00");
 });
-$("fileInput").addEventListener("change",event=>addLocalFiles(event.target.files));
+$("addReferenceFiles").addEventListener("click",async event=>{
+  event.stopPropagation();
+  const button=event.currentTarget;
+  if(button.disabled)return;
+  button.disabled=true;
+  button.setAttribute("aria-busy","true");
+  try{
+    const handler=window.portableMvp?.addReferences;
+    if(typeof handler==="function"){
+      await handler();
+      return;
+    }
+    $("fileInput").value="";
+    $("fileInput").click();
+  }finally{
+    button.disabled=false;
+    button.setAttribute("aria-busy","false");
+  }
+});
+$("fileInput").addEventListener("change",event=>{
+  addLocalFiles(event.target.files);
+  event.target.value="";
+});
 const globalDrop=$("globalDrop");
 globalDrop.addEventListener("dragover",event=>{
   if(!event.dataTransfer.types.includes("text/reference-id"))return;

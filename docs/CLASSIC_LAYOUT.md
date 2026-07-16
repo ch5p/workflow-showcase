@@ -1,6 +1,6 @@
-﻿# Classic Layout
+# Classic Layout
 
-classic은 공개 베타가 공식 제공하는 유일한 출력 레이아웃입니다.
+classic is the only output layout officially provided by the public beta.
 
 ## Render contract
 
@@ -14,23 +14,23 @@ classic은 공개 베타가 공식 제공하는 유일한 출력 레이아웃입
 - Fallback encoder: libx264
 - Container: MP4 with fast start
 
-기본값의 단일 소스는 render-spec.cjs입니다. editor fit, Export summary, offscreen BrowserWindow, paint 검사와 FFmpeg 입력이 같은 spec을 사용합니다.
+The single source for these defaults is `render-spec.cjs`. The editor fit, Export summary, offscreen BrowserWindow, paint check, and FFmpeg input all use the same spec.
 
 ## Presentation files
 
-- src/layouts/classic/tokens.css: 색과 typography
-- src/layouts/classic/classic.css: canvas와 영역 배치
-- src/output-preview.html: named presentation regions와 preview runtime
+- `src/layouts/classic/tokens.css`: color and typography
+- `src/layouts/classic/classic.css`: canvas and region placement
+- `src/output-preview.html`: named presentation regions and the preview runtime
 
-주요 영역은 video, callout, references, timeline, overview입니다. CSS와 해당 DOM은 presentation surface이며 src/core의 parser와 timeline 계산은 presentation이 아닙니다.
+The main regions are video, callout, references, timeline, and overview. The CSS and its DOM are the presentation surface; the parser and timeline calculation in `src/core` are not presentation.
 
 ## Visual QA
 
-자동 smoke는 구조와 브리지만 확인합니다. 레이아웃 변경 후에는 공개 fixture로 다음을 직접 봅니다.
+Automated smoke only checks structure and bridges. After a layout change, inspect the following with the public fixture:
 
-- 2–5초에 OVERLAY D가 보임
-- 7–8초에 disabled E가 보이지 않고 CLIP A가 보임
-- PRIMARY가 A → D → B → A → C
-- 제목과 callout이 video 위에서 읽힘
-- reference card와 timeline이 잘리지 않음
-- Export MP4가 1280 × 1080이며 preview와 같은 배치
+- OVERLAY D is visible at 2–5 seconds
+- disabled E is not visible and CLIP A is visible at 7–8 seconds
+- PRIMARY is A → D → B → A → C
+- the title and callout are legible over the video
+- reference cards and the timeline are not clipped
+- the Export MP4 is 1280 × 1080 with the same layout as the preview

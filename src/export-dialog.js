@@ -32,7 +32,10 @@
     $("startButton").disabled = !next.ready;
     if(!next.ready){
       $("stateValue").textContent = "NOT READY";
-      setMessage("XML과 완성본 영상을 먼저 불러와야 합니다.", true);
+      setMessage(next.readyMessage || "XML과 완성본 영상을 먼저 불러와야 합니다.", true);
+    }else{
+      $("stateValue").textContent = "READY";
+      setMessage("START EXPORT를 누르면 렌더링을 시작합니다.");
     }
   }
 

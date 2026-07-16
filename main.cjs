@@ -2,7 +2,7 @@
 
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { randomUUID } = require("node:crypto");
-const { spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -560,14 +560,56 @@ const exportController = createExportController({
 let exportWindow = null;
 let exportDialogContext = {};
 
+function exportReadiness(job){
+  if(recoveryRequired){
+    return { ready: false, message: "Current Job 복구가 필요합니다. 앱을 다시 시작한 뒤 로그를 확인하세요." };
+  }
+  const requiredSources = [
+    { entry: job.xml, label: "Export XML", message: "XML 파일이 없거나 이동되었습니다. XML을 다시 불러오세요." },
+    { entry: job.video, label: "Export video", message: "완성본 영상 파일이 없거나 이동되었습니다. 영상을 다시 불러오세요." },
+  ];
+  for(const item of requiredSources){
+    if(!item.entry?.relativePath) return { ready: false, message: item.message };
+    try{
+      resolveOwnedRelativeFile({
+        jobRoot: JOB_ROOT,
+        ownedRoot: SOURCE_ROOT,
+        relativePath: item.entry.relativePath,
+        label: item.label,
+        mustExist: true,
+      });
+    }catch{
+      return { ready: false, message: item.message };
+    }
+  }
+  for(const reference of job.references || []){
+    try{
+      resolveOwnedRelativeFile({
+        jobRoot: JOB_ROOT,
+        ownedRoot: REFERENCES_ROOT,
+        relativePath: reference.relativePath,
+        label: "Export reference",
+        mustExist: true,
+      });
+    }catch{
+      return {
+        ready: false,
+        message: "등록된 레퍼런스 파일 중 일부가 없거나 안전하지 않습니다. 다시 추가하거나 해당 항목을 삭제하세요.",
+      };
+    }
+  }
+  return { ready: true, message: "" };
+}
+
 function exportSummary(){
-  const job = hydrateJob(loadJob());
+  const job = loadJob();
+  const readiness = exportReadiness(job);
   const durationSeconds = Math.max(0, Number(exportDialogContext.durationSeconds) || 0);
   const spec = resolveRenderSpec(job.output);
   return {
     jobId: job.jobId,
     revision: job.revision,
-    projectTitle: job.projectTitle,
+    projectTitle: normalizeProjectTitle(job.projectTitle),
     format: "H.264",
     width: spec.width,
     height: spec.height,
@@ -580,7 +622,8 @@ function exportSummary(){
     outputFolder: OUTPUT_ROOT,
     videoName: job.video?.name || "NO VIDEO",
     xmlName: job.xml?.name || "NO XML",
-    ready: !recoveryRequired && Boolean(job.xml?.relativePath && job.video?.relativePath),
+    ready: readiness.ready,
+    readyMessage: readiness.message,
   };
 }
 
@@ -636,6 +679,50 @@ function openExportWindow(sender, context = {}){
   return true;
 }
 
+function runSecondarySmoke(){
+  return new Promise(resolve => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timer = null;
+    let killGraceTimer = null;
+    let timeoutError = null;
+    let child = null;
+    const appendTail = (current, chunk) => (current + String(chunk || "")).slice(-4000);
+    const finish = result => {
+      if(settled) return;
+      settled = true;
+      if(timer) clearTimeout(timer);
+      if(killGraceTimer) clearTimeout(killGraceTimer);
+      resolve({ ...result, stdout, stderr });
+    };
+    try{
+      // RED ZONE: keep the primary event loop alive so Electron can reject the secondary instance.
+      child = spawn(process.execPath, [APP_ROOT, "--smoke-test"], {
+        cwd: APP_ROOT,
+        env: process.env,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    }catch(error){
+      finish({ status: null, error });
+      return;
+    }
+    child.stdout?.on("data", chunk => { stdout = appendTail(stdout, chunk); });
+    child.stderr?.on("data", chunk => { stderr = appendTail(stderr, chunk); });
+    child.once("error", error => finish({ status: null, error }));
+    child.once("close", status => finish({ status, error: timeoutError }));
+    timer = setTimeout(() => {
+      timeoutError = new Error("Secondary instance timed out after 10000ms");
+      try{
+        if(child.exitCode == null && !child.killed) child.kill();
+      }catch{}
+      // Let Windows release the child handles before the outer smoke runner removes its temp root.
+      killGraceTimer = setTimeout(() => finish({ status: null, error: timeoutError }), 1500);
+    }, 10000);
+  });
+}
+
 function createWindow(){
   const window = new BrowserWindow({
     width: 1360,
@@ -665,13 +752,7 @@ function createWindow(){
   if(SMOKE_TEST){
     window.webContents.once("did-finish-load", async () => {
       try{
-        const secondary = spawnSync(process.execPath, [APP_ROOT, "--smoke-test"], {
-          cwd: APP_ROOT,
-          env: process.env,
-          encoding: "utf8",
-          windowsHide: true,
-          timeout: 10000,
-        });
+        const secondary = await runSecondarySmoke();
         if(secondary.error || secondary.status !== 0 || !String(secondary.stdout || "").includes("SINGLE_INSTANCE_REJECTED")){
           throw new Error("Single-instance smoke failed: " + JSON.stringify({
             status: secondary.status,

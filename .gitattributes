@@ -12,3 +12,4 @@
 *.jpg binary
 *.jpeg binary
 *.webp binary
+/scripts/git-hooks/* text eol=lf

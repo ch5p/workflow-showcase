@@ -1,23 +1,23 @@
-﻿# Security Policy
+# Security Policy
 
 ## Supported version
 
-현재 보안 수정 대상은 최신 0.1.x source beta입니다. 실행파일 배포본은 아직 제공하지 않습니다.
+Security fixes currently target the latest 0.1.x source beta. No executable distribution is provided yet.
 
 ## Reporting a vulnerability
 
-공개 Issue에 취약점 상세, 사용자 경로, 영상 또는 Job 파일을 올리지 마세요.
+Do not post vulnerability details, user paths, or video/Job files in a public Issue.
 
-GitHub 저장소의 Security 탭에 `Report a vulnerability` 버튼이 보이면 private vulnerability report를 작성해 주세요.
+If you see a `Report a vulnerability` button on the repository's Security tab, please file a private vulnerability report.
 
 https://github.com/ch5p/character-workflow-portable/security/advisories/new
 
-버튼을 사용할 수 없다면 상세 정보 없이 제목이 `Security contact request`인 Issue만 열어 주세요. 공개 댓글에 재현 정보나 민감한 파일을 쓰지 마세요.
+If the button is unavailable, open only an Issue titled `Security contact request` with no details. Do not put reproduction information or sensitive files in public comments.
 
-보고에는 재현 절차, 영향 범위, 사용한 버전과 가능한 최소 fixture만 포함해 주세요. 실제 프로젝트 데이터와 인증정보는 제거해야 합니다.
+Include only reproduction steps, impact, the version used, and the smallest possible fixture. Real project data and credentials must be removed.
 
 ## Scope notes
 
-이 앱은 로컬 파일을 current-job으로 복사하고 FFmpeg를 실행합니다. path boundary 우회, 임의 파일 읽기·삭제, IPC 검증 우회, Export process orphan은 보안 이슈로 취급합니다.
+This app copies local files into `current-job` and runs FFmpeg. Path boundary escapes, arbitrary file read/delete, IPC validation bypass, and orphaned Export processes are treated as security issues.
 
-`current-job`과 그 하위 `source`, `references`, `output`, `logs`에는 symlink 또는 junction을 두지 마세요. 앱은 저장된 상대경로를 사용할 때 lexical boundary와 실제 경로를 모두 검사하고 링크가 발견되면 작업을 중단합니다.
+Do not place symlinks or junctions in `current-job` or its `source`, `references`, `output`, and `logs`. When using a stored relative path, the app checks both the lexical boundary and the real resolved path, and aborts if a link is found.

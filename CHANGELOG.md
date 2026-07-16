@@ -1,22 +1,28 @@
-﻿# Changelog
+# Changelog
 
 ## 0.1.0-beta.2
 
-- single-instance guard와 durable Current Job 저장 강화
-- 저장 경로의 symlink/junction 이탈 차단
-- 영상 커밋 전 Electron decode·metadata 사전검증
-- 렌더 완료 뒤 파일명 교체 실패 시 `.part.mp4` 보존
-- Current Job 새로고침 아이콘과 `TO START` 명칭 정리
-- 콜아웃 글자 하단 잘림과 subtitle shadow 수정
-- 임베드 프리뷰 drop을 공식 XML/video import transaction으로 연결
+- Hardened the single-instance guard and durable Current Job saving
+- Blocked symlink/junction escapes on stored paths
+- Electron decode/metadata preflight before committing a video
+- Preserve `.part.mp4` when the final rename after a render fails
+- Added the Current Job reload icon and renamed the reset control to `TO START`
+- Fixed callout descender clipping and the subtitle shadow
+- Routed embedded-preview drops through the official XML/video import transaction
+- Made English the default public documentation, added Korean `.ko.md` editions, and published the AI customization guardrails
+- Kept the primary Electron process responsive while the smoke test verifies second-instance rejection
+- Added an `ADD FILES` picker to `REFERENCE FILES` while preserving drag and drop
+- Made the Export popup verify that its stored XML, video, and reference files still exist before showing `READY`
+- Removed the unimplemented `DURATION Δ` claim and documented the actual orphan, audio-codec, and large-file limits
+- Limited GitHub Actions to read-only repository access and a bounded run time
 
 ## 0.1.0-beta.1
 
-- legacy xmeml 기반 PRIMARY timeline과 SHOT reference workflow 공개
-- UPDATE XML과 NEW JOB 안전 분리
-- Windows 파일 잠금 대응 transaction rollback과 recovery
-- XML, video, reference drop zones
-- pure parser, PRIMARY timeline, SHOT, reference mapping core 분리
-- classic render spec과 presentation CSS 분리
-- 실제 current-job을 건드리지 않는 격리 smoke와 Export smoke
-- Premiere Pro 2026 synthetic XML과 MP4 fixture
+- Released the legacy-xmeml PRIMARY timeline and SHOT reference workflow
+- Safe separation of UPDATE XML and NEW JOB
+- Transaction rollback and recovery for Windows file locks
+- XML, video, and reference drop zones
+- Split out the pure parser, PRIMARY timeline, SHOT, and reference-mapping core
+- Split the classic render spec from the presentation CSS
+- Isolated smoke and Export smoke that never touch the real current-job
+- Premiere Pro 2026 synthetic XML and MP4 fixture

@@ -45,7 +45,7 @@ function resolveFfmpeg(appRoot){
     const probe = spawnSync(candidate, ["-hide_banner", "-version"], { encoding: "utf8", windowsHide: true });
     if(probe.status === 0) return candidate;
   }
-  throw new Error("FFmpeg를 찾을 수 없습니다. 앱의 ffmpeg 폴더 또는 PATH를 확인하세요.");
+  throw new Error("FFmpeg를 찾을 수 없습니다. WinGet을 사용할 수 있다면 'winget install -e --id Gyan.FFmpeg'를 실행한 뒤 앱을 완전히 재시작하세요. 또는 ffmpeg.exe를 앱의 ffmpeg 폴더에 넣으세요.");
 }
 
 function canUseNvenc(ffmpegPath,spec=resolveRenderSpec()){

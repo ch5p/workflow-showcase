@@ -1,74 +1,76 @@
-﻿# Project Map
+# Project Map
 
 ## App
 
-- `main.cjs`: Electron 창, 파일 선택, XML UPDATE/NEW JOB 선택 경계, 포터블 복사, `job.json` CAS 저장, 앱 로그
-- `durable-file.cjs`: 일반 Job과 완성 Export의 UUID staging, fsync, Windows rename 재시도, 실패 staging 보존
-- `owned-path.cjs`: Current Job owned root의 lexical·lstat·realpath no-follow 검사
-- `preload.cjs`: 화면에 노출하는 최소 로컬 파일 API와 XML/video/reference drop용 제한 IPC
-- `job-lifecycle.cjs`: XML UPDATE/NEW JOB의 prepare/commit/rollback/crash recovery와 Windows-safe staged replace
-- `video-lifecycle.cjs`: source video 교체의 prepare/commit/rollback/crash recovery와 Windows-safe staged replace
-- `timeline-reconcile.cjs`: 익명 SHOT descriptor 1:1 재매칭과 orphan 보존
-- `render-spec.cjs`: classic 1280x1080, output fps, bitrate, pixel/color 계약의 단일 소스
-- `export-preload.cjs`: Export 팝업에만 노출하는 시작·취소·진행·폴더 열기 API
-- `exporter.cjs`: offscreen BGRA 프레임 수집, FFmpeg H.264/AAC 출력, 진행률·취소·fallback
-- `src/index.html`: 편집 화면과 SHOT 레일
-- `src/mvp-app.js`: 편집 화면, Job 저장소, 출력 프리뷰 연결
-- `src/core/*`: legacy xmeml parser, PRIMARY timeline, SHOT descriptor, reference mapping 순수 코어
-- `src/layouts/classic/tokens.css`, `classic.css`: 공식 classic presentation token과 배치
-- `src/output-preview.html`: named presentation regions, 재생 시계와 `window.portablePreview` bridge
-- `src/export-dialog.html`, `src/export-dialog.js`: 저장된 제목과 렌더 사양 확인, 진행률과 완료 경로를 표시하는 독립 Export 창
+- `main.cjs`: Electron window, file selection, the XML UPDATE/NEW JOB decision boundary, portable copy, `job.json` CAS save, app log
+- `durable-file.cjs`: UUID staging, fsync, Windows rename retry, and preservation of failed staging for ordinary Jobs and completed Exports
+- `owned-path.cjs`: lexical, lstat, and realpath no-follow checks for the Current Job owned root
+- `preload.cjs`: the minimal local file API exposed to the screen, plus restricted IPC for XML/video/reference drop
+- `job-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for XML UPDATE/NEW JOB
+- `video-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for source video replacement
+- `timeline-reconcile.cjs`: 1:1 rematching of anonymous SHOT descriptors and orphan preservation
+- `render-spec.cjs`: the central classic width/height and pixel/color contract, plus default output fps/bitrate; an existing Job may override fps/bitrate through `output`
+- `export-preload.cjs`: the start/cancel/progress/open-folder API exposed only to the Export popup
+- `exporter.cjs`: offscreen BGRA frame capture, FFmpeg H.264 output with optional source-audio stream copy, progress, cancel, and fallback
+- `src/index.html`: the editing screen and the SHOT rail
+- `src/mvp-app.js`: the editing screen, Job store, and output-preview wiring
+- `src/core/*`: the pure core for the legacy xmeml parser, PRIMARY timeline, SHOT descriptor, and reference mapping
+- `src/layouts/classic/tokens.css`, `classic.css`: the official classic presentation tokens and placement
+- `src/output-preview.html`: named presentation regions, the playback clock, and the `window.portablePreview` bridge
+- `src/export-dialog.html`, `src/export-dialog.js`: the standalone Export window that confirms the saved title and render spec and shows progress and the completed path
 
 ## Current Job Contract
 
-- `current-job/job.json`: 레퍼런스와 SHOT 매핑의 기준 파일
-- `jobId`, `revision`: 새 Job identity와 같은 Job 안의 변경 세대. 모든 renderer mutation은 자신이 읽은 두 값을 보내며 Main은 하나라도 다른 stale save를 거부
-- 일반 `job.json` 변경은 고정 `.tmp`가 아니라 UUID staging을 fsync한 뒤 교체합니다. persistent file lock에서는 기존 Job과 완성 staging을 보존하고 오류를 반환합니다.
-- `current-job`과 `source`, `references`, `output`, `logs`는 실제 디렉터리여야 하며 symlink/junction을 허용하지 않습니다. 저장된 파일은 사용 직전에 실제 경로까지 owned root 안인지 다시 검사합니다.
-- `projectTitle`: 편집 패널에서 입력 즉시 미리보기에 반영되고 자동 저장되는 최대 40자의 선택 필드. 필드가 없으면 `UNTITLED PROJECT`, 명시적인 빈 문자열은 빈 제목으로 사용
-- `callout`: `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`을 가진 선택 필드이며 출력 미리보기와 offscreen 렌더가 동일하게 사용
-- `shotMappings.<shotId>`: 기존 `mode`, `refs`에 선택 필드 `leadInSeconds: 1`을 추가할 수 있으며, 없으면 `0`으로 처리
-- `timelineShots`: 원본 이름·경로 없이 `identityKey`, `nameKey`, timeline/source in-out occurrence만 저장하는 재매칭 descriptor
-- `orphanedShotMappings`: 새 타임라인과 확실히 1:1 매칭되지 않은 기존 매핑. `descriptor`, `mapping`, `reason`만 저장하며 다음 UPDATE에서 다시 연결 가능
-- `current-job/source/timeline.xml`: 앱으로 가져온 XML
-- `current-job/source/video.*`: 앱으로 가져온 완성본 영상
-- `current-job/references/`: 이미지·영상 레퍼런스 복사본
-- `current-job/output/`: `character_workflow_export_*.mp4`와 QA 산출물
-- `current-job/logs/app.log`: 진단 이벤트 JSONL
+- `current-job/job.json`: the reference file for references and SHOT mappings
+- `jobId`, `revision`: the new-Job identity and the change generation within the same Job. Every renderer mutation sends the two values it read, and Main rejects any stale save where even one differs.
+- Ordinary `job.json` changes are staged with a fsync'd UUID staging file rather than a fixed `.tmp`, then swapped in. Under a persistent file lock, the existing Job and the completed staging are preserved and an error is returned.
+- `current-job` and `source`, `references`, `output`, `logs` must be real directories; symlinks/junctions are not allowed. Stored files are re-checked all the way to the real path, inside the owned root, immediately before use.
+- `projectTitle`: an optional field of up to 40 characters that is reflected in the preview as soon as it is typed in the edit panel and auto-saved. If the field is absent, `UNTITLED PROJECT` is used; an explicit empty string is used as an empty title.
+- `callout`: an optional field with `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`, used identically by the output preview and the offscreen render.
+- `shotMappings.<shotId>`: may add the optional field `leadInSeconds: 1` to the existing `mode`, `refs`; when absent it is treated as `0`.
+- `timelineShots`: rematching descriptors that store only `identityKey`, `nameKey`, and timeline/source in-out occurrence, without original names or paths
+- `orphanedShotMappings`: existing mappings that did not clearly match the new timeline 1:1. Only `descriptor`, `mapping`, and `reason` are stored, and they can be reattached in the next UPDATE.
+- `current-job/source/timeline.xml`: the XML imported into the app
+- `current-job/source/video.*`: the finished video imported into the app
+- `current-job/references/`: copies of image/video references
+- `current-job/output/`: `character_workflow_export_*.mp4` and QA artifacts
+- `current-job/logs/app.log`: diagnostic events as JSONL
 
-모든 저장 경로는 앱 폴더 기준 상대 경로입니다. 내부 식별자와 JSON key는 변경하지 않습니다.
+All stored paths are relative to the app folder. Internal identifiers and JSON keys are not changed.
 
 ## Import Contract
 
-- `LOAD XML` 버튼과 XML drop은 같은 prepare/commit 경로를 사용하며 후보 검증 뒤 `타임라인만 업데이트`(기본), `새 Job으로 불러오기`, `취소`를 표시합니다.
-- 선택 취소, 파일 선택 취소, 검증 실패에서는 기존 `job.json`, source, references를 변경하지 않습니다.
-- UPDATE는 `source/timeline.xml`만 교체하고 video/reference/GLOBAL/title/callout/`ui`/`output`을 보존합니다. exact source identity를 우선하며 unique name + source range/occurrence 증거가 있을 때만 fallback하고, ambiguous/unmatched 매핑은 orphan으로 보관합니다.
-- NEW JOB은 명시 선택 시에만 source XML/video와 reference 파일을 정리하고 `references`, `globalReferenceIds`, 이전 `shotMappings`·orphan, `projectTitle`, `callout`을 초기화합니다. `timelineShots`에는 새 XML의 익명 descriptor를 저장하며, `current-job/output/`, `current-job/logs/`, 기존 `ui`, `output`은 보존합니다.
-- `LOAD VIDEO` 버튼과 video drop은 같은 2단계 transaction을 사용합니다. candidate는 detached Electron video probe에서 metadata와 첫 프레임을 읽은 뒤에만 renderer media handle을 해제하고 commit합니다. preflight 실패는 candidate만 폐기하며 기존 video·Job·revision을 바꾸지 않습니다. Main이 기존 video/Job backup, 교체, rollback을 담당합니다.
-- 모든 mutation은 `jobId + revision`을 비교하므로 XML UPDATE와 NEW JOB 뒤 도착한 이전 debounce 저장이 현재 상태를 덮어쓰지 못합니다.
-- XML/video transaction은 Windows rename 잠금 오류를 4회 재시도하고, 지속 실패 시 durable copy·fsync·SHA-256 검증으로 manifest와 Job 파일을 교체합니다. 유효한 primary manifest가 항상 기준이며 primary가 없거나 손상된 경우에만 staging manifest를 사용합니다.
-- 잠긴 고정 staging 파일은 UUID staging으로 우회합니다. rollback 완료 marker도 UUID staging에 fsync한 뒤 검증 교체하고 `state: rolled_back`를 기록합니다. marker 이전 중단은 `moved` inventory와 backup 잔존 여부로 candidate 제거를 멱등 재실행합니다. transaction 정리는 fallback을 primary로 복구한 뒤 staging과 backup/candidate를 지우고 primary manifest를 마지막에 삭제합니다. `prepared`/`committed`/`rolled_back` transaction의 일시적 정리 실패는 `deferred`로 기록하고 현재 Job mutation과 Export를 차단하지 않습니다.
-- `backup/job.json` 복원 권한은 durable manifest의 `hadJob: true`입니다. `hadJob: null`인 초기 backup crash에서는 final backup 파일이 보여도 live Job은 아직 untouched이므로 현재 `job.json`을 유지합니다.
+- The `XML` click/drop zone uses one prepare/commit path. The current dialog labels are `타임라인만 업데이트` (`Update timeline only`, default), `새 Job으로 불러오기` (`Load as a new Job`), and `취소` (`Cancel`).
+- On selection cancel, file-pick cancel, or validation failure, the existing `job.json`, source, and references are unchanged.
+- UPDATE replaces only `source/timeline.xml` and preserves video/reference/GLOBAL/title/callout/`ui`/`output`. It prefers exact source identity, falls back only when there is unique name + source range/occurrence evidence, and keeps ambiguous/unmatched mappings as orphans.
+- NEW JOB cleans up the source XML/video and reference files only when explicitly chosen, and resets `references`, `globalReferenceIds`, previous `shotMappings`/orphans, `projectTitle`, and `callout`. It stores the new XML's anonymous descriptors in `timelineShots`, and preserves `current-job/output/`, `current-job/logs/`, existing `ui`, and `output`.
+- The `VIDEO` click/drop zone uses one two-step transaction. A candidate releases the renderer media handle and commits only after a detached Electron video probe reads metadata and the first frame. A preflight failure discards only the candidate and does not change the existing video, Job, or revision. Main owns the existing video/Job backup, replacement, and rollback.
+- Every mutation compares `jobId + revision`, so an earlier debounced save arriving after an XML UPDATE or NEW JOB cannot overwrite the current state.
+- XML/video transactions retry Windows rename lock errors 4 times, and on persistent failure replace the manifest and Job files via durable copy, fsync, and SHA-256 verification. A valid primary manifest is always the reference; a staging manifest is used only when the primary is missing or corrupted.
+- Locked fixed staging files are bypassed with UUID staging. The rollback completion marker is also fsync'd to UUID staging, then verified and swapped, recording `state: rolled_back`. An interruption before the marker re-runs candidate removal idempotently based on the `moved` inventory and any remaining backup. Transaction cleanup restores the fallback to primary, then removes staging and backup/candidate, and deletes the primary manifest last. A transient cleanup failure of a `prepared`/`committed`/`rolled_back` transaction is recorded as `deferred` and does not block current Job mutation or Export.
+- Restore authority for `backup/job.json` is `hadJob: true` in the durable manifest. In an early backup crash with `hadJob: null`, the current `job.json` is kept even if a final backup file exists, because the live Job is still untouched.
 
 ## Test Fixtures
 
-- `fixtures/premiere-export-kit/media/`: 실제 Premiere Sequence를 만드는 중립 소스 카드 5개
-- `fixtures/premiere-export-kit/PREMIERE_EXPORT_GUIDE.md`: 24 fps, 12초 fixture 제작·내보내기 절차
-- `fixtures/premiere-export-kit/public-fixture/`: 공개 정리를 마친 실제 Premiere `xmeml`과 같은 Sequence의 최종 MP4
-- `fixtures/premiere-export-kit/public-fixture/SOURCE_NOTES.md`: 출처, 정리 내역, 검증 contract, SHA-256 기록
+- `fixtures/premiere-export-kit/media/`: 5 neutral source cards that build a real Premiere Sequence
+- `fixtures/premiere-export-kit/PREMIERE_EXPORT_GUIDE.md`: the 24 fps, 12-second fixture production/export procedure
+- `fixtures/premiere-export-kit/public-fixture/`: the publicly cleaned real Premiere `xmeml` and the final MP4 of the same Sequence
+- `fixtures/premiere-export-kit/public-fixture/SOURCE_NOTES.md`: provenance, cleanup record, validation contract, and SHA-256 records
 
-Premiere가 처음 만든 raw XML과 원본 첨부 파일은 Git에 추가하지 않습니다. `tests/fixtures/`를 추가할 때는 실제 Premiere 통합 fixture를 복제하지 않고, 손작성 `xmeml` edge case와 Job 단위 fixture만 둡니다.
+The raw XML that Premiere first produced and the original attachments are not added to Git. When adding `tests/fixtures/`, do not duplicate the real Premiere integration fixture; keep only hand-written `xmeml` edge cases and Job-scoped fixtures.
 
-`scripts/run-smoke.cjs`는 OS 임시 폴더에 test-only Job root와 Electron userData를 만들고 `PORTABLE_SMOKE_XML`로 공개 XML을 읽습니다. Main은 test root가 없거나 앱 폴더 내부를 가리키는 smoke를 거부합니다. `smoke:export`는 같은 임시 Job에 공개 XML/MP4를 복사해 1초 출력 후 전체 임시 폴더를 삭제합니다.
+`scripts/run-smoke.cjs` creates a test-only Job root and Electron userData in an OS temp folder and reads the public XML via `PORTABLE_SMOKE_XML`. Main rejects a smoke that has no test root or points inside the app folder. `smoke:export` copies the public XML/MP4 into the same temp Job, produces 1 second of output, then deletes the entire temp folder.
 
-Lifecycle 회귀 검사는 OS 임시 Job root에서만 실행하며 manifest/Job backup/install/restore의 지속적 `EPERM`, 유효 primary + 오래된 `.tmp`, 손상 primary + 유효 UUID fallback, 잠긴 고정 staging 우회, rollback 뒤 cleanup 중단, 이전 timeline/video가 없던 candidate 설치 중단, marker 기록 실패 뒤 재복구, 정상 `.partial` + 잘린 Job backup final, 동일 Job 해시 교체 생략을 강제로 검증합니다. 실제 `current-job` 접근은 guard로 실패시킵니다.
+Lifecycle regression checks run only in an OS temp Job root and forcibly verify: persistent `EPERM` on manifest/Job backup/install/restore, valid primary + stale `.tmp`, corrupted primary + valid UUID fallback, locked fixed-staging bypass, cleanup interruption after rollback, candidate-install interruption when there was no prior timeline/video, re-recovery after a marker write failure, a valid `.partial` + a truncated Job backup final, and the identical-Job hash replace skip. Real `current-job` access is failed by a guard.
 
-`scripts/check-runtime-safety.cjs`는 OS 임시 폴더에서 일반 Job atomic save, persistent lock의 staging/기존 Job 보존, symlink/junction escape 차단, Export final 충돌 회피와 완성 part 보존을 검사합니다. 격리 smoke는 정상/손상 영상 preflight와 Job 불변, 동일 test `userData`의 두 번째 Electron 차단을 추가로 검사합니다.
+`scripts/check-runtime-safety.cjs` checks, in an OS temp folder, the ordinary Job atomic save, staging/existing-Job preservation under a persistent lock, symlink/junction escape blocking, and Export final collision avoidance and completed-part preservation. The isolated smoke additionally checks normal/corrupted video preflight and Job invariance, and uses an asynchronous secondary probe to verify that a second Electron is blocked on the same test `userData` without blocking the primary event loop.
 
-## Contract 확인
+Before the Export popup shows `READY`, `main.cjs` resolves the stored XML, video, and every registered reference with `mustExist: true` inside its owned Current Job directory. The actual Export start repeats its own source/reference checks; the readiness display does not replace that final guard.
 
-- 문서 기준: 위 `current-job` 구조, `job.json` version 1, `jobId + revision`, UPDATE/NEW JOB Import Contract
-- 실제 샘플: Premiere Pro 2026 fixture의 24 fps, 288 frames, 반복 source identity와 앱의 격리 smoke 결과 5 EDITS/4 SHOTS. 실패 transaction 실복구에서 source 2개/reference 11개/기존 Job의 파일별 SHA-256 일치를 확인
-- 코드 가정: `main.cjs`의 `JOB_ROOT`, `durable-file.cjs`, `owned-path.cjs`, XML/video lifecycle, timeline reconcile, `src/core/*`, `render-spec.cjs`, CAS guard와 `hydrateJob()`이 같은 구조를 읽음
-- 불일치 여부: 없음
-- 처리 방식: 구조 변경 시 문서, 실제 샘플, 코드 세 곳을 함께 확인
+## Contract check
+
+- Document reference: the `current-job` structure above, `job.json` version 1, `jobId + revision`, and the UPDATE/NEW JOB Import Contract
+- Real sample: 24 fps, 288 frames, repeated source identity of the Premiere Pro 2026 fixture, and the app's isolated smoke result of 5 EDITS / 4 SHOTS. In a real recovery of a failed transaction, per-file SHA-256 matches for 2 sources / 11 references / the existing Job were confirmed.
+- Code assumption: `main.cjs`'s `JOB_ROOT`, `durable-file.cjs`, `owned-path.cjs`, the XML/video lifecycles, timeline reconcile, `src/core/*`, `render-spec.cjs`, the CAS guard, and `hydrateJob()` all read the same structure.
+- Mismatch: none
+- Handling: when the structure changes, verify the document, the real sample, and the code together.

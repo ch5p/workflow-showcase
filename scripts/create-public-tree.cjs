@@ -3,12 +3,14 @@
 const crypto=require("node:crypto");
 const fs=require("node:fs");
 const path=require("node:path");
+const {spawnSync}=require("node:child_process");
 
 const root=path.resolve(__dirname,"..");
-const target=path.resolve(process.argv[2]||path.join(root,"release","character-workflow-portable"));
-const relativeTarget=path.relative(root,target);
+const releaseRoot=path.join(root,"release");
+const target=path.resolve(process.argv[2]||path.join(releaseRoot,"character-workflow-portable"));
+const relativeTarget=path.relative(releaseRoot,target);
 if(!relativeTarget||relativeTarget.startsWith("..")||path.isAbsolute(relativeTarget)){
-  throw new Error("Public tree target must be a dedicated directory inside this workspace.");
+  throw new Error("Public tree target must be a dedicated directory inside release/.");
 }
 if(fs.existsSync(target)&&fs.readdirSync(target).length){
   throw new Error("Public tree target is not empty: "+target);
@@ -16,12 +18,12 @@ if(fs.existsSync(target)&&fs.readdirSync(target).length){
 fs.mkdirSync(target,{recursive:true});
 
 const rootFiles=[
-  ".gitattributes",".gitignore","CHANGELOG.md","CONTRIBUTING.md","CUSTOMIZING.md","LICENSE","README.md","ROADMAP.md","SECURITY.md","START_APP.cmd",
+  ".gitattributes",".gitignore","AGENTS.md","CHANGELOG.md","CONTRIBUTING.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","LICENSE","README.md","README.ko.md","ROADMAP.md","SECURITY.md","START_APP.cmd",
   "durable-file.cjs","export-preload.cjs","exporter.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","preload.cjs","render-spec.cjs","timeline-reconcile.cjs","video-lifecycle.cjs",
 ];
 const directoryRoots=[".github","fixtures","scripts","src"];
 const explicitFiles=[
-  "docs/CLASSIC_LAYOUT.md","docs/XML_COMPATIBILITY.md",
+  "docs/CLASSIC_LAYOUT.md","docs/CUSTOMIZING_WITH_AI.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md","docs/XML_COMPATIBILITY.md",
   "current-job/source/.gitkeep","current-job/references/.gitkeep","current-job/output/.gitkeep","current-job/logs/.gitkeep",
 ];
 
@@ -34,19 +36,21 @@ function copyFile(relative){
   fs.copyFileSync(source,destination);
 }
 
-function copyDirectory(relative){
-  const source=path.join(root,relative);
-  for(const entry of fs.readdirSync(source,{withFileTypes:true})){
-    const child=path.join(relative,entry.name);
-    if(entry.isSymbolicLink())throw new Error("Symlinks are not allowed in public tree: "+child);
-    if(entry.isDirectory())copyDirectory(child);
-    else if(entry.isFile())copyFile(child);
+function trackedFilesUnder(roots){
+  const result=spawnSync("git",["ls-files","-z","--",...roots],{
+    cwd:root,
+    encoding:"buffer",
+    windowsHide:true,
+  });
+  if(result.error||result.status!==0){
+    throw new Error("Unable to read the tracked public file inventory: "+(result.error?.message||String(result.stderr||"git ls-files failed")));
   }
+  return result.stdout.toString("utf8").split("\0").filter(Boolean);
 }
 
 rootFiles.forEach(copyFile);
 explicitFiles.forEach(copyFile);
-directoryRoots.forEach(copyDirectory);
+trackedFilesUnder(directoryRoots).forEach(copyFile);
 
 const forbidden=[
   {label:"Windows user path",pattern:/[A-Za-z]:[\\/]+Users[\\/]+/i},

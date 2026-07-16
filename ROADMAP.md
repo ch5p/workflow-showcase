@@ -1,15 +1,15 @@
-﻿# Roadmap
+# Roadmap
 
-이 목록은 방향 제안이며 공개 beta의 구현 약속이 아닙니다.
+This list is a set of directional suggestions, not an implementation commitment for the public beta.
 
 ## Maintainer candidates
 
 - FHD editor controls polish
 - click-based reference assignment
 - duplicated paint frame measurement
-- audio codec probe와 AAC fallback
+- audio codec probe and AAC fallback
 - platform transcode simulation
-- long render와 cancel soak test
+- long render and cancel soak test
 
 ## Community and fork candidates
 
@@ -21,7 +21,7 @@
 - watermark callout
 - documentary lower third
 - storyboard-focused reference layout
-- prompt와 source-material reference layout
+- prompt and source-material reference layout
 - modern FCPXML input adapter
 
-화면비 실험은 runtime preset system을 먼저 만들지 않고 포크의 고정 render spec과 classic layout 변경으로 시작합니다.
+Start aspect-ratio experiments by changing a fork's fixed render spec and classic layout, not by building a runtime preset system first.
