@@ -129,7 +129,7 @@ function nextJobFor(layout, id){
       style: "line",
       startSeconds: 0.08,
       durationSeconds: 3.5,
-      subtitle: "REFERENCE MAP · EDIT WORKFLOW",
+      subtitle: "WORKFLOW SHOWCASE · EDIT WORKFLOW",
     },
     ui: JSON.parse(JSON.stringify(layout.oldJob.ui)),
     output: JSON.parse(JSON.stringify(layout.oldJob.output)),

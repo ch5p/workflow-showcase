@@ -20,7 +20,7 @@
         <span class="videoCalloutCopy">
           <span class="videoCalloutEyebrow">EDIT WORKFLOW</span>
           <strong id="videoCalloutTitle">UNTITLED PROJECT</strong>
-          <span class="videoCalloutMeta" id="videoCalloutSubtitle">REFERENCE MAP · EDIT WORKFLOW</span>
+          <span class="videoCalloutMeta" id="videoCalloutSubtitle">WORKFLOW SHOWCASE · EDIT WORKFLOW</span>
         </span>
       </div>
     </div>
@@ -124,7 +124,7 @@ const CONFIG = {
   },
   // match는 XML 클립 이름의 일부와 일치시킨다. thumbnail이 비어 있으면 placeholder가 표시된다.
 };
-let CALLOUT_CONFIG={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"REFERENCE MAP · EDIT WORKFLOW"};
+let CALLOUT_CONFIG={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
 let RENDER_SPEC={width:1280,height:1080,fps:60,bitrateMbps:12};
 
 /* ============ 공개 synthetic fallback ============ */
@@ -801,7 +801,7 @@ function setCalloutConfig(value){
     style:["line","label","minimal"].includes(source.style)?source.style:"line",
     startSeconds:number(source.startSeconds,.08,0,60),
     durationSeconds:number(source.durationSeconds,3.5,.5,30),
-    subtitle:source.subtitle===undefined?"REFERENCE MAP · EDIT WORKFLOW":String(source.subtitle).replace(/\s+/g," ").trim().slice(0,60),
+    subtitle:source.subtitle===undefined?"WORKFLOW SHOWCASE · EDIT WORKFLOW":String(source.subtitle).replace(/\s+/g," ").trim().slice(0,60),
   };
   const callout=$("videoCallout");
   callout.dataset.position=CALLOUT_CONFIG.position;

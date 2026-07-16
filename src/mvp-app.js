@@ -15,7 +15,7 @@
   let titleSaveTimer=0;
   let calloutSaveTimer=0;
   let pendingSavePromise=Promise.resolve();
-  const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"REFERENCE MAP · EDIT WORKFLOW"};
+  const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
   const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4",".mov",".m4v"])};
 
   function preview(){ return iframe.contentWindow?.portablePreview||null; }

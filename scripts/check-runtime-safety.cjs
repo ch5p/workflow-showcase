@@ -17,7 +17,7 @@ const {
   finalizeCompletedExport,
 } = require("../exporter.cjs");
 
-const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "character-workflow-runtime-safety-"));
+const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-showcase-runtime-safety-"));
 
 function transientError(){
   const error = new Error("forced Windows lock");
@@ -125,6 +125,7 @@ try{
   assert.equal(fs.existsSync(finalPath), false);
 
   const firstPaths = availableExportPaths(outputRoot);
+  assert.match(path.basename(firstPaths.outputPath), /^workflow_showcase_export_/);
   fs.writeFileSync(firstPaths.outputPath, "EXISTING", "utf8");
   fs.writeFileSync(firstPaths.temporaryPath, "STALE", "utf8");
   const secondPaths = availableExportPaths(outputRoot);

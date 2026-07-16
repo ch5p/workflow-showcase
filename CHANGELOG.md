@@ -2,6 +2,7 @@
 
 ## 0.1.0-beta.2
 
+- Unified the app, package, documentation, Export prefix, and public repository identity as `Workflow Showcase`
 - Hardened the single-instance guard and durable Current Job saving
 - Blocked symlink/junction escapes on stored paths
 - Electron decode/metadata preflight before committing a video

@@ -10,7 +10,7 @@ Do not post vulnerability details, user paths, or video/Job files in a public Is
 
 If you see a `Report a vulnerability` button on the repository's Security tab, please file a private vulnerability report.
 
-https://github.com/ch5p/character-workflow-portable/security/advisories/new
+https://github.com/ch5p/workflow-showcase/security/advisories/new
 
 If the button is unavailable, open only an Issue titled `Security contact request` with no details. Do not put reproduction information or sensitive files in public comments.
 

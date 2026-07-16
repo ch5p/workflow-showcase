@@ -10,7 +10,7 @@ const root=path.resolve(__dirname,"..");
 const fixtureRoot=path.join(root,"fixtures","premiere-export-kit","public-fixture");
 const fixtureXml=path.join(fixtureRoot,"premiere-synthetic.xml");
 const fixtureVideo=path.join(fixtureRoot,"premiere-synthetic-final.mp4");
-const temporaryRoot=fs.mkdtempSync(path.join(os.tmpdir(),"character-workflow-smoke-"));
+const temporaryRoot=fs.mkdtempSync(path.join(os.tmpdir(),"workflow-showcase-smoke-"));
 const jobRoot=path.join(temporaryRoot,"current-job");
 const invalidVideo=path.join(temporaryRoot,"invalid-video.mp4");
 const exportMode=process.argv.includes("--export");
@@ -39,7 +39,7 @@ function prepareExportJob(){
     timelineShots:[],
     orphanedShotMappings:[],
     projectTitle:"SYNTHETIC TIMELINE",
-    callout:{enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"REFERENCE MAP · EDIT WORKFLOW"},
+    callout:{enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"},
     ui:{scale:1.25},
     output:{codec:"h264",bitrateMbps:12,fps:60},
   };
