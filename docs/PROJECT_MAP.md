@@ -15,6 +15,7 @@
 - `src/index.html`: the editing screen and the SHOT rail
 - `src/mvp-app.js`: the editing screen, Job store, and output-preview wiring
 - `src/core/*`: the pure core for the legacy xmeml parser, PRIMARY timeline, SHOT descriptor, and reference mapping
+- `src/adapters/xmeml-unsupported-layers.js`: excludes pathless Premiere Adjustment Layers before the stable PRIMARY/SHOT core runs; effect metadata is not exposed or persisted
 - `src/layouts/classic/tokens.css`, `classic.css`: the official classic presentation tokens and placement
 - `src/output-preview.html`: named presentation regions, the playback clock, and the `window.portablePreview` bridge
 - `src/export-dialog.html`, `src/export-dialog.js`: the standalone Export window that confirms the saved title and render spec and shows progress and the completed path
@@ -42,6 +43,7 @@ All stored paths are relative to the app folder. Internal identifiers and JSON k
 ## Import Contract
 
 - The `XML` click/drop zone uses one prepare/commit path. The current dialog labels are `타임라인만 업데이트` (`Update timeline only`, default), `새 Job으로 불러오기` (`Load as a new Job`), and `취소` (`Cancel`).
+- XML validation, UPDATE, NEW JOB, preview, and Export all exclude Premiere Adjustment Layers before PRIMARY/SHOT inspection. Adjustment filter data is neither rendered nor stored in the Job.
 - When `current-job/job.json` does not exist, Main copies the existing public fixture XML/MP4 into `current-job/source`, creates a `demo: true` sample Job, and logs `starter_demo_seeded`. It never seeds over an existing Job. If fixture seeding fails, it logs `starter_demo_seed_failed` and falls back to the empty Job contract.
 - A valid XML selected while `demo: true` bypasses the UPDATE choice and enters the existing NEW JOB transaction, so the disposable sample XML/video are removed while output/logs remain. The candidate is parsed before this decision. Ordinary Jobs keep the normal UPDATE/NEW JOB dialog.
 - On selection cancel, file-pick cancel, or validation failure, the existing `job.json`, source, and references are unchanged.

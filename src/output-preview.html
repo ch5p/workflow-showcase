@@ -98,6 +98,7 @@
 </div>
 
 <script src="./core/xmeml-parser.js"></script>
+<script src="./adapters/xmeml-unsupported-layers.js"></script>
 <script src="./core/primary-timeline.js"></script>
 <script src="./core/shot-model.js"></script>
 <script src="./core/reference-mapping.js"></script>
@@ -161,9 +162,13 @@ let videoClockGeneration=0;
 let lastReportedShot=0;
 /* ============ 안정 코어 bridge ============ */
 const parseFCPXML=window.PortableXmeml.parseXmeml;
+const excludeUnsupportedXmemlLayers=window.PortableUnsupportedXmeml.excludeUnsupportedLayers;
 const buildFocusSegments=window.PortablePrimaryTimeline.buildPrimarySegments;
 const inspectParsedXml=window.PortableShotModel.inspectTimeline;
 const resolveVisibleReferenceIds=window.PortableReferenceMapping.resolveVisibleReferenceIds;
+function parseSupportedFCPXML(text){
+  return excludeUnsupportedXmemlLayers(text,parseFCPXML(text));
+}
 /* ============ 구간(range) 적용 : 잘라서 0프레임 기준으로 재정렬 ============ */
 function parseRangePoint(v,fps){
   if(typeof v==="number") return Math.round(v*fps);
@@ -1426,12 +1431,12 @@ if(CONFIG.sourceVideo) setVideoSource(CONFIG.sourceVideo);
 /* RED ZONE: 기존 FCP XML 파서와 쇼 엔진은 유지하고 Electron에서는 이 브리지만 호출한다. */
 window.portablePreview={
   setRenderSpec,
-  inspectXml(text){ return inspectParsedXml(parseFCPXML(text)); },
+  inspectXml(text){ return inspectParsedXml(parseSupportedFCPXML(text)); },
   validateXml(text){
-    return inspectParsedXml(parseFCPXML(text));
+    return inspectParsedXml(parseSupportedFCPXML(text));
   },
   loadXml(text){
-    const parsed=parseFCPXML(text);
+    const parsed=parseSupportedFCPXML(text);
     const inspected=inspectParsedXml(parsed);
     build(parsed);
     return inspected;

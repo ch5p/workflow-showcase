@@ -4,6 +4,8 @@
 
 The Electron single-Job MVP skeleton is in place. The existing FCP XML parser keeps its behavior but was split into `src/core/xmeml-parser.js`, and the PRIMARY calculation and pure SHOT/reference rules into the rest of `src/core/*`. `output-preview.html` owns the `window.portablePreview` bridge and the presentation runtime. XML, video, and references are copied into `current-job`, and GLOBAL/SHOT mappings are auto-saved into `job.json`.
 
+Premiere Adjustment Layers are removed by `src/adapters/xmeml-unsupported-layers.js` before the unchanged PRIMARY/SHOT core runs. This prevents a full-length generated Slug layer from replacing the actual cut, while keeping effect/filter details out of the UI and Job data. Optional effect support remains a contributor-owned input-adapter extension rather than a beta feature.
+
 The public source beta is deployed from a standalone public history at `https://github.com/ch5p/workflow-showcase`, excluding private history and user Jobs. The `v0.1.0-beta.1` tag keeps its historical release name; the current app and repository identity is `Workflow Showcase`. Windows `npm ci`/`check`/isolated `smoke` and fresh-tree `smoke:export` are the release gates. Private vulnerability reporting is also enabled.
 
 When `current-job/job.json` is absent, the app seeds the existing public Premiere fixture XML/MP4 as a playable `SAMPLE JOB` with `demo: true`. Existing Jobs are never overwritten. After the renderer validates the first user XML, an untouched demo Job bypasses UPDATE and is replaced through the existing NEW JOB transaction; the first real save/import removes the marker so user changes are no longer disposable. Normal Jobs retain the UPDATE/NEW JOB choice. The central empty-video guidance points to the real top XML/VIDEO controls rather than claiming the preview itself is an active drop zone.
@@ -25,6 +27,7 @@ The English-default / Korean `.ko.md` documentation pass and a fresh public-tree
 ## Red Zone
 
 - `src/core/xmeml-parser.js`, `primary-timeline.js`, `shot-model.js`, `reference-mapping.js`, and `build` and the playback clock in `src/output-preview.html` are existing output contracts. Do not modify the core or rewrite the parser during layout work.
+- Keep unsupported Premiere Adjustment Layers excluded in `parseSupportedFCPXML` before every inspect, validate, preview, and Export path. Do not move their filter/effect metadata into the stable core, UI, or Job schema.
 - Do not arbitrarily change the `version`, `jobId`, `revision`, `relativePath`, `globalReferenceIds`, `shotMappings`, `timelineShots`, `orphanedShotMappings` keys of `current-job/job.json`.
 - `demo: true` is reserved for the untouched bundled starter only. Seed it only when `job.json` is absent, never over an existing Job. A validated replacement XML must use the existing NEW JOB transaction and remove the marker; a user save, video replacement, reference import/delete, or output-setting write also removes it before later XML decisions.
 - Only one Electron process accesses one Current Job. Do not remove `requestSingleInstanceLock()` or move it before the test `userData` setup.
@@ -64,7 +67,7 @@ The English-default / Korean `.ko.md` documentation pass and a fresh public-tree
 - The optional SHOT mapping field `leadInSeconds` currently allows only `1`. An enabled shot does not change the video/SHOT selection position; it applies only the reference mapping from 1 second before the actual shot start. When the field is absent or `0`, the existing cut-start behavior is kept.
 - When entering the 1-second pre-roll of a SHOT with LEAD-IN on, clean up the previous card immediately, and apply only a transform pop without opacity blending on the new card. When leaving a LEAD-IN SHOT, clear its card immediately (a 0.35s crossfade stacks the old card above the next one as a ghost) but let the next shot's cards play the normal revealed entrance animation. Do not restore the old shot-exit pop path, which removed the entrance animation. Normal cuts keep the 0.35s crossfade.
 
-Search keywords: `RED ZONE`, `window.portablePreview`, `JOB_ROOT`, `job_saved`, `export_started`, `export_completed`.
+Search keywords: `RED ZONE`, `parseSupportedFCPXML`, `PortableUnsupportedXmeml`, `window.portablePreview`, `JOB_ROOT`, `job_saved`, `export_started`, `export_completed`.
 
 ## Hot Debug
 
@@ -88,6 +91,8 @@ If the EDIT PANEL closes during internal operation, first check whether the `pre
 For reference-deletion issues, first check the `reference_deleted`, `reference_file_delete_failed` events and whether the deleted ID remains in `job.json`. Even if file cleanup fails, the mapping is removed; clean up only the orphaned file manually.
 
 For XML update issues, first check the mode, `jobId`, and `revision` of `job_xml_mode_selected`. In UPDATE, cross-check `timelineShots`, `shotMappings`, `orphanedShotMappings` with the `preserved/newShots/orphaned/ambiguous/reattached` of `renderer_xml_update_applied`, and confirm the video/reference file hashes are unchanged. In NEW JOB, confirm the source/reference reset and the `output`/`logs` preservation. If a rollback-failure event appears, do not reload the same XML; quit all app processes. Restart the app without deleting the `.job-import-*` and valid primary manifest or overwriting with `.tmp`, confirm `job_xml_recovery_rolled_back`, and compare the source/reference count/paths and the `job.json` SHA-256 with the prior inventory.
+
+If an Adjustment Layer becomes the only EDIT/SHOT, first confirm `./adapters/xmeml-unsupported-layers.js` is loaded before PRIMARY inspection and run `scripts/check-input-adapters.cjs`. The supported result must follow the real media tracks; do not add the Adjustment Layer or Lumetri/filter fields to `job.json` as a workaround.
 
 For video-replacement issues, check `video_import_prepared`, `video_import_preflight_passed` or `video_import_preflight_failed`, `job_video_commit_started`, `job_video_commit_committed` or `job_video_commit_rollback_*` in order. A preflight failure must have no commit event, and the existing video/Job revision must be unchanged. The renderer releases the media handle before replacement, and on a commit failure the previous video and `job.json` must be restored together.
 
