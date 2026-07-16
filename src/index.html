@@ -895,6 +895,11 @@ function moveShotSelection(delta){
   const next=shots[Math.max(0,Math.min(shots.length-1,currentIndex+delta))];
   selectOnlyShot(next.id);seekPreview(next);
 }
+function moveShotSelectionToBoundary(last){
+  const next=last?shots.at(-1):shots[0];
+  if(!next)return;
+  selectOnlyShot(next.id);seekPreview(next);
+}
 function isTextEntryControl(target){
   return target instanceof HTMLElement&&(
     target.isContentEditable||Boolean(target.closest("input,textarea,select"))
@@ -914,6 +919,10 @@ document.addEventListener("keydown",event=>{
     event.preventDefault();moveShotSelection(-1);
   }else if(["ArrowDown","ArrowRight"].includes(event.key)){
     event.preventDefault();moveShotSelection(1);
+  }else if(event.key==="Home"){
+    event.preventDefault();moveShotSelectionToBoundary(false);
+  }else if(event.key==="End"){
+    event.preventDefault();moveShotSelectionToBoundary(true);
   }
 });
 document.addEventListener("keyup",event=>{
