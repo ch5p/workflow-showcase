@@ -173,7 +173,7 @@ for(const relative of collectPublicMarkdown()){
   if(!needsBom&&hasBom)throw new Error("English/default Markdown must not use a UTF-8 BOM: "+relative);
 }
 const publicTreeBuilder=fs.readFileSync(path.join(root,"scripts","create-public-tree.cjs"),"utf8");
-for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md"]){
+for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md","job-backup.cjs"]){
   if(!publicTreeBuilder.includes('"'+marker+'"'))throw new Error("Public tree contract file missing from manifest: "+marker);
 }
 for(const relative of ["src/index.html","src/output-preview.html","src/mvp-app.js"]){
