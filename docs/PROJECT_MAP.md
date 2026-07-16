@@ -5,6 +5,7 @@
 - `main.cjs`: Electron window, file selection, the XML UPDATE/NEW JOB decision boundary, portable copy, `job.json` CAS save, app log
 - `durable-file.cjs`: UUID staging, fsync, Windows rename retry, and preservation of failed staging for ordinary Jobs and completed Exports
 - `owned-path.cjs`: lexical, lstat, and realpath no-follow checks for the Current Job owned root
+- `strings.cjs`: EN/KR user-facing strings for the Main process and the exporter, plus the `ui.language` → OS-locale resolution rule
 - `preload.cjs`: the minimal local file API exposed to the screen, plus restricted IPC for XML/video/reference drop
 - `job-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for XML UPDATE/NEW JOB
 - `video-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for source video replacement
@@ -29,6 +30,7 @@
 - `current-job` and `source`, `references`, `output`, `logs` must be real directories; symlinks/junctions are not allowed. Stored files are re-checked all the way to the real path, inside the owned root, immediately before use.
 - `projectTitle`: an optional field of up to 40 characters that is reflected in the preview as soon as it is typed in the edit panel and auto-saved. If the field is absent, `UNTITLED PROJECT` is used; an explicit empty string is used as an empty title.
 - `callout`: an optional field with `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`, used identically by the output preview and the offscreen render.
+- `ui.language`: optional `"en"` or `"ko"`. Absent means follow the OS locale. Toggled by the editor's EN/KR button and saved through the normal `job:save` ui merge; the Export popup reads it from the summary `language` field.
 - `shotMappings.<shotId>`: may add the optional field `leadInSeconds: 1` to the existing `mode`, `refs`; when absent it is treated as `0`.
 - `timelineShots`: rematching descriptors that store only `identityKey`, `nameKey`, and timeline/source in-out occurrence, without original names or paths
 - `orphanedShotMappings`: existing mappings that did not clearly match the new timeline 1:1. Only `descriptor`, `mapping`, and `reason` are stored, and they can be reattached in the next UPDATE.

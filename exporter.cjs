@@ -8,6 +8,11 @@ const { pathToFileURL } = require("node:url");
 const { fsyncExistingFile, replaceByRenameWithRetry } = require("./durable-file.cjs");
 const { assertDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
 const { resolveRenderSpec } = require("./render-spec.cjs");
+const { exporterText } = require("./strings.cjs");
+
+// One export runs at a time (guarded by `active`), so a module-level language is safe.
+let activeLanguage = "en";
+const t = key => exporterText(activeLanguage, key);
 
 function sleep(milliseconds){
   return new Promise(resolve => setTimeout(resolve, Math.max(0, milliseconds)));
@@ -30,7 +35,7 @@ function availableExportPaths(outputRoot){
       return { outputPath, temporaryPath };
     }
   }
-  throw new Error("새 Export 파일명을 할당하지 못했습니다.");
+  throw new Error(t("output_name_failed"));
 }
 
 function finalizeCompletedExport(temporaryPath, outputPath){
@@ -45,7 +50,7 @@ function resolveFfmpeg(appRoot){
     const probe = spawnSync(candidate, ["-hide_banner", "-version"], { encoding: "utf8", windowsHide: true });
     if(probe.status === 0) return candidate;
   }
-  throw new Error("FFmpeg를 찾을 수 없습니다. WinGet을 사용할 수 있다면 'winget install -e --id Gyan.FFmpeg'를 실행한 뒤 앱을 완전히 재시작하세요. 또는 ffmpeg.exe를 앱의 ffmpeg 폴더에 넣으세요.");
+  throw new Error(t("ffmpeg_missing"));
 }
 
 function canUseNvenc(ffmpegPath,spec=resolveRenderSpec()){
@@ -182,7 +187,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       renderWindow.webContents.invalidate();
       await Promise.race([
         firstFrame,
-        sleep(5000).then(() => { throw new Error("offscreen 첫 프레임 시간 초과"); }),
+        sleep(5000).then(() => { throw new Error(t("first_frame_timeout")); }),
       ]);
 
       const fullDurationSeconds = parsed.durationFrames / parsed.fps;
@@ -215,7 +220,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
         if(active.cancelled) throw new Error("EXPORT_CANCELLED");
         const targetTime = startedAt + frameIndex / fps * 1000;
         await sleep(targetTime - performance.now());
-        if(!latestFrame) throw new Error("offscreen 프레임이 비어 있습니다.");
+        if(!latestFrame) throw new Error(t("frame_empty"));
         if(!ffmpeg.stdin.write(latestFrame)) await once(ffmpeg.stdin, "drain");
         if(frameIndex % Math.max(1, Math.round(fps / 5)) === 0 || frameIndex === totalFrames - 1){
           emit(sender, {
@@ -232,7 +237,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       ffmpeg.stdin.end();
       const [exitCode] = await once(ffmpeg, "close");
       active.ffmpeg = null;
-      if(exitCode !== 0) throw new Error("FFmpeg 실패 (" + exitCode + ")\n" + ffmpegError);
+      if(exitCode !== 0) throw new Error(t("ffmpeg_failed") + " (" + exitCode + ")\n" + ffmpegError);
       return { durationSeconds, totalFrames };
     }finally{
       if(ffmpeg && ffmpeg.exitCode == null && !ffmpeg.killed) ffmpeg.kill();
@@ -242,10 +247,11 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     }
   }
 
-  async function start(sender, job){
-    if(active) throw new Error("이미 익스포트가 진행 중입니다.");
-    if(!job.xml?.relativePath) throw new Error("XML이 없습니다.");
-    if(!job.video?.relativePath) throw new Error("영상이 없습니다.");
+  async function start(sender, job, language){
+    if(language === "en" || language === "ko") activeLanguage = language;
+    if(active) throw new Error(t("already_running"));
+    if(!job.xml?.relativePath) throw new Error(t("xml_missing"));
+    if(!job.video?.relativePath) throw new Error(t("video_missing"));
     sourceFile(job.xml.relativePath, "Export XML");
     sourceFile(job.video.relativePath, "Export video");
     assertDirectoryNoLink(outputRoot, "Current Job output");
@@ -288,8 +294,8 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
           part: partPreserved ? path.basename(temporaryPath) : null,
         });
         const failure = new Error(partPreserved
-          ? "렌더는 완료됐지만 최종 파일명으로 바꾸지 못했습니다. 완성된 .part.mp4 파일은 보존했습니다."
-          : "렌더는 완료됐지만 최종 파일 검증에 실패했습니다. output 폴더와 앱 로그를 확인하세요.");
+          ? t("finalize_rename")
+          : t("finalize_verify"));
         failure.code = "EXPORT_FINALIZE_DEFERRED";
         failure.cause = error;
         if(partPreserved) failure.partPath = temporaryPath;

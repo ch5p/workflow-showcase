@@ -10,6 +10,7 @@ const { createExportController } = require("./exporter.cjs");
 const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
 const { cleanupSiblingStagingFiles, fsyncExistingFile, replaceByRenameWithRetry, writeTextAtomically } = require("./durable-file.cjs");
 const { ensureDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
+const { resolveLanguage, mainText } = require("./strings.cjs");
 const { createJobBackup } = require("./job-backup.cjs");
 const {
   inspectInputFile,
@@ -238,6 +239,15 @@ function loadJob(){
   }
 }
 
+function currentLanguage(){
+  let preferred = null;
+  try{ preferred = loadJob().ui?.language; }catch{}
+  let osLocale = "";
+  try{ osLocale = app.getLocale(); }catch{}
+  return resolveLanguage(preferred, osLocale);
+}
+const T = key => mainText(currentLanguage(), key);
+
 function writeJob(job, { preserveDemo = false } = {}){
   ensureJobFolders();
   const jobToWrite = { ...job };
@@ -257,7 +267,7 @@ function writeJob(job, { preserveDemo = false } = {}){
       code: error.code || "WRITE_FAILED",
       staged: error.stagedPath ? path.basename(error.stagedPath) : null,
     })}catch{}
-    const failure = new Error("Current Job을 안전하게 저장하지 못했습니다. 기존 Job은 유지되며 앱 로그를 확인하세요.");
+    const failure = new Error(T("job_save_failed"));
     failure.code = "JOB_WRITE_FAILED";
     failure.cause = error;
     throw failure;
@@ -606,11 +616,11 @@ let exportDialogContext = {};
 
 function exportReadiness(job){
   if(recoveryRequired){
-    return { ready: false, message: "Current Job 복구가 필요합니다. 앱을 다시 시작한 뒤 로그를 확인하세요." };
+    return { ready: false, message: T("ready_recovery") };
   }
   const requiredSources = [
-    { entry: job.xml, label: "Export XML", message: "XML 파일이 없거나 이동되었습니다. XML을 다시 불러오세요." },
-    { entry: job.video, label: "Export video", message: "완성본 영상 파일이 없거나 이동되었습니다. 영상을 다시 불러오세요." },
+    { entry: job.xml, label: "Export XML", message: T("ready_xml_missing") },
+    { entry: job.video, label: "Export video", message: T("ready_video_missing") },
   ];
   for(const item of requiredSources){
     if(!item.entry?.relativePath) return { ready: false, message: item.message };
@@ -638,7 +648,7 @@ function exportReadiness(job){
     }catch{
       return {
         ready: false,
-        message: "등록된 레퍼런스 파일 중 일부가 없거나 안전하지 않습니다. 다시 추가하거나 해당 항목을 삭제하세요.",
+        message: T("ready_reference_missing"),
       };
     }
   }
@@ -660,6 +670,7 @@ function exportSummary(){
     outputFps: spec.fps,
     sourceFps: Math.max(0, Number(exportDialogContext.sourceFps) || 0),
     bitrateMbps: spec.bitrateMbps,
+    language: currentLanguage(),
     durationSeconds,
     totalFrames: durationSeconds ? Math.ceil(durationSeconds * spec.fps) : 0,
     editCount: Math.max(0, Number(exportDialogContext.editCount) || 0),
@@ -998,10 +1009,7 @@ if(SINGLE_INSTANCE_LOCK){
   try{
     ensureJobFolders();
   }catch(error){
-    dialog.showErrorBox(
-      "Current Job path is unsafe",
-      "current-job 내부에 안전하지 않은 링크 또는 폴더가 있어 앱을 중단했습니다. 원본을 보존하고 폴더 구성을 확인하세요.",
-    );
+    dialog.showErrorBox(T("boot_unsafe_title"), T("boot_unsafe"));
     app.quit();
     return;
   }
@@ -1016,10 +1024,7 @@ if(SINGLE_INSTANCE_LOCK){
     });
   }catch(error){
     try{logEvent("job_xml_recovery_boot_failed", { code: error.code || "RECOVERY_BOOT_FAILED" })}catch{}
-    dialog.showErrorBox(
-      "Current Job recovery required",
-      "안전한 Job 복구 상태를 확인하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
-    );
+    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_xml_check"));
     app.quit();
     return;
   }
@@ -1027,10 +1032,7 @@ if(SINGLE_INSTANCE_LOCK){
     logEvent("job_xml_recovery_summary", recovery);
   }
   if(recovery.failed){
-    dialog.showErrorBox(
-      "Current Job recovery required",
-      "완료되지 않은 XML 교체를 자동 복구하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
-    );
+    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_xml"));
     app.quit();
     return;
   }
@@ -1044,10 +1046,7 @@ if(SINGLE_INSTANCE_LOCK){
     });
   }catch(error){
     try{logEvent("job_video_recovery_boot_failed", { code: error.code || "RECOVERY_BOOT_FAILED" })}catch{}
-    dialog.showErrorBox(
-      "Current Job recovery required",
-      "안전한 영상 교체 복구 상태를 확인하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
-    );
+    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_video_check"));
     app.quit();
     return;
   }
@@ -1055,20 +1054,14 @@ if(SINGLE_INSTANCE_LOCK){
     logEvent("job_video_recovery_summary", videoRecovery);
   }
   if(videoRecovery.failed){
-    dialog.showErrorBox(
-      "Current Job recovery required",
-      "완료되지 않은 영상 교체를 자동 복구하지 못해 앱을 중단했습니다. current-job/logs/app.log를 확인하고 원본 파일을 보존한 채 복구하세요.",
-    );
+    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_video"));
     app.quit();
     return;
   }
   try{
     loadJob();
   }catch(error){
-    dialog.showErrorBox(
-      "Current Job is unreadable",
-      "current-job/job.json을 읽을 수 없어 앱을 중단했습니다. 원본 파일은 덮어쓰지 않았습니다. current-job/logs/app.log를 확인하세요.",
-    );
+    dialog.showErrorBox(T("boot_unreadable_title"), T("boot_unreadable"));
     app.quit();
     return;
   }
@@ -1088,6 +1081,7 @@ app.on("window-all-closed", () => {
 
 ipcMain.handle("job:get", () => hydrateJob(loadJob()));
 ipcMain.handle("app:get-render-spec", () => publicRenderSpec(loadJob().output));
+ipcMain.handle("app:get-language", () => currentLanguage());
 ipcMain.handle("app:reload-current-job", event => {
   if(exportController.isRunning()) throw new Error("Finish or cancel Export before reloading the Current Job.");
   const ownerId = event.sender.id;
@@ -1173,9 +1167,9 @@ ipcMain.handle("job:choose-xml-mode", async (event, token) => {
   const options = {
     type: "warning",
     title: "Load timeline XML",
-    message: "새 XML을 현재 작업에 반영할 방식을 선택하세요.",
-    detail: "타임라인만 업데이트: 영상·레퍼런스·GLOBAL·제목·콜아웃·출력 설정을 유지하고 SHOT 매핑을 안전하게 재연결합니다.\n새 Job으로 불러오기: 기존 작업 자료를 초기화합니다.",
-    buttons: ["타임라인만 업데이트", "새 Job으로 불러오기", "취소"],
+    message: T("xml_dialog_message"),
+    detail: T("xml_dialog_detail"),
+    buttons: ["UPDATE XML", "NEW JOB", "CANCEL"],
     defaultId: 0,
     cancelId: 2,
     noLink: true,
@@ -1261,10 +1255,7 @@ ipcMain.handle("job:commit-xml", (event, payload) => {
     if(error.rollbackError){
       recoveryRequired = true;
       logEvent("job_runtime_recovery_required", { transactionId: entry.token, code: "ROLLBACK_FAILED" });
-      dialog.showErrorBox(
-        "Current Job recovery required",
-        "XML 교체 rollback을 완료하지 못해 저장과 Export를 차단했습니다. 앱을 다시 시작한 뒤 current-job/logs/app.log를 확인하세요.",
-      );
+      dialog.showErrorBox(T("rollback_block_title"), T("rollback_block_xml"));
       const fatal = new Error("JOB_RECOVERY_REQUIRED: XML commit rollback failed.");
       fatal.code = "JOB_RECOVERY_REQUIRED";
       throw fatal;
@@ -1331,10 +1322,7 @@ ipcMain.handle("job:commit-video", (event, payload) => {
     if(error.rollbackError){
       recoveryRequired = true;
       logEvent("job_runtime_recovery_required", { transactionId: entry.token, code: "VIDEO_ROLLBACK_FAILED" });
-      dialog.showErrorBox(
-        "Current Job recovery required",
-        "영상 교체 rollback을 완료하지 못해 저장과 Export를 차단했습니다. 앱을 다시 시작한 뒤 current-job/logs/app.log를 확인하세요.",
-      );
+      dialog.showErrorBox(T("rollback_block_title"), T("rollback_block_video"));
       const fatal = new Error("JOB_RECOVERY_REQUIRED: video commit rollback failed.");
       fatal.code = "JOB_RECOVERY_REQUIRED";
       throw fatal;
@@ -1512,9 +1500,9 @@ ipcMain.handle("export:get-summary", () => exportSummary());
 ipcMain.handle("export:set-bitrate", (_event, payload) => {
   // Export popup may change only output.bitrateMbps. The bumped revision is safe:
   // the editor's stale-save path adopts the new revision and retries when jobId is unchanged.
-  if(exportController.isRunning()) throw new Error("렌더링 중에는 비트레이트를 변경할 수 없습니다.");
+  if(exportController.isRunning()) throw new Error(T("bitrate_running"));
   const bitrateMbps = Number(payload?.bitrateMbps);
-  if(bitrateMbps !== 12 && bitrateMbps !== 24) throw new Error("지원하지 않는 비트레이트입니다.");
+  if(bitrateMbps !== 12 && bitrateMbps !== 24) throw new Error(T("bitrate_invalid"));
   const job = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "export_set_bitrate");
   writeJob({ ...job, output: { ...(job.output || {}), bitrateMbps } });
   logEvent("export_bitrate_updated", { bitrateMbps });
@@ -1525,7 +1513,7 @@ ipcMain.handle("export:start", async (event, payload) => {
   const window = BrowserWindow.fromWebContents(event.sender);
   if(window && !window.isDestroyed()) window.setClosable(false);
   try{
-    return await exportController.start(event.sender, job);
+    return await exportController.start(event.sender, job, currentLanguage());
   }finally{
     if(window && !window.isDestroyed()) window.setClosable(true);
   }

@@ -368,6 +368,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       <button class="command editPanelToggle" id="editPanelButton">EDIT PANEL</button>
       <button class="command" id="previewButton">OUTPUT</button>
       <button class="command primary" id="exportButton">EXPORT H.264</button>
+      <button class="command" id="languageToggle" title="Switch UI language (EN/KR)">EN</button>
     </div>
   </header>
 
@@ -592,10 +593,18 @@ function removeLocalReference(id){
   refreshSelection();
   showToast("REFERENCE DELETED");
 }
+let editorLanguage="en";
+window.applyEditorLanguage=lang=>{
+  editorLanguage=lang==="ko"?"ko":"en";
+  const toggle=$("languageToggle");
+  if(toggle)toggle.textContent=editorLanguage==="ko"?"KR":"EN";
+};
 function requestReferenceDelete(id){
   const asset=assets.get(id);if(!asset)return;
   hideReferencePreview();
-  const confirmed=window.confirm(asset.label+" 파일을 삭제할까요?\nGLOBAL과 모든 SHOT 연결에서도 제거됩니다.");
+  const confirmed=window.confirm(editorLanguage==="ko"
+    ?asset.label+" 파일을 삭제할까요?\nGLOBAL과 모든 SHOT 연결에서도 제거됩니다."
+    :"Delete "+asset.label+"?\nIt is also removed from GLOBAL and every SHOT mapping.");
   if(!confirmed)return;
   if(window.portableMvp?.deleteReference)window.portableMvp.deleteReference(id);
   else removeLocalReference(id);
@@ -949,6 +958,11 @@ $("overlayBackupJob").addEventListener("click",()=>{
   backup();
 });
 $("overlayResetShot").addEventListener("click",()=>{shots.filter(shot=>selectedShots.has(shot.id)).forEach(shot=>{shot.mode="INHERIT";shot.refs=[];shot.leadInSeconds=0});refreshSelection();showToast("SHOT RESET")});
+$("languageToggle").addEventListener("click",async()=>{
+  const next=editorLanguage==="ko"?"en":"ko";
+  if(window.portableMvp?.setLanguage)await window.portableMvp.setLanguage(next);
+  else window.applyEditorLanguage(next);
+});
 $("loadXml").addEventListener("click",()=>window.portableMvp?.loadXml()||showToast("XML INPUT READY"));
 $("loadVideo").addEventListener("click",()=>window.portableMvp?.loadVideo()||showToast("VIDEO INPUT READY"));
 function setOverlayOpen(open){

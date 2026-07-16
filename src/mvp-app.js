@@ -6,6 +6,7 @@
   const iframe=document.getElementById("renderPreview");
   let job=null;
   let timeline=null;
+  let language="en";
   let initialized=false;
   let transitioning=false;
   let runtimeBlocked=false;
@@ -19,6 +20,16 @@
   const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4",".mov",".m4v"])};
 
   function preview(){ return iframe.contentWindow?.portablePreview||null; }
+  function applyLanguage(next){
+    language=next==="ko"?"ko":"en";
+    try{window.applyEditorLanguage?.(language)}catch{}
+    try{preview()?.setLanguage?.(language)}catch{}
+  }
+  async function setLanguage(next){
+    applyLanguage(next);
+    await saveJobPatch({ui:{language:language}});
+    return language;
+  }
   function waitForPreview(){
     if(preview())return Promise.resolve(preview());
     return new Promise(resolve=>iframe.addEventListener("load",()=>resolve(preview()),{once:true}));
@@ -645,10 +656,15 @@
   async function initialize(){
     if(!bridge){ui.showToast("OPEN WITH ELECTRON");return}
     try{
-      const [current,renderSpec]=await Promise.all([bridge.getJob(),bridge.getRenderSpec()]);
+      const [current,renderSpec,bootLanguage]=await Promise.all([
+        bridge.getJob(),
+        bridge.getRenderSpec(),
+        bridge.getLanguage?.().catch(()=>"en")??"en",
+      ]);
       const target=await waitForPreview();
       target?.setRenderSpec?.(renderSpec);
       ui.setRenderSpec?.(renderSpec);
+      applyLanguage(bootLanguage);
       await hydrateJobState(current);
       initialized=true;
       await safeRendererLog("renderer_ready",{
@@ -663,6 +679,7 @@
   window.portableMvp={
     loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
     addReferences,addDroppedReferences,deleteReference,backupCurrentJob,loadXmlText,syncActiveShot,exportVideo,reloadCurrentJob,logPreviewEvent,
+    getLanguage:()=>language,setLanguage,
   };
   bridge?.onProjectTitleUpdated(projectTitle=>{if(!transitioning&&!runtimeBlocked)applyProjectTitle(projectTitle)});
   window.addEventListener("wireframechange",scheduleSave);

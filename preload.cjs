@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 contextBridge.exposeInMainWorld("portableApi", {
   getJob: () => ipcRenderer.invoke("job:get"),
   getRenderSpec: () => ipcRenderer.invoke("app:get-render-spec"),
+  getLanguage: () => ipcRenderer.invoke("app:get-language"),
   reloadCurrentJob: () => ipcRenderer.invoke("app:reload-current-job"),
   saveJob: payload => ipcRenderer.invoke("job:save", payload),
   selectXml: () => ipcRenderer.invoke("job:select-xml"),

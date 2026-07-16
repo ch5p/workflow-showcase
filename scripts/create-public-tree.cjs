@@ -19,7 +19,7 @@ fs.mkdirSync(target,{recursive:true});
 
 const rootFiles=[
   ".gitattributes",".gitignore","AGENTS.md","CHANGELOG.md","CONTRIBUTING.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","LICENSE","README.md","README.ko.md","ROADMAP.md","SECURITY.md","START_APP.cmd",
-  "durable-file.cjs","export-preload.cjs","exporter.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","preload.cjs","render-spec.cjs","timeline-reconcile.cjs","video-lifecycle.cjs",
+  "durable-file.cjs","export-preload.cjs","exporter.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","preload.cjs","render-spec.cjs","strings.cjs","timeline-reconcile.cjs","video-lifecycle.cjs",
 ];
 const directoryRoots=[".github","fixtures","scripts","src"];
 const explicitFiles=[

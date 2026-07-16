@@ -8,6 +8,40 @@
   let completed = false;
   let startedAt = 0;
   let latestProgress = 0;
+  let dialogLanguage = "en";
+
+  const DIALOG_STRINGS = {
+    en: {
+      lead: "Confirm the title and output info before starting the render.",
+      idle: "Press START EXPORT to begin rendering.",
+      not_ready: "Load the XML and the source video first.",
+      preparing: "Preparing the render surface and the encoder.",
+      fallback: "The NVIDIA encoder is unavailable; restarting with CPU rendering.",
+      finalizing: "Finalizing the MP4 file.",
+      failed: "Rendering failed.",
+      complete: "Rendering is complete.",
+      cancelled: "Rendering was cancelled.",
+      cancelling: "Stopping the render and cleaning up temporary files.",
+      bitrate_saved: mbps => "Saved the bitrate as " + mbps + " Mbps.",
+    },
+    ko: {
+      lead: "렌더링을 시작하기 전에 제목과 출력 정보를 확인하세요.",
+      idle: "START EXPORT를 누르면 렌더링을 시작합니다.",
+      not_ready: "XML과 완성본 영상을 먼저 불러와야 합니다.",
+      preparing: "렌더링 화면과 인코더를 준비하고 있습니다.",
+      fallback: "NVIDIA 인코더를 사용할 수 없어 CPU 렌더링으로 다시 시작합니다.",
+      finalizing: "MP4 파일을 마무리하고 있습니다.",
+      failed: "렌더링에 실패했습니다.",
+      complete: "렌더링이 완료되었습니다.",
+      cancelled: "렌더링을 취소했습니다.",
+      cancelling: "렌더링을 중단하고 임시 파일을 정리하고 있습니다.",
+      bitrate_saved: mbps => "비트레이트를 " + mbps + " Mbps로 저장했습니다.",
+    },
+  };
+  const msg = key => {
+    const dict = DIALOG_STRINGS[dialogLanguage] || DIALOG_STRINGS.en;
+    return dict[key] ?? DIALOG_STRINGS.en[key] ?? key;
+  };
 
   function clock(seconds){
     if(!Number.isFinite(seconds) || seconds < 0) return "--:--";
@@ -18,6 +52,8 @@
 
   function renderSummary(next){
     summary = next;
+    dialogLanguage = next.language === "ko" ? "ko" : "en";
+    $("leadText").textContent = msg("lead");
     $("projectTitle").value = next.projectTitle ?? "UNTITLED PROJECT";
     updateTitleCount();
     $("formatValue").textContent = next.format;
@@ -32,10 +68,10 @@
     $("startButton").disabled = !next.ready;
     if(!next.ready){
       $("stateValue").textContent = "NOT READY";
-      setMessage(next.readyMessage || "XML과 완성본 영상을 먼저 불러와야 합니다.", true);
+      setMessage(next.readyMessage || msg("not_ready"), true);
     }else{
       $("stateValue").textContent = "READY";
-      setMessage("START EXPORT를 누르면 렌더링을 시작합니다.");
+      setMessage(msg("idle"));
     }
   }
 
@@ -70,9 +106,9 @@
     const elapsed = startedAt ? (Date.now() - startedAt) / 1000 : 0;
     const remaining = progress > .02 && progress < 1 ? elapsed * (1 - progress) / progress : NaN;
     $("timeProgress").textContent = clock(elapsed) + " · " + clock(remaining) + " LEFT";
-    if(payload?.state === "fallback") setMessage("NVIDIA 인코더를 사용할 수 없어 CPU 렌더링으로 다시 시작합니다.");
-    if(payload?.state === "finalizing") setMessage("MP4 파일을 마무리하고 있습니다.");
-    if(payload?.state === "error") setMessage(payload.message || "렌더링에 실패했습니다.", true);
+    if(payload?.state === "fallback") setMessage(msg("fallback"));
+    if(payload?.state === "finalizing") setMessage(msg("finalizing"));
+    if(payload?.state === "error") setMessage(payload.message || msg("failed"), true);
   }
 
   function setRunning(next){
@@ -89,7 +125,7 @@
     try{
       const next = await api.setBitrate(Number(event.target.value), summary?.jobId, summary?.revision);
       renderSummary(next);
-      setMessage("비트레이트를 " + next.bitrateMbps + " Mbps로 저장했습니다.");
+      setMessage(msg("bitrate_saved")(next.bitrateMbps));
     }catch(error){
       event.target.value = previous;
       setMessage(error.message, true);
@@ -100,7 +136,7 @@
     completed = true;
     setRunning(false);
     setProgress({ state: "complete", progress: 1, frame: result.totalFrames, totalFrames: result.totalFrames });
-    setMessage("렌더링이 완료되었습니다.");
+    setMessage(msg("complete"));
     $("outputPath").textContent = result.outputPath;
     $("outputPath").classList.add("visible");
     $("startButton").style.display = "none";
@@ -119,13 +155,13 @@
     $("startButton").textContent = "START EXPORT";
     setRunning(true);
     setProgress({ state: "preparing", progress: 0 });
-    setMessage("렌더링 화면과 인코더를 준비하고 있습니다.");
+    setMessage(msg("preparing"));
     try{
       const result = await api.startExport(projectTitle, summary?.jobId, summary?.revision);
       if(result?.cancelled){
         setRunning(false);
         setProgress({ state: "cancelled", progress: 0 });
-        setMessage("렌더링을 취소했습니다.");
+        setMessage(msg("cancelled"));
       }else if(result?.ok) showComplete(result);
     }catch(error){
       setRunning(false);
@@ -137,7 +173,7 @@
   async function cancelOrClose(){
     if(running){
       $("cancelButton").disabled = true;
-      setMessage("렌더링을 중단하고 임시 파일을 정리하고 있습니다.");
+      setMessage(msg("cancelling"));
       await api.cancelExport();
       $("cancelButton").disabled = false;
       return;

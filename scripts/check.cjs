@@ -9,7 +9,7 @@ const {spawnSync}=require("node:child_process");
 const root=path.resolve(__dirname,"..");
 const required=[
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs","LICENSE","AGENTS.md","README.md","README.ko.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
-  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","strings.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
   "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
@@ -26,7 +26,7 @@ for(const relative of required){
 }
 for(const relative of [
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs",
-  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","strings.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js",
   "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/mvp-app.js","src/export-dialog.js",
