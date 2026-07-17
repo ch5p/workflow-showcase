@@ -97,7 +97,7 @@ Here is the basic workflow.
 
 ## 1. In Premiere, choose Export > Final Cut Pro XML... to export an XML file.
 
-- WS does not currently support effect layers such as Adjustment Layers and automatically excludes them when importing XML. The default UI displays only actual video clips. Exposing effect layers as an `FX` lane requires a separate input adapter and UI implementation.
+- The app does not currently support effect layers such as Adjustment Layers and automatically excludes them when importing XML. The default UI displays only actual video clips. Exposing effect layers as an `FX` lane requires a separate input adapter and UI implementation.
 
 ## 2. Launch the app, then add the XML and VIDEO files by drag-and-drop or by clicking their zones.
 
