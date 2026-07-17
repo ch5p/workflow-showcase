@@ -43,6 +43,13 @@
 
 All stored paths are relative to the app folder. Internal identifiers and JSON keys are not changed.
 
+## Maintainer UI Capture
+
+- `Ctrl+Shift+P` (`Cmd+Shift+P` on macOS) captures the focused app renderer at device scale factor 2 before opening its chooser.
+- The chooser can save `FULL APP`, `PREVIEW AREA`, `EDIT PANEL`, or the currently visible `TITLE CALLOUT` as a lossless PNG. Window chrome and the mouse cursor are excluded.
+- The Save dialog is the only output path authority. Capture never changes `job.json`, source media, references, mappings, or Export output; it records only diagnostic events in `current-job/logs/app.log`.
+- Every PNG is checked against the selected CSS rectangle at exactly 2x pixel dimensions. A 1x capture is rejected instead of being enlarged after capture.
+
 ## Import Contract
 
 - The `XML` click/drop zone uses one prepare/commit path. The dialog buttons remain `UPDATE XML` (default), `NEW JOB`, and `CANCEL` in both UI languages; the explanatory message and detail follow `ui.language`.

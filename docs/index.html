@@ -1,0 +1,270 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Workflow Showcase — 편집 데이터로 워크플로우 쇼케이스 영상 만들기</title>
+<meta name="description" content="프리미어에서 뽑은 XML과 완성 영상으로, 레퍼런스 맵과 컷 타임라인이 얹힌 쇼케이스 영상을 만드는 템플릿 앱." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f7f8f7; --panel:#ffffff; --ink:#16211d; --muted:#5b6b64;
+    --line:#e4e9e6; --accent:#12b28a; --accent-soft:#d8f3ea; --mono:'JetBrains Mono',ui-monospace,monospace;
+    --radius:16px; --shadow:0 10px 30px rgba(18,40,32,.08);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  .mono{font-family:var(--mono);letter-spacing:.02em}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);background:rgba(247,248,247,.8);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em}
+  .brand .dot{width:26px;height:26px;border-radius:7px;background:var(--ink);color:#fff;display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:700}
+  .navlinks{display:flex;align-items:center;gap:22px;font-size:14px;color:var(--muted);font-weight:500}
+  .navlinks a:hover{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;font-size:14px;transition:transform .12s ease,opacity .12s}
+  .btn:hover{transform:translateY(-1px);opacity:.92}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+
+  /* hero */
+  header{padding:76px 0 40px;text-align:center;background:
+    radial-gradient(1100px 400px at 50% -80px, var(--accent-soft), transparent 70%)}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--accent);
+    background:var(--accent-soft);border:1px solid #bfe9db;padding:6px 13px;border-radius:999px;margin-bottom:22px}
+  h1{font-size:clamp(34px,6vw,58px);line-height:1.08;letter-spacing:-.03em;font-weight:800;margin:0 0 18px}
+  h1 .accent{color:var(--accent)}
+  .lede{font-size:clamp(16px,2.4vw,20px);color:var(--muted);max-width:640px;margin:0 auto 30px}
+  .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+  .install{display:inline-flex;align-items:center;gap:12px;background:#0f1a16;color:#dff5ee;font-family:var(--mono);
+    font-size:13.5px;padding:12px 16px;border-radius:11px;margin-top:8px}
+  .install .g{color:#59b89b}
+  .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+  .badge{font-family:var(--mono);font-size:11.5px;color:var(--muted);border:1px solid var(--line);background:var(--panel);
+    padding:5px 11px;border-radius:8px}
+
+  /* media frame */
+  .frame{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+    overflow:hidden;margin:44px auto 0;max-width:940px}
+  .frame video,.frame img{display:block;width:100%;height:auto;background:#eef2f0}
+  .frame .bar{display:flex;align-items:center;gap:7px;padding:11px 15px;border-bottom:1px solid var(--line)}
+  .frame .bar i{width:10px;height:10px;border-radius:50%;background:#e0e5e2;display:inline-block}
+  .frame .bar span{margin-left:8px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+  /* sections */
+  section{padding:64px 0}
+  .eyebrow{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+  h2{font-size:clamp(24px,3.5vw,34px);letter-spacing:-.02em;font-weight:800;margin:0 0 14px}
+  .sub{color:var(--muted);max-width:620px;font-size:16px}
+  .center{text-align:center}
+  .center .sub{margin:0 auto}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:40px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;transition:transform .14s ease,box-shadow .14s}
+  .card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .card .ico{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);color:var(--accent);
+    display:grid;place-items:center;font-family:var(--mono);font-weight:700;margin-bottom:14px}
+  .card h3{margin:0 0 7px;font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .card p{margin:0;color:var(--muted);font-size:14.5px}
+
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:34px}
+  .three figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .three video,.three img{display:block;width:100%;height:auto;background:#eef2f0}
+  .three figcaption{padding:11px 14px;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);border-top:1px solid var(--line)}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;margin-top:20px}
+  .split .frame{margin:0}
+
+  /* install band */
+  .band{background:var(--ink);color:#eaf3ef;border-radius:24px;padding:52px 40px;text-align:center;margin:20px 0}
+  .band h2{color:#fff}
+  .band .sub{color:#9fb5ac;margin:0 auto 26px}
+  .cmd{background:#0b1310;border:1px solid #22322b;border-radius:12px;font-family:var(--mono);font-size:14px;
+    color:#dff5ee;padding:16px 20px;max-width:520px;margin:12px auto;text-align:left}
+  .cmd .c{color:#59b89b}
+  .cmd b{color:#fff;font-weight:700}
+
+  /* support matrix */
+  .matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
+  .mrow{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:20px}
+  .mrow .tag{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;display:inline-block;margin-bottom:11px}
+  .ok{background:var(--accent-soft);color:var(--accent)}
+  .warn{background:#fff3d6;color:#b7791f}
+  .no{background:#fde5e2;color:#c0392b}
+  .mrow h4{margin:0 0 5px;font-size:15px}
+  .mrow p{margin:0;color:var(--muted);font-size:13.5px}
+
+  footer{border-top:1px solid var(--line);padding:44px 0;color:var(--muted);font-size:14px}
+  footer .wrap{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+  .note{font-size:12.5px;color:#9aa8a2;margin-top:8px}
+
+  @media(max-width:760px){
+    .deskbr{display:none}
+    .grid,.three,.matrix{grid-template-columns:1fr}
+    .split{grid-template-columns:1fr}
+    .navlinks a:not(.btn){display:none}
+    section{padding:48px 0}
+    .band{padding:40px 22px;border-radius:18px}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot">WS</span> Workflow Showcase</a>
+    <div class="navlinks">
+      <a href="#what">소개</a>
+      <a href="#features">사용법</a>
+      <a href="#install">설치</a>
+      <a class="btn ghost" href="https://github.com/ch5p/portable-mvp">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header id="top">
+  <div class="wrap">
+    <span class="pill">● Premiere XML → 쇼케이스 영상</span>
+    <h1>편집 데이터로 만드는<br><span class="accent">워크플로우 쇼케이스</span></h1>
+    <p class="lede">프리미어에서 뽑은 <b>XML 데이터</b>를 기반으로 최종 렌더링된 영상 밑에 <b>간단한 워크플로우</b>를 얹어주는 기본적인 템플릿 앱입니다.</p>
+    <div class="cta-row">
+      <a class="btn" href="#install">설치하기 →</a>
+      <a class="btn ghost" href="https://github.com/ch5p/portable-mvp">소스보기</a>
+    </div>
+    <div class="install"><span class="g">$</span> npm.cmd ci &nbsp;<span class="g">&&</span>&nbsp; npm.cmd start</div>
+
+    <!-- 히어로 데모: animated WebP 자동재생 -->
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>01 · 데모 플레이</span></div>
+      <img src="./readme-assets/animations/demo-playback.webp" alt="Workflow Showcase 기본 데모">
+    </div>
+
+    <div class="badges">
+      <span class="badge">Windows 10 / 11</span>
+      <span class="badge">1280 × 1080 · 60fps</span>
+      <span class="badge">H.264 · NVENC / CPU FALLBACK</span>
+      <span class="badge">12 / 24 Mbps</span>
+      <span class="badge">MIT License</span>
+      <span class="badge">Electron</span>
+    </div>
+  </div>
+</header>
+
+<section id="what">
+  <div class="wrap center">
+    <div class="eyebrow">What it does</div>
+    <h2>하는 김에 좀 더 예쁘게.</h2>
+    <p class="sub">소셜에 영상 밑에 캐릭터 시트나 스토리보드 등을 얹어서 올리는 방식을 바리에이션한,<br class="deskbr">자기가 작업한 데이터를 뽑아 템플릿으로 사용하는 도구입니다.</p>
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>sample · reference + cut timeline</span></div>
+      <img src="./readme-assets/animations/interaction-samples.webp" alt="레퍼런스와 컷 타임라인 인터랙션 샘플">
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="center"><div class="eyebrow">Features</div><h2>퍼스널 커스텀에 최적화 됐습니다</h2>
+      <p class="sub center" style="margin:0 auto">개발된 기능이 없다시피 한 초간단 앱입니다. 예쁜 건 전부 여러분이 직접 만들어야 합니다.<br class="deskbr">대신 만들기 좋게 — 정확히는 에이전트가 수정하기 좋게 구조를 잘 분해해 놨습니다.<br class="deskbr">틀 가져가서 토큰 아끼고, 빠르게 커스텀할 수 있는 게 진정한 FEATURES입니다.</p></div>
+    <div class="grid">
+      <div class="card"><div class="ico">P</div><h3>PRIMARY 컷</h3><p>기본값은 활성 클립 중 최상단의 클립만 보입니다. 본인이 이 클립을 몇 번 썰었는지, 프롬프트 가챠를 몇 번 했는지 최대한 알립니다.</p></div>
+      <div class="card"><div class="ico">R</div><h3>SHOT 레퍼런스</h3><p>사람이 직접 보고 조립해야 합니다. 대신 GLOBAL BASE 전역 세팅, 샷별 ADD / REPLACE / HIDE, LEAD-IN 등 최대한 편의성을 챙기려고 노력했습니다.</p></div>
+      <div class="card"><div class="ico">C</div><h3>타이틀 콜아웃</h3><p>기본 3종은 뼈대만 잡아둔 샘플입니다. 더 예쁘게 꾸며서 활용하세요.</p></div>
+      <div class="card"><div class="ico">60</div><h3>60fps 인터랙션</h3><p>현재 기본 출력은 60fps입니다. 24fps 원본 영상도 workflow의 인터랙션을 부드럽게 보여주기 위해 60fps로 출력합니다.</p></div>
+      <div class="card"><div class="ico">FX</div><h3>효과 레이어 제외</h3><p>원본 클립을 제외한 커스텀 레이어(Adjustment Layer)는 반영되지 않습니다. FX 레인은 기본 제공하지 않으며, 추가하려면 입력 어댑터와 UI를 별도로 구현해야 합니다.</p></div>
+      <div class="card"><div class="ico">AI</div><h3>에이전트 부리기 좋게</h3><p>구조를 에이전트가 추적하기 쉽게 분해·문서화해뒀습니다. 코덱스/클로드한테 "이렇게 바꿔줘" 한마디면 됩니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="callout">
+  <div class="wrap">
+    <div class="center"><div class="eyebrow">Callout styles</div><h2>타이틀 콜아웃 3종</h2>
+      <p class="sub center">에이전트한테 더 이쁘게 만들어 달라고 하거나, 코드를 커스텀해 본인만의 워터마크 스타일로 활용해주세요.</p></div>
+    <div class="three">
+      <figure><img src="./readme-assets/animations/callout-line.webp" alt="LINE 타이틀 콜아웃"><figcaption>LINE</figcaption></figure>
+      <figure><img src="./readme-assets/animations/callout-label.webp" alt="LABEL 타이틀 콜아웃"><figcaption>LABEL</figcaption></figure>
+      <figure><img src="./readme-assets/animations/callout-minimal.webp" alt="MINIMAL 타이틀 콜아웃"><figcaption>MINIMAL</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <div class="eyebrow">Lead-in</div>
+        <h2>짧은 구간 레퍼런스도 살린다</h2>
+        <p class="sub">레퍼런스가 쓰인 장면이 너무 짧아 묻힐 때, LEAD-IN을 켜면 1초 전부터 인접 샷에 미리 붙여줍니다. "제발 봐줘!!" 하는 구간을 지키는 용도입니다.</p>
+      </div>
+      <div class="frame">
+        <div class="bar"><i></i><i></i><i></i><span>lead-in · 1s preview</span></div>
+        <img src="./readme-assets/animations/lead-in.webp" alt="LEAD-IN 1초 미리보기">
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="custom">
+  <div class="wrap">
+    <div class="split">
+      <div class="frame">
+        <div class="bar"><i></i><i></i><i></i><span>custom · rail layout</span></div>
+        <img src="./readme-assets/animations/alternate-rail-layout.webp" alt="레일식 커스텀 레이아웃">
+      </div>
+      <div>
+        <div class="eyebrow">Customize</div>
+        <h2>취향대로 바꿔 쓰세요</h2>
+        <p class="sub">기본 레이아웃 사용은 제 목적이 아닙니다. 코덱스·클로드에게 "이렇게 바꿔줘" 한마디면 레이아웃·콜아웃·화면비를 취향에 맞게 바꿀 수 있습니다. 설치하면 AI전용 커스터마이즈 가이드가 함께 들어갑니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="band">
+      <div class="eyebrow" style="color:var(--accent)">Get started</div>
+      <h2>복붙 한 번이면 끝</h2>
+      <p class="sub"><span class="mono" style="word-break:break-all">https://github.com/ch5p/portable-mvp</span> 복사해서 에이전트(Codex·Claude)한테 실행해달라고 하세요.</p>
+      <div class="cmd"><span class="c"># 소스 받기</span><br>git clone https://github.com/ch5p/portable-mvp<br>cd portable-mvp<br><br><span class="c"># FFmpeg (Export에 필요)</span><br>winget install -e --id <b>Gyan.FFmpeg</b><br><br><span class="c"># 앱 실행</span><br>npm.cmd ci<br>npm.cmd start</div>
+      <p class="note" style="color:#7f958c">Windows 10/11 · Node.js 22.12+ · NVIDIA GPU 권장(없으면 CPU 폴백)</p>
+      <div class="cta-row" style="margin-top:8px">
+        <a class="btn" style="background:var(--accent)" href="https://github.com/ch5p/portable-mvp">GitHub에서 받기 →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="support">
+  <div class="wrap center">
+    <div class="eyebrow">Environment</div>
+    <h2>지원 환경</h2>
+    <div class="matrix" style="text-align:left">
+      <div class="mrow"><span class="tag ok">검증됨</span><h4>Windows + Premiere</h4><p>Windows 11 · Adobe Premiere 2026 (26.2.2 Build 3)의 Final Cut Pro XML export로 검증했습니다.</p></div>
+      <div class="mrow"><span class="tag warn">미검증·미지원</span><h4>macOS / modern FCPXML</h4><p>macOS 앱 실행은 검증하지 않았습니다. 최신 Final Cut Pro XML(.fcpxml)은 현재 미지원이며 별도의 입력 어댑터가 필요합니다.</p></div>
+      <div class="mrow"><span class="tag no">미지원</span><h4>CapCut</h4><p>공식 타임라인 XML 내보내기 기능을 제공하지 않아 지원하지 않습니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <div class="brand"><span class="dot">WS</span> Workflow Showcase</div>
+    </div>
+    <div class="navlinks">
+      <a href="https://github.com/ch5p/portable-mvp">GitHub</a>
+      <a href="https://github.com/ch5p/portable-mvp/blob/main/LICENSE">MIT License</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

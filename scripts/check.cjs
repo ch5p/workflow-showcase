@@ -69,7 +69,7 @@ for(const marker of ['class="command inputDropZone"','class="command inputDropZo
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }
 const main=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
-for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:get-language","app:reload-current-job","getPreferredSystemLanguages","ui_language_resolved","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed"]){
+for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:get-language","app:reload-current-job","getPreferredSystemLanguages","ui_language_resolved","recoverXmlTransactions","recoverVideoTransactions","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed","registerUiCaptureShortcut","Emulation.setDeviceMetricsOverride","Page.captureScreenshot","deviceScaleFactor:2","ui_capture_completed"]){
   if(!main.includes(marker))throw new Error("Current Job lifecycle marker missing: "+marker);
 }
 if(!main.includes("await runSecondarySmoke()")||main.includes("const secondary = spawnSync"))throw new Error("Single-instance smoke must keep the primary event loop available");

@@ -10,7 +10,7 @@
 
 앱의 기본 구동은 이렇습니다.
 
-[▶ 기본 데모 영상 보기](./docs/readme-assets/videos/demo-playback.mp4)
+![기본 데모](./docs/readme-assets/animations/demo-playback.webp)
 
 화면 중앙에 CLIP A로 보이는 게 실제 사용자의 최종 작업물입니다.
 
@@ -26,7 +26,7 @@
 
 취향에 따라 이런 식으로도 출력 가능합니다. 에이전트한테 자유롭게 바꿔 달라고 하세요.
 
-[▶ 레일식 템플릿 영상 보기](./docs/readme-assets/videos/alternate-rail-layout.mp4)
+![레일식 템플릿](./docs/readme-assets/animations/alternate-rail-layout.webp)
 
 ---
 
@@ -36,7 +36,7 @@
 
 최종 샷의 개수는 사용자가 사용한 원본 영상 클립 개수와 동일합니다. 샷별로 컷을 쪼갠 건 역시 한 샷으로 취급되고 컷 개수는 타임라인 우측 상단에 작게 EDIT으로 표시됩니다.
 
-[▶ 인터랙션 샘플 3개 보기](./docs/readme-assets/videos/interaction-samples.mp4)
+![인터랙션 샘플 3개](./docs/readme-assets/animations/interaction-samples.webp)
 
 ---
 
@@ -87,7 +87,7 @@ npm.cmd start
 
 - XML과 VIDEO를 한 번에 넣는 기능은 현재 미지원입니다. 각각 따로 넣어주세요.
 
-[▶ XML·VIDEO 불러오기 영상 보기](./docs/readme-assets/videos/import-xml-video.mp4)
+![XML·VIDEO 불러오기](./docs/readme-assets/animations/import-xml-video.webp)
 
 전역으로 들어갈 레퍼런스를 먼저 GLOBAL BASE에 넣으면 작업이 간편해집니다. 레퍼런스는 드래그&드롭 말고 `ADD FILES` 버튼으로도 넣을 수 있어요.
 
@@ -165,7 +165,7 @@ EN/KR: UI 언어 전환
 
 | LINE | LABEL | MINIMAL |
 | :---: | :---: | :---: |
-| [▶ 영상 보기](./docs/readme-assets/videos/callout-line.mp4) | [▶ 영상 보기](./docs/readme-assets/videos/callout-label.mp4) | [▶ 영상 보기](./docs/readme-assets/videos/callout-minimal.mp4) |
+| ![LINE](./docs/readme-assets/animations/callout-line.webp) | ![LABEL](./docs/readme-assets/animations/callout-label.webp) | ![MINIMAL](./docs/readme-assets/animations/callout-minimal.webp) |
 
 
 ---
@@ -189,7 +189,7 @@ EN/KR: UI 언어 전환
 
 LEAD-IN는 레퍼런스 사용한 장면이 너무 짧아서 묻힐 때 1초 전부터 미리 인접 샷에 레퍼런스를 붙여 주는 기능입니다.
 
-[▶ LEAD-IN 영상 보기](./docs/readme-assets/videos/lead-in.mp4)
+![LEAD-IN](./docs/readme-assets/animations/lead-in.webp)
 
 ---
 

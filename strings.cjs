@@ -45,6 +45,10 @@ const MAIN = {
     xml_mode_required: "Choose how to import XML before committing it.",
     bitrate_running: "The bitrate cannot be changed while rendering.",
     bitrate_invalid: "Unsupported bitrate.",
+    ui_capture_choose: "Choose the UI area to save as a 2X PNG.",
+    ui_capture_detail: "The image was captured at the moment you pressed Ctrl+Shift+P. Window chrome and the mouse cursor are excluded.",
+    ui_capture_scope_unavailable: "That area is not visible in the captured frame. Open the EDIT PANEL or pause while the TITLE CALLOUT is visible, then try again.",
+    ui_capture_failed: "Could not create a verified 2X PNG. The Current Job was not changed; check current-job/logs/app.log.",
   },
   ko: {
     job_save_failed: "Current Job을 안전하게 저장하지 못했습니다. 기존 Job은 유지되며 앱 로그를 확인하세요.",
@@ -73,6 +77,10 @@ const MAIN = {
     xml_mode_required: "XML을 반영할 방식을 선택한 뒤 적용하세요.",
     bitrate_running: "렌더링 중에는 비트레이트를 변경할 수 없습니다.",
     bitrate_invalid: "지원하지 않는 비트레이트입니다.",
+    ui_capture_choose: "2배 PNG로 저장할 UI 영역을 선택하세요.",
+    ui_capture_detail: "Ctrl+Shift+P를 누른 순간의 화면을 캡처했습니다. 창 테두리와 마우스 커서는 포함되지 않습니다.",
+    ui_capture_scope_unavailable: "캡처 순간에 해당 영역이 보이지 않았습니다. EDIT PANEL을 열거나 TITLE CALLOUT이 보이는 지점에서 일시정지한 뒤 다시 시도하세요.",
+    ui_capture_failed: "검증된 2배 PNG를 만들지 못했습니다. Current Job은 변경하지 않았으며 current-job/logs/app.log를 확인하세요.",
   },
 };
 
