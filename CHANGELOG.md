@@ -19,7 +19,7 @@
 - Kept the primary Electron process responsive while the smoke test verifies second-instance rejection
 - Added an `ADD FILES` picker to `REFERENCE FILES` while preserving drag and drop
 - Made the Export popup verify that its stored XML, video, and reference files still exist before showing `READY`
-- Removed the unimplemented `DURATION Δ` claim and documented the actual orphan, audio-codec, and large-file limits
+- Removed the unimplemented `DURATION Δ` claim and documented the actual orphan behavior and audio-codec limits
 - Limited GitHub Actions to read-only repository access and a bounded run time
 
 ## 0.1.0-beta.1

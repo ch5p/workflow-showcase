@@ -2,7 +2,7 @@
 
 [한국어](./README.ko.md) · **English**
 
-> `Workflow Showcase template` is a simple template app that uses XML data exported from Premiere to place a compact workflow presentation beneath your finished rendered video.
+> `Workflow Showcase template` is a template app for AI video creators built around references used during generation and XML data exported from Premiere, making it easy to place a compact workflow beneath a final rendered video.
 
 **Contents**: [AI customization](#customizing-with-an-ai-agent) · [Preview](#preview) · [Installation](#installation) · [How to use](#how-to-use) · [Output settings](#output-settings) · [Setting up references](#setting-up-references) · [Troubleshooting](#troubleshooting) · [Closing notes](#closing-notes)
 
@@ -250,6 +250,9 @@ A small BACKUP JOB button appears at the bottom of the EDIT PANEL. It copies `jo
 
 **My video is rejected when I add it**
 → If the app cannot play its codec, it blocks the replacement before changing the existing Job. Export it again as MP4 (H.264) and try loading that file.
+
+**The video plays, but Export reports an audio error**
+→ Source audio is copied without transcoding, and only AAC has been validated. If Export fails, create an H.264 MP4 with AAC audio and load that version.
 
 **The rendered result is shorter than expected**
 → See [DURATION Δ](#when-the-durations-do-not-match-duration-δ) above. The app renders only the XML timeline duration.

@@ -1454,7 +1454,7 @@ function loadFile(f){
     const rd=new FileReader();
     rd.onload=()=>{
       try{
-        build(parseFCPXML(rd.result));
+        build(parseSupportedFCPXML(rd.result));
       }catch(err){
         alert(ps("xmlReadFailed")+err.message);
   }

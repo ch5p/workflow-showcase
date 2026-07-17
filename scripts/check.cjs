@@ -47,6 +47,7 @@ for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.c
   if(!preview.includes(marker))throw new Error("Parser bridge marker missing: "+marker);
 }
 if(/<style(?:\s|>)/i.test(preview))throw new Error("Classic preview CSS returned to inline HTML");
+if(!preview.includes("build(parseSupportedFCPXML(rd.result));")||preview.includes("build(parseFCPXML(rd.result));"))throw new Error("Standalone XML drop must keep the supported xmeml adapter boundary");
 const editor=fs.readFileSync(path.join(root,"src/index.html"),"utf8");
 if(!editor.includes('id="overlayProjectTitle"'))throw new Error("Project title editor missing");
 if(!editor.includes('id="calloutSettings"'))throw new Error("Callout settings missing");

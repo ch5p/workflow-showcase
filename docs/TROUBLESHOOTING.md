@@ -62,6 +62,8 @@ If `export_finalize_failed` appears and a `.part.mp4` remains under app-root `ou
 
 If the popup does not open, inspect `export_dialog_opened` and whether `export-preload.cjs` loaded. If progress stalls, inspect the latest Export progress state and FFmpeg log instead of repeatedly opening new Export windows.
 
+Source audio is copied without transcoding. AAC is the validated fixture codec; other audio codecs are not preflighted or transcoded. If video import succeeds but Export fails while attaching audio, create an H.264 MP4 with AAC audio and load that version.
+
 ## Save and path failures
 
 - `job_write_failed`: preserve both the existing `job.json` and `.job.json.<uuid>.tmp`, quit the app, release the file lock, and restart. Do not overwrite the existing Job arbitrarily.
