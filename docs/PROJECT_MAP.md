@@ -1,5 +1,14 @@
 # Project Map
 
+## Document Authority
+
+- `AGENTS.md`: agent behavior and required read order
+- `CUSTOMIZING.md`: Safe presentation surface and Stable core boundary
+- `docs/PROJECT_MAP.md`: file ownership and runtime contracts
+- `docs/INPUT_ADAPTER_CONTRACT.md`: normalized timeline and input-boundary requirements
+- `docs/TROUBLESHOOTING.md`: public diagnostic event order and recovery procedure
+- `HANDOFF.md`: maintainer-only current state; useful when present, but not authoritative over the public contracts
+
 ## App
 
 - `main.cjs`: Electron window, file selection, the XML UPDATE/NEW JOB decision boundary, portable copy, `job.json` CAS save, app log
@@ -9,6 +18,7 @@
 - `preload.cjs`: the minimal local file API exposed to the screen, plus restricted IPC for XML/video/reference drop
 - `job-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for XML UPDATE/NEW JOB
 - `video-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for source video replacement
+- `job-backup.cjs`: manual dated snapshot of `job.json`, the recorded timeline XML, registered references, and a hash manifest; source video, Export output, and logs are excluded
 - `timeline-reconcile.cjs`: 1:1 rematching of anonymous SHOT descriptors and orphan preservation
 - `render-spec.cjs`: the central classic width/height and pixel/color contract, plus default output fps/bitrate; an existing Job may override fps/bitrate through `output`
 - `export-preload.cjs`: the start/cancel/progress/open-folder API exposed only to the Export popup
@@ -41,7 +51,7 @@
 - `current-job/logs/app.log`: diagnostic events as JSONL
 - `backup/<YYYY-MM-DD_HH-mm-ss>/`: manual settings snapshots containing `job.json`, recorded timeline XML, recorded references, and a hash manifest; only source video, exports, and logs are excluded
 
-All stored paths are relative to the app folder. Internal identifiers and JSON keys are not changed.
+All stored Job paths are relative to the `current-job` root. Store `source/timeline.xml`, not an absolute path and not `current-job/source/timeline.xml`. Internal identifiers and JSON keys are not changed.
 
 ## Maintainer UI Capture
 
@@ -52,6 +62,7 @@ All stored paths are relative to the app folder. Internal identifiers and JSON k
 
 ## Import Contract
 
+- The current production adapter accepts legacy Final Cut Pro 7 XML (`xmeml`) only. Any second input format or VIDEO ONLY mode must follow `docs/INPUT_ADAPTER_CONTRACT.md`; it must not rewrite the xmeml parser or the PRIMARY/SHOT core.
 - The `XML` click/drop zone uses one prepare/commit path. The dialog buttons remain `UPDATE XML` (default), `NEW JOB`, and `CANCEL` in both UI languages; the explanatory message and detail follow `ui.language`.
 - XML validation, UPDATE, NEW JOB, preview, and Export all exclude Premiere Adjustment Layers before PRIMARY/SHOT inspection. Adjustment filter data is neither rendered nor stored in the Job.
 - When `current-job/job.json` does not exist, Main copies the existing public fixture XML/MP4 into `current-job/source`, creates a `demo: true` sample Job, and logs `starter_demo_seeded`. It never seeds over an existing Job. If fixture seeding fails, it logs `starter_demo_seed_failed` and falls back to the empty Job contract.
@@ -82,10 +93,9 @@ Lifecycle regression checks run only in an OS temp Job root and forcibly verify:
 
 Before the Export popup shows `READY`, `main.cjs` resolves the stored XML, video, and every registered reference with `mustExist: true` inside its owned Current Job directory. The actual Export start repeats its own source/reference checks; the readiness display does not replace that final guard.
 
-## Contract check
+## Contract Verification
 
 - Document reference: the `current-job` structure above, `job.json` version 1, `jobId + revision`, and the UPDATE/NEW JOB Import Contract
 - Real sample: 24 fps, 288 frames, repeated source identity of the Premiere Pro 2026 fixture, and the app's isolated smoke result of 5 EDITS / 4 SHOTS. In a real recovery of a failed transaction, per-file SHA-256 matches for 2 sources / 11 references / the existing Job were confirmed.
 - Code assumption: `main.cjs`'s `JOB_ROOT`, `durable-file.cjs`, `owned-path.cjs`, the XML/video lifecycles, timeline reconcile, `src/core/*`, `render-spec.cjs`, the CAS guard, and `hydrateJob()` all read the same structure.
-- Mismatch: none
-- Handling: when the structure changes, verify the document, the real sample, and the code together.
+- Handling: never assume there is no mismatch. When the structure changes, compare this document, the real fixture/runtime sample, and the code together before implementation.

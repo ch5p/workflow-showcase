@@ -4,7 +4,17 @@
 
 > `Workflow Showcase template` is a simple template app that uses XML data exported from Premiere to place a compact workflow presentation beneath your finished rendered video.
 
-**Contents**: [Preview](#preview) · [Installation](#installation) · [How to use](#how-to-use) · [Output settings](#output-settings) · [Setting up references](#setting-up-references) · [Troubleshooting](#troubleshooting) · [Closing notes](#closing-notes)
+**Contents**: [AI customization](#customizing-with-an-ai-agent) · [Preview](#preview) · [Installation](#installation) · [How to use](#how-to-use) · [Output settings](#output-settings) · [Setting up references](#setting-up-references) · [Troubleshooting](#troubleshooting) · [Closing notes](#closing-notes)
+
+## Customizing with an AI agent
+
+If you give this repository to Codex, Claude, or another coding agent, have it start with these documents instead of searching the code blindly:
+
+- [Agent guardrails](./AGENTS.md)
+- [Customizing with AI](./docs/CUSTOMIZING_WITH_AI.md)
+- [Project and contract map](./docs/PROJECT_MAP.md)
+
+The agent should report before touching the Stable core or Red Zone. Do not copy these rules into a prompt by hand; the linked documents are the authoritative versions.
 
 # Preview
 
@@ -248,13 +258,13 @@ A small BACKUP JOB button appears at the bottom of the EDIT PANEL. It copies `jo
 → Check whether another instance is already running. A second launch brings the existing window forward and then exits quietly to protect the Job data.
 
 **Something is wrong, but I do not know why**
-→ Everything is recorded in `current-job/logs/app.log`. The fastest option is to ask an agent, “Read this log and tell me what is wrong.”
+→ Everything is recorded in `current-job/logs/app.log`. Ask an agent to follow the [Troubleshooting Contract](./docs/TROUBLESHOOTING.md), read the recent event sequence, and tell you what failed before changing code.
 
 ---
 
 # Closing notes
 
-- The supported input is Final Cut Pro 7 XML (`xmeml`), including XML exported from Adobe Premiere Pro. Modern Final Cut Pro `.fcpxml` is not currently supported and requires a separate input adapter.
+- The supported input is Final Cut Pro 7 XML (`xmeml`), including XML exported from Adobe Premiere Pro. Modern Final Cut Pro `.fcpxml` is not currently supported and requires a separate adapter that follows the [Input Adapter Contract](./docs/INPUT_ADAPTER_CONTRACT.md).
 - The output resolution is `1280 x 1080`, which is reasonably viewable on a phone.
 - I hope people who, like me, cannot be bothered to build an entire workflow presentation but still want to show that some work went into the process will take this and use it in different ways. I paid attention to making it easy to customize, so put your agent to work and tailor it to your taste.
 - I do not have a programming background, so I picked the strongest model I could and asked it to make sure that **when a user types [do it] once, an agent can quickly locate and modify only that part**. During the public-release refactor, the stable core was separated from the presentation areas intended for free customization. I expect modifications to be approachable.
@@ -269,7 +279,7 @@ Tested in the following environment:
 Not validated in the following environment:
 
 - The app has not been validated on macOS.
-- Modern Final Cut Pro XML (`.fcpxml`) is not supported. A separate input adapter must be created. Ask your agent if needed.
+- Modern Final Cut Pro XML (`.fcpxml`) is not supported. A separate input adapter must be created under the [Input Adapter Contract](./docs/INPUT_ADAPTER_CONTRACT.md). Ask your agent if needed.
 
 This program does not work with:
 

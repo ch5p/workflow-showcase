@@ -25,6 +25,15 @@ HTML 영역은 `src/output-preview.html`에서 다음 ID로 찾을 수 있습니
 - `overviewTimeline`
 - `stage`
 
+### JavaScript에 남아 있는 좁은 presentation 지점
+
+다음 두 시각 요청은 `src/output-preview.html`에 있는 좁은 JavaScript presentation 값도 함께 봐야 합니다.
+
+- 고정 화면비: `CONFIG.panelHeight`, `applyLayout()`, `fitScale()`가 panel 높이와 실제 canvas 크기를 적용합니다. `render-spec.cjs`, `classic.css`와 함께 확인하세요.
+- 레퍼런스 카드 크기·밀도: `positionReferenceDock()`가 카드 폭 `72`–`176` px, gap `8` px 가정, `--reference-item-width`, `visibleCount > 6` crop 상태를 계산합니다.
+
+이 값들만 presentation 배관으로 취급하세요. `positionReferenceDock()` 전체를 다시 쓰거나 visible-reference 선택, LEAD-IN, crossfade, ghost-card 정리, playback clock, parser/core 동작을 바꾸면 안 됩니다.
+
 ## Stable core
 
 다음 파일은 presentation 변경을 위해 수정하지 않습니다.
@@ -43,7 +52,7 @@ HTML 영역은 `src/output-preview.html`에서 다음 ID로 찾을 수 있습니
 
 1. 먼저 `npm.cmd run check`와 `npm.cmd run smoke`를 통과시킵니다.
 2. `render-spec.cjs`의 classic width와 height를 포크의 고정값으로 바꿉니다.
-3. `classic.css`에서 stage, videoZone, panel, reference, timeline 영역을 새 canvas에 맞게 직접 배치합니다.
+3. `classic.css`에서 stage, videoZone, panel, reference, timeline 영역을 새 canvas에 맞게 직접 배치합니다. `src/output-preview.html`의 `applyLayout()`과 `fitScale()`가 사용하는 presentation 전용 `CONFIG.panelHeight`도 함께 맞추세요. 이 inline 높이를 그대로 두면 일반 CSS보다 우선합니다.
 4. editor fit과 Export summary가 같은 render spec을 표시하는지 확인합니다.
 5. 공개 fixture를 불러와 같은 5 EDITS와 4 SHOTS가 유지되는지 확인합니다.
 6. `npm.cmd run smoke:export`로 자동 Export 경로를 검사합니다.
@@ -63,6 +72,16 @@ HTML 영역은 `src/output-preview.html`에서 다음 ID로 찾을 수 있습니
 - `subtitle`
 
 선택 필드를 추가할 때는 기존 Job이 같은 결과로 열리도록 기본값을 제공해야 합니다. 외부 텍스트는 `innerHTML`이 아니라 `textContent`로 삽입해야 합니다.
+
+## classic을 유지하면서 새 레이아웃을 추가해 달라는 요청
+
+수정 전에 멈추고 사용자가 어떤 결과를 원하는지 먼저 물어보세요.
+
+1. classic을 하나의 고정 레이아웃으로 교체하는 개인 포크
+2. runtime Job 계약을 바꾸지 않는 별도 실험 preview/build
+3. 앱에서 선택할 수 있는 두 번째 공식 레이아웃
+
+일반 presentation 커스터마이징으로 문서화된 경로는 1번뿐입니다. 2번이나 3번을 추측해 selector, registry, plugin framework, Job layout 필드를 조용히 추가하지 마세요.
 
 ## Do not add yet
 

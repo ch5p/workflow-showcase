@@ -23,6 +23,7 @@
 이 저장소를 고치기 전에 AGENTS.md, docs/PROJECT_MAP.md의 계약,
 CUSTOMIZING.md의 Safe/Stable 구분을 먼저 읽어줘.
 내 요청이 Red Zone이나 Stable core에 걸리면 바로 고치지 말고 먼저 알려줘.
+runtime 오류라면 코드를 고치기 전에 docs/TROUBLESHOOTING.md를 따라 진단해줘.
 기존 미커밋 변경은 보존하고 이번 요청에서 바꿀 파일과 이유를 먼저 알려줘.
 다 고친 다음엔 npm.cmd run check, 그다음 npm.cmd run smoke 를 실행해줘.
 Export 계약을 바꿨다면 npm.cmd run smoke:export 도 실행해줘.
@@ -53,11 +54,11 @@ Export 계약을 바꿨다면 npm.cmd run smoke:export 도 실행해줘.
 | 도움말·안내 문구 수정 | "미리보기 도움말/드롭 안내 문구를 ○○로 고쳐줘" | 🟢 자유 |
 | 색·폰트 톤 바꾸기 | "classic 공통 디자인 토큰의 액센트 색을 ○○로 바꿔줘" | 🟢 영역별 고정값은 `classic.css`에도 있으므로 함께 확인 |
 | 자막(제목 콜아웃) 글씨 색·크기 | "영상 자막 글씨를 더 크게/다른 색으로 해줘" | 🟡 **"영상 시간 기반 타이밍은 바꾸지 마"**를 꼭 같이 (3번 참고) |
-| 하단 레이아웃 배치 조정 | "레퍼런스 카드와 타임라인 배치를 ○○처럼 바꿔줘" | 🟡 `classic.css` presentation만, `src/core`는 건들지 말라고 명시 |
-| 출력 해상도·화면비 바꾸기 (예: 세로 4:5) | "render-spec의 width/height와 classic.css로 고정 ○:○ 포크를 만들어줘. `../CUSTOMIZING.ko.md`의 포크 가이드 따라서" | 🟡 width/height와 배치를 새 캔버스에 맞춤. fps/bitrate는 별도 Export 계약이므로 함께 바꾸지 않음 |
+| 하단 레이아웃 배치 조정 | "레퍼런스 카드와 타임라인 배치를 ○○처럼 바꿔줘" | 🟡 `classic.css`부터 시작. 카드 크기·밀도는 `../CUSTOMIZING.ko.md`에 적힌 좁은 packing 지점도 확인하되 reference timing이나 `src/core`는 다시 쓰지 않음 |
+| 출력 해상도·화면비 바꾸기 (예: 세로 4:5) | "render-spec의 width/height와 classic presentation 값으로 고정 ○:○ 포크를 만들어줘. `../CUSTOMIZING.ko.md`의 포크 가이드 따라서" | 🟡 새 canvas에 맞춰 배치하고 `CONFIG.panelHeight`도 확인. fps/bitrate는 별도 Export 계약이므로 함께 바꾸지 않음 |
 | 새 기능 추가 | "○○ 기능을 **기존 동작은 그대로 두고** 옵션으로 추가해줘" | 🟡 기존 걸 **대체하지 말고 확장**하라고 명시 |
 | 인코더/코덱 바꾸기 | (되도록 시키지 말기) "가능한지·위험한지부터 먼저 알려줘" | 🔴 BGRA 캡처와 원본 audio stream-copy는 고정 경계. 공식 기본값은 60fps이며 fps 변경은 별도 Export 계약 변경 |
-| 저장이 안 돼요 / 경로 오류 | "고치지 말고 먼저 `current-job/logs/app.log` 마지막 줄 보고 원인 알려줘" | 🔴 원인 확인이 먼저, 코드 수정은 나중 |
+| 저장이 안 돼요 / 경로 오류 | "고치지 말고 `docs/TROUBLESHOOTING.md`에 따라 `current-job/logs/app.log`의 최근 20–50개 이벤트를 보고 실패 단계를 알려줘" | 🔴 원인 확인이 먼저. transaction 오류는 마지막 한 줄만 보면 부족함 |
 
 표에 없는 걸 시킬 땐, 0번 기본 주문을 붙이고 **"이거 위험한 부분이야, 아니야?"**를 먼저 물어보세요.
 
@@ -93,7 +94,7 @@ Export 계약을 바꿨다면 npm.cmd run smoke:export 도 실행해줘.
 ## 5. 문제 생겼을 때 되돌리기
 
 - **아직 커밋 전이면**: 먼저 Git diff를 확인하고 **이번 요청에서 추가한 변경만** 되돌리라고 하세요. 같은 파일에 기존 작업이 섞여 있으면 사용자 확인 없이 파일 전체를 복구하거나 `reset`/`checkout`하지 말라고 명시하세요.
-- **원인 모를 때**: 코드부터 고치지 말고, "`current-job/logs/app.log` 마지막 이벤트 먼저 확인해줘".
+- **원인 모를 때**: 코드부터 고치지 말고 [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)를 따라 `current-job/logs/app.log`의 최근 20–50개 이벤트에서 operation/transaction 흐름을 먼저 확인하세요.
 - **앱이 안 켜지거나 저장이 안 될 때**: 임의로 파일을 지우지 말고 상태부터 보고받으세요. 대부분 원본은 보존되도록 설계돼 있습니다.
 
 ---

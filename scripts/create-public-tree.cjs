@@ -21,9 +21,10 @@ const rootFiles=[
   ".gitattributes",".gitignore","AGENTS.md","CHANGELOG.md","CONTRIBUTING.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","LICENSE","README.md","README.ko.md","ROADMAP.md","SECURITY.md","START_APP.cmd",
   "durable-file.cjs","export-preload.cjs","exporter.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","preload.cjs","render-spec.cjs","strings.cjs","timeline-reconcile.cjs","video-lifecycle.cjs",
 ];
-const directoryRoots=[".github","fixtures","scripts","src"];
+// Keep the entire tracked docs surface together so README assets, the Pages landing page,
+// and agent contracts cannot silently disappear from a later public-tree build.
+const directoryRoots=[".github","docs","fixtures","scripts","src"];
 const explicitFiles=[
-  "docs/CLASSIC_LAYOUT.md","docs/CUSTOMIZING_WITH_AI.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md","docs/XML_COMPATIBILITY.md",
   "current-job/source/.gitkeep","current-job/references/.gitkeep","current-job/output/.gitkeep","current-job/logs/.gitkeep",
 ];
 

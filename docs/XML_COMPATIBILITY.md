@@ -48,4 +48,4 @@ transitionitem is used only for some clip boundary and content-length calculatio
 
 ## Contributions
 
-Propose FCPXML or optional Adjustment Layer/effect support as a separate input adapter that normalizes into the common timeline model without modifying the existing xmeml parser or PRIMARY renderer. Synthetic fixtures and regression checks against the existing parser are required.
+Propose FCPXML or optional Adjustment Layer/effect support as a separate input adapter that follows the [Input Adapter Contract](INPUT_ADAPTER_CONTRACT.md) without modifying the existing xmeml parser or PRIMARY renderer. Synthetic fixtures and regression checks against the existing parser are required.

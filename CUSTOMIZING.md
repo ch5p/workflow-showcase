@@ -25,6 +25,15 @@ You can find the HTML regions in `src/output-preview.html` by these IDs:
 - `overviewTimeline`
 - `stage`
 
+### Narrow presentation runtime seams
+
+Two visual requests also have narrow JavaScript-owned presentation values in `src/output-preview.html`:
+
+- Fixed aspect ratio: `CONFIG.panelHeight`, `applyLayout()`, and `fitScale()` write the panel height and resolved canvas size. Account for them together with `render-spec.cjs` and `classic.css`.
+- Reference-card size/density: `positionReferenceDock()` calculates the `72`–`176` px card width, `8` px gap assumption, `--reference-item-width`, and the `visibleCount > 6` crop state.
+
+Treat only those values as presentation plumbing. Do not rewrite `positionReferenceDock()` or alter visible-reference selection, LEAD-IN, crossfade, ghost-card cleanup, the playback clock, or parser/core behavior.
+
 ## Stable core
 
 Do not modify these files for presentation changes:
@@ -43,7 +52,7 @@ In particular, the XML parser, SHOT identity, reference mapping semantics, Job r
 
 1. First make `npm.cmd run check` and `npm.cmd run smoke` pass.
 2. Change the classic width and height in `render-spec.cjs` to your fork's fixed values.
-3. In `classic.css`, re-lay-out the stage, videoZone, panel, reference, and timeline regions for the new canvas.
+3. In `classic.css`, re-lay-out the stage, videoZone, panel, reference, and timeline regions for the new canvas. Also update the presentation-only `CONFIG.panelHeight` used by `applyLayout()` and `fitScale()` in `src/output-preview.html`; its inline height otherwise overrides ordinary CSS.
 4. Confirm the editor fit and the Export summary show the same render spec.
 5. Load the public fixture and confirm the same 5 EDITS and 4 SHOTS hold.
 6. Run `npm.cmd run smoke:export` to verify the automated Export path.
@@ -63,6 +72,16 @@ The callout fields of an existing Job keep these meanings:
 - `subtitle`
 
 When adding an optional field, provide defaults so existing Jobs open with the same result. Insert external text via `textContent`, not `innerHTML`.
+
+## When a user asks to keep classic and add another layout
+
+Stop before editing and ask which result the user means:
+
+1. a fork that replaces classic with one fixed layout;
+2. a separate experimental preview/build that does not change the runtime Job contract; or
+3. a deliberate second official layout selectable by the app.
+
+Only the first path is documented as a normal presentation customization. Do not silently add a selector, registry, plugin framework, or Job layout field for the second or third path.
 
 ## Do not add yet
 

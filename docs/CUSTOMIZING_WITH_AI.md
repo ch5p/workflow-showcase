@@ -23,6 +23,7 @@ When you ask for a change, paste this before or after your request. It sharply l
 Before editing this repo, read AGENTS.md, the contracts in docs/PROJECT_MAP.md,
 and the Safe/Stable split in CUSTOMIZING.md.
 If my request touches the Red Zone or Stable core, tell me first instead of editing.
+For a runtime failure, follow docs/TROUBLESHOOTING.md before changing code.
 Preserve existing uncommitted work and first list the files and reasons for this change.
 After the change, run npm.cmd run check, then npm.cmd run smoke.
 If the Export contract changed, also run npm.cmd run smoke:export.
@@ -53,11 +54,11 @@ The instinct: **on-screen text and color = free**, **layout/resolution = ask fir
 | Edit help/hint text | "Change the preview help / drop-zone text to ○○" | 🟢 Free |
 | Change color/font tone | "Change the shared classic accent token to ○○" | 🟢 Region-specific fixed values also live in `classic.css`; inspect both. |
 | Subtitle (title callout) color/size | "Make the video subtitle bigger / a different color" | 🟡 Always add "keep the video-time timing unchanged" (see §3) |
-| Adjust the bottom layout | "Rearrange the reference cards and timeline like ○○" | 🟡 `classic.css` presentation only; say "do not touch `src/core`" |
-| Change output resolution / aspect ratio (e.g. vertical 4:5) | "Make a fixed ○:○ fork by changing render-spec width/height and classic.css, following `../CUSTOMIZING.md`" | 🟡 Re-lay-out for the new canvas. fps/bitrate are a separate Export contract; do not change them as part of the aspect-ratio request. |
+| Adjust the bottom layout | "Rearrange the reference cards and timeline like ○○" | 🟡 Start with `classic.css`. Card size/density also has a narrow packing seam documented in `../CUSTOMIZING.md`; do not rewrite reference timing or `src/core`. |
+| Change output resolution / aspect ratio (e.g. vertical 4:5) | "Make a fixed ○:○ fork by changing render-spec width/height and classic presentation values, following `../CUSTOMIZING.md`" | 🟡 Re-lay-out for the new canvas and account for `CONFIG.panelHeight`. fps/bitrate are a separate Export contract; do not change them as part of the aspect-ratio request. |
 | Add a new feature | "Add ○○ as an option **without changing existing behavior**" | 🟡 Say "extend, don't replace" |
 | Change encoder/codec | (avoid) "First tell me whether it's possible and risky" | 🔴 BGRA capture and source-audio stream copy are fixed boundaries. The official default is 60 fps; changing fps is a separate Export-contract change. |
-| Save fails / path error | "Don't fix it yet — first read the last line of `current-job/logs/app.log` and tell me the cause" | 🔴 Diagnose first, edit later |
+| Save fails / path error | "Don't fix it yet — follow `docs/TROUBLESHOOTING.md`, inspect the latest 20–50 events in `current-job/logs/app.log`, and tell me the failing phase" | 🔴 Diagnose first, edit later; one final line is not enough for a transaction |
 
 For anything not in the table, paste the §0 base instruction and ask "is this a risky area or not?" first.
 
@@ -93,7 +94,7 @@ Automated checks cannot judge whether a color looks wrong or a position feels of
 ## 5. Rolling back when something goes wrong
 
 - **Before committing**: first inspect the Git diff and revert **only the changes made for the current request**. If a file already contained unrelated work, tell the LLM not to restore the whole file or use `reset`/`checkout` without your approval.
-- **When the cause is unclear**: do not edit code first — ask it to read the last event in `current-job/logs/app.log`.
+- **When the cause is unclear**: do not edit code first — follow [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md), inspect the latest 20–50 events in `current-job/logs/app.log`, and correlate the operation/transaction before deciding what failed.
 - **When the app will not start or save**: do not delete files at random; get a status report first. Most originals are designed to be preserved.
 
 ---

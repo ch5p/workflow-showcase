@@ -20,7 +20,7 @@ const required=[
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml",
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4",
   "fixtures/premiere-export-kit/public-fixture/SOURCE_NOTES.md",
-  "docs/XML_COMPATIBILITY.md","docs/CLASSIC_LAYOUT.md","docs/CUSTOMIZING_WITH_AI.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md","src/layouts/classic/README.md",".github/pull_request_template.md",".github/ISSUE_TEMPLATE/bug_report.yml",".github/ISSUE_TEMPLATE/layout_proposal.yml",
+  "docs/XML_COMPATIBILITY.md","docs/CLASSIC_LAYOUT.md","docs/CUSTOMIZING_WITH_AI.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md","docs/TROUBLESHOOTING.md","docs/INPUT_ADAPTER_CONTRACT.md","src/layouts/classic/README.md",".github/pull_request_template.md",".github/ISSUE_TEMPLATE/bug_report.yml",".github/ISSUE_TEMPLATE/layout_proposal.yml",
 ];
 for(const relative of required){
   if(!fs.existsSync(path.join(root,relative)))throw new Error("Missing: "+relative);
@@ -210,8 +210,33 @@ for(const relative of collectPublicMarkdown()){
   if(!needsBom&&hasBom)throw new Error("English/default Markdown must not use a UTF-8 BOM: "+relative);
 }
 const publicTreeBuilder=fs.readFileSync(path.join(root,"scripts","create-public-tree.cjs"),"utf8");
-for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md","job-backup.cjs"]){
+for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","job-backup.cjs"]){
   if(!publicTreeBuilder.includes('"'+marker+'"'))throw new Error("Public tree contract file missing from manifest: "+marker);
+}
+if(!/const directoryRoots=\[[^\]]*"docs"/.test(publicTreeBuilder))throw new Error("Tracked docs tree is missing from the public manifest");
+const readmeSource=fs.readFileSync(path.join(root,"README.md"),"utf8");
+for(const marker of ["./AGENTS.md","./docs/CUSTOMIZING_WITH_AI.md","./docs/PROJECT_MAP.md"]){
+  if(!readmeSource.includes(marker))throw new Error("README agent entrypoint missing: "+marker);
+}
+const agentsSource=fs.readFileSync(path.join(root,"AGENTS.md"),"utf8");
+for(const marker of ["docs/TROUBLESHOOTING.md","docs/INPUT_ADAPTER_CONTRACT.md","source/timeline.xml","current-job/source/timeline.xml"]){
+  if(!agentsSource.includes(marker))throw new Error("Agent contract marker missing: "+marker);
+}
+const projectMapSource=fs.readFileSync(path.join(root,"docs","PROJECT_MAP.md"),"utf8");
+for(const marker of ["job-backup.cjs","docs/TROUBLESHOOTING.md","docs/INPUT_ADAPTER_CONTRACT.md","relative to the `current-job` root"]){
+  if(!projectMapSource.includes(marker))throw new Error("Project Map routing marker missing: "+marker);
+}
+const customizingSource=fs.readFileSync(path.join(root,"CUSTOMIZING.md"),"utf8");
+for(const marker of ["CONFIG.panelHeight","positionReferenceDock()","keep classic and add another layout"]){
+  if(!customizingSource.includes(marker))throw new Error("Customization routing marker missing: "+marker);
+}
+const troubleshootingSource=fs.readFileSync(path.join(root,"docs","TROUBLESHOOTING.md"),"utf8");
+for(const marker of ["latest 20–50 JSONL events","transactionId","export_finalize_failed","STORED_PATH_UNSAFE"]){
+  if(!troubleshootingSource.includes(marker))throw new Error("Troubleshooting contract marker missing: "+marker);
+}
+const adapterContractSource=fs.readFileSync(path.join(root,"docs","INPUT_ADAPTER_CONTRACT.md"),"utf8");
+for(const marker of ["Normalized parsed timeline","sourceId","VIDEO ONLY / automatic cut detection","candidate.xml","parseSupportedFCPXML()"]){
+  if(!adapterContractSource.includes(marker))throw new Error("Input adapter contract marker missing: "+marker);
 }
 for(const relative of ["src/index.html","src/output-preview.html","src/mvp-app.js"]){
   const content=fs.readFileSync(path.join(root,relative),"utf8");
