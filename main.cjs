@@ -22,6 +22,8 @@ const {
 const { reconcileTimelineMappings } = require("./timeline-reconcile.cjs");
 const { validatePersistedTimelineState } = require("./persisted-timeline-state.cjs");
 const { assertCopySpace, copyFileWithHash } = require("./storage-policy.cjs");
+const { commitImportedReferences } = require("./reference-import-state.cjs");
+const { listExistingJobPayload } = require("./starter-demo-guard.cjs");
 const { createUiCaptureController } = require("./ui-capture.cjs");
 const { attachSmokeHarness } = require("./smoke-harness.cjs");
 const {
@@ -209,6 +211,17 @@ function validateJobShape(job){
 function loadJob(){
   ensureJobFolders();
   if(!fs.existsSync(JOB_PATH)){
+    const preservedPayload = listExistingJobPayload({
+      jobRoot: JOB_ROOT,
+      ownedRoots: [SOURCE_ROOT, REFERENCES_ROOT],
+    });
+    if(preservedPayload.length){
+      logEvent("starter_demo_seed_skipped_existing_payload", {
+        count: preservedPayload.length,
+        paths: preservedPayload.slice(0, 20),
+      });
+      return writeJob(emptyJob());
+    }
     try{
       return createBundledDemoJob();
     }catch(error){
@@ -1226,14 +1239,25 @@ async function importReferencePaths(event, sourcePaths, expectedJobId, expectedR
       current.references.push(reference);
       added.push(reference);
     }
-    current.references = normalizeReferenceLabels(current.references);
-    next = added.length ? writeJob(current) : current;
+    next = added.length
+      ? commitImportedReferences({
+          loadExpectedJob: requireExpectedJob,
+          persistJob: writeJob,
+          normalizeReferences: normalizeReferenceLabels,
+          expectedJobId,
+          expectedRevision,
+          added,
+        })
+      : current;
   }catch(error){
     sendFileCopyProgress(event, { operationId, kind: "references", state: "failed" });
     for(const createdPath of createdPaths){
       try{if(fs.existsSync(createdPath)) fs.unlinkSync(createdPath)}catch(cleanupError){
         logEvent("reference_import_cleanup_failed", { code: cleanupError.code || "CLEANUP_FAILED" });
       }
+    }
+    if(error.code === "JOB_STALE"){
+      logEvent("reference_import_stale_discarded", { copiedFileCount: createdPaths.length });
     }
     throw error;
   }

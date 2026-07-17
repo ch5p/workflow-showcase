@@ -51,6 +51,10 @@ A preflight failure must not have a commit event. The previous video, `job.json`
 
 If `video_import_prepare_failed` reports `INSUFFICIENT_DISK_SPACE`, the copy was rejected before video preflight or Job replacement. Free space on the Current Job drive and retry. Video/reference copies reserve the selected bytes plus `max(512 MiB, 10%)`, capped at 8 GiB. A failed streaming copy removes its partial destination; do not weaken the reserve or switch back to a blocking copy to work around the error.
 
+If `reference_import_stale_discarded` appears, another process or external file change advanced the Current Job while files were copying. The copied files were removed and newer Job data was preserved; reload the Current Job, then add the references again. Do not attach the discarded records manually to `job.json`.
+
+If `starter_demo_seed_skipped_existing_payload` appears, `job.json` was missing but files remained under `current-job/source` or `current-job/references`. The app preserved those files and created an empty Job instead of installing the sample. Copy the preserved files elsewhere before manually loading the intended XML/video again.
+
 ## Export
 
 Read the operation in this order:

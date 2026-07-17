@@ -26,6 +26,9 @@
 - Split persisted timeline validation, DURATION boundary math, UI capture, and smoke orchestration into focused modules with regression checks
 - Sandboxed the Export confirmation window and verified its preload API in the isolated desktop smoke
 - Replaced the README's model-review attribution with a direct description of the current exporter behavior
+- Removed the hidden Premiere project path from the public MP4 fixture and added binary privacy regression checks
+- Rechecked Current Job state at reference-import completion and rejected stale completion instead of overwriting newer Job edits
+- Preserved orphaned source/reference files when `job.json` is missing instead of replacing them with the starter demo
 
 ## 0.1.0-beta.1
 

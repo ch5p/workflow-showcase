@@ -20,6 +20,14 @@ This repository is meant to be customized by non-coders through LLM agents. Befo
 - `HANDOFF.md`: maintainer-only current state; it may add context but does not replace the public contracts above.
 - If a request touches the Red Zone or the Stable core (`src/core`, save/import transactions, path checks, encoder/codec, callout timing), report the relevant contract first and do not edit until the user confirms.
 
+## Review evidence and product scope
+
+- This is a small template for short AI-video workflows, usually a single-digit set of still/video references and short 720p/1080p outputs. It is not a digital-asset manager, bulk-ingest tool, or long-form media pipeline.
+- Separate a code-level invariant from claimed user impact. Report a proven contract violation as such, but do not assign user-visible severity to a hypothetical delay, freeze, or workflow burden without reproducing it on representative local storage or asking the maintainer for observed QA.
+- Treat concerns that require unusually slow storage, unsupported bulk workloads, or extreme files outside the intended workflow as future hardening unless they also cause privacy exposure, path escape, silent corruption, or another reproducible contract violation.
+- Do not infer that an operation is perceptibly slow from file size or asynchronous code alone. Record the tested file, environment, elapsed time, and visible result when performance is the finding.
+- For customization audits, prioritize whether an agent can locate the documented presentation surface, avoid the Stable core, run the focused checks, and recover through Git. The repository provides guardrails and regression checks; it does not claim that arbitrary agent edits are impossible to break.
+
 ## Red Zone / hard rules
 
 - Never rewrite the legacy FCP XML parser or the pure logic in `src/core/*`.

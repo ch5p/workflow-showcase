@@ -10,10 +10,10 @@ const {spawnSync}=require("node:child_process");
 const root=path.resolve(__dirname,"..");
 const required=[
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs","LICENSE","AGENTS.md","README.md","README.ko.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
-  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","smoke-harness.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
-  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
+  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
   "current-job/source","current-job/references","current-job/logs",
@@ -27,9 +27,9 @@ for(const relative of required){
 }
 for(const relative of [
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs",
-  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","smoke-harness.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
-  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/mvp-app.js","src/export-dialog.js",
 ]){
   const result=spawnSync(process.execPath,["--check",path.join(root,relative)],{encoding:"utf8"});
@@ -154,8 +154,11 @@ for(const [script,successMarker] of [
   ["check-video-lifecycle.cjs","VIDEO_LIFECYCLE_CHECK_OK"],
   ["check-timeline-reconcile.cjs","TIMELINE_RECONCILE_OK"],
   ["check-persisted-timeline-state.cjs","PERSISTED_TIMELINE_STATE_OK"],
+  ["check-public-fixture-privacy.cjs","PUBLIC_FIXTURE_PRIVACY_OK"],
+  ["check-reference-import-state.cjs","REFERENCE_IMPORT_STATE_OK"],
   ["check-runtime-safety.cjs","RUNTIME_SAFETY_CHECK_OK"],
   ["check-smoke-harness.cjs","SMOKE_HARNESS_CHECK_OK"],
+  ["check-starter-demo-guard.cjs","STARTER_DEMO_GUARD_OK"],
   ["check-storage-policy.cjs","STORAGE_POLICY_CHECK_OK"],
   ["check-ui-capture.cjs","UI_CAPTURE_CHECK_OK"],
   ["check-thumbnail-frame-gate.cjs","THUMBNAIL_FRAME_GATE_OK"],
@@ -176,7 +179,7 @@ if(!appHtml.includes("<title>Workflow Showcase</title>")||!appHtml.includes('<di
   throw new Error("Workflow Showcase app identity is incomplete");
 }
 const mainSource=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
-for(const marker of ["createBundledDemoJob","starter_demo_seeded","starter_demo_replacement_selected",'demo: true']){
+for(const marker of ["createBundledDemoJob","starter_demo_seeded","starter_demo_seed_skipped_existing_payload","starter_demo_replacement_selected",'demo: true']){
   if(!mainSource.includes(marker))throw new Error("Bundled starter demo contract is incomplete: "+marker);
 }
 const mvpSource=fs.readFileSync(path.join(root,"src","mvp-app.js"),"utf8");

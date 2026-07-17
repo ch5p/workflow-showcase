@@ -16,8 +16,8 @@ current-job/references/*
 current-job/output/*
 current-job/logs/*
 !current-job/logs/.gitkeep
-current-job/.job-import-*/
-current-job/.video-import-*/
+current-job/logs/.job-import-*/
+current-job/logs/.video-import-*/
 
 *.part.mp4
 *.tmp

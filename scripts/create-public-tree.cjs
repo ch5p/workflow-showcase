@@ -4,6 +4,7 @@ const crypto=require("node:crypto");
 const fs=require("node:fs");
 const path=require("node:path");
 const {spawnSync}=require("node:child_process");
+const {assertNoPrivateBinaryContent}=require("./public-privacy.cjs");
 
 const root=path.resolve(__dirname,"..");
 const releaseRoot=path.join(root,"release");
@@ -19,13 +20,14 @@ fs.mkdirSync(target,{recursive:true});
 
 const rootFiles=[
   ".gitattributes",".gitignore","AGENTS.md","CHANGELOG.md","CONTRIBUTING.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","LICENSE","README.md","README.ko.md","ROADMAP.md","SECURITY.md","START_APP.cmd",
-  "durable-file.cjs","export-preload.cjs","exporter.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","persisted-timeline-state.cjs","preload.cjs","render-spec.cjs","smoke-harness.cjs","storage-policy.cjs","strings.cjs","timeline-reconcile.cjs","ui-capture.cjs","video-lifecycle.cjs",
+  "durable-file.cjs","export-preload.cjs","exporter.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","persisted-timeline-state.cjs","preload.cjs","reference-import-state.cjs","render-spec.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","timeline-reconcile.cjs","ui-capture.cjs","video-lifecycle.cjs",
 ];
 // Keep the entire tracked docs surface together so README assets, the Pages landing page,
 // and agent contracts cannot silently disappear from a later public-tree build.
 const directoryRoots=[".github","docs","fixtures","scripts","src"];
 const explicitFiles=[
   "current-job/source/.gitkeep","current-job/references/.gitkeep","current-job/logs/.gitkeep",
+  "scripts/public-privacy.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-starter-demo-guard.cjs",
 ];
 
 function copyFile(relative){
@@ -69,6 +71,7 @@ function auditDirectory(directory){
       const relative=path.relative(target,absolute).replaceAll("\\","/");
       const bytes=fs.readFileSync(absolute);
       if(bytes.length>50*1024*1024)throw new Error("Public file exceeds 50 MiB: "+relative);
+      assertNoPrivateBinaryContent(bytes,relative);
       const extension=path.extname(entry.name).toLowerCase();
       if(textExtensions.has(extension)||entry.name.startsWith(".")){
         const content=bytes.toString("utf8");
