@@ -25,7 +25,7 @@ const rootFiles=[
 // and agent contracts cannot silently disappear from a later public-tree build.
 const directoryRoots=[".github","docs","fixtures","scripts","src"];
 const explicitFiles=[
-  "current-job/source/.gitkeep","current-job/references/.gitkeep","current-job/output/.gitkeep","current-job/logs/.gitkeep",
+  "current-job/source/.gitkeep","current-job/references/.gitkeep","current-job/logs/.gitkeep",
 ];
 
 function copyFile(relative){

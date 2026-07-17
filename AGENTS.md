@@ -7,7 +7,7 @@ This repository is meant to be customized by non-coders through LLM agents. Befo
 - The `Current Job Contract` and `Import Contract` in `docs/PROJECT_MAP.md`.
 - The Safe customization surface vs. Stable core split in `CUSTOMIZING.md`.
 - For failures, `docs/TROUBLESHOOTING.md` before changing runtime code.
-- For a new input format or VIDEO ONLY mode, `docs/INPUT_ADAPTER_CONTRACT.md` before changing extension gates, storage, parser dispatch, or timeline data.
+- For a new input format, read `docs/INPUT_ADAPTER_CONTRACT.md` before changing extension gates, storage, parser dispatch, or timeline data.
 - If a maintainer workspace also contains `HANDOFF.md`, read its `Red Zone` and `Hot Debug` before touching runtime state.
 
 ## Document authority

@@ -17,7 +17,7 @@ const exportMode=process.argv.includes("--export");
 
 function prepareExportJob(){
   const sourceRoot=path.join(jobRoot,"source");
-  for(const directory of [sourceRoot,path.join(jobRoot,"references"),path.join(jobRoot,"output"),path.join(jobRoot,"logs")]){
+  for(const directory of [sourceRoot,path.join(jobRoot,"references"),path.join(jobRoot,"logs")]){
     fs.mkdirSync(directory,{recursive:true});
   }
   const xmlName="premiere-synthetic.xml";

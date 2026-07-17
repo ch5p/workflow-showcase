@@ -39,7 +39,7 @@ try{
   const jobRoot = path.join(temporaryRoot, "current-job");
   const sourceRoot = path.join(jobRoot, "source");
   const referencesRoot = path.join(jobRoot, "references");
-  const outputRoot = path.join(jobRoot, "output");
+  const outputRoot = path.join(temporaryRoot, "output");
   const logsRoot = path.join(jobRoot, "logs");
   for(const directory of [sourceRoot, referencesRoot, outputRoot, logsRoot]){
     fs.mkdirSync(directory, { recursive: true });

@@ -255,7 +255,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     if(!job.video?.relativePath) throw new Error(t("video_missing"));
     sourceFile(job.xml.relativePath, "Export XML");
     sourceFile(job.video.relativePath, "Export video");
-    assertDirectoryNoLink(outputRoot, "Current Job output");
+    assertDirectoryNoLink(outputRoot, "Export output");
     const ffmpegPath = resolveFfmpeg(appRoot);
     const { outputPath, temporaryPath } = availableExportPaths(outputRoot);
     active = { cancelled: false, ffmpeg: null, renderWindow: null };

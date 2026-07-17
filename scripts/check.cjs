@@ -16,7 +16,7 @@ const required=[
   "scripts/check-core-modules.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
-  "current-job/source","current-job/references","current-job/output","current-job/logs",
+  "current-job/source","current-job/references","current-job/logs",
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml",
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4",
   "fixtures/premiere-export-kit/public-fixture/SOURCE_NOTES.md",
@@ -74,6 +74,8 @@ for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","write
 }
 if(!main.includes("await runSecondarySmoke()")||main.includes("const secondary = spawnSync"))throw new Error("Single-instance smoke must keep the primary event loop available");
 if(!main.includes("readyMessage")||!main.includes("mustExist: true"))throw new Error("Export readiness file check missing");
+if(!main.includes('const OUTPUT_ROOT = TEST_JOB_ROOT ? path.join(path.dirname(JOB_ROOT), "output") : path.join(APP_ROOT, "output");'))throw new Error("Export output must remain outside the replaceable Current Job");
+if(main.includes('const OUTPUT_ROOT = path.join(JOB_ROOT, "output")'))throw new Error("Export output returned inside Current Job");
 for(const marker of ['id="durationDelta"',"function updateDurationDelta()","mainVideo.duration-xmlSeconds",'badge.textContent="DURATION Δ "']){
   if(!preview.includes(marker))throw new Error("Duration-delta help contract missing: "+marker);
 }
@@ -235,7 +237,7 @@ for(const marker of ["latest 20–50 JSONL events","transactionId","export_final
   if(!troubleshootingSource.includes(marker))throw new Error("Troubleshooting contract marker missing: "+marker);
 }
 const adapterContractSource=fs.readFileSync(path.join(root,"docs","INPUT_ADAPTER_CONTRACT.md"),"utf8");
-for(const marker of ["Normalized parsed timeline","sourceId","VIDEO ONLY / automatic cut detection","candidate.xml","parseSupportedFCPXML()"]){
+for(const marker of ["Normalized parsed timeline","sourceId","Modern FCPXML","candidate.xml","parseSupportedFCPXML()"]){
   if(!adapterContractSource.includes(marker))throw new Error("Input adapter contract marker missing: "+marker);
 }
 for(const relative of ["src/index.html","src/output-preview.html","src/mvp-app.js"]){

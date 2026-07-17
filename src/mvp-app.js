@@ -278,7 +278,7 @@
     const dot=name.lastIndexOf(".");
     const extension=dot>=0?name.slice(dot).toLowerCase():"";
     if(!INPUT_EXTENSIONS[kind].has(extension)){
-      throw inputError(kind==="xml"?"XML ONLY · .XML":"VIDEO ONLY · MP4/MOV/M4V");
+      throw inputError(kind==="xml"?"XML ONLY · .XML":"VIDEO FILES · MP4/MOV/M4V");
     }
     const sourcePath=bridge.getPathForFile(file);
     if(!sourcePath)throw inputError("DROP PATH UNAVAILABLE");

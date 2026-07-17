@@ -78,7 +78,7 @@ function createLayout(root, label){
   const jobRoot = path.join(root, label);
   const sourceRoot = path.join(jobRoot, "source");
   const referencesRoot = path.join(jobRoot, "references");
-  const outputRoot = path.join(jobRoot, "output");
+  const outputRoot = path.join(root, label + "-output");
   const logRoot = path.join(jobRoot, "logs");
   const jobPath = path.join(jobRoot, "job.json");
   for(const candidate of [jobRoot, sourceRoot, referencesRoot, outputRoot, logRoot, jobPath]){

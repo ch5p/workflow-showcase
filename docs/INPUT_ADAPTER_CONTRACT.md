@@ -2,7 +2,7 @@
 
 This contract defines how a future input format reaches the existing timeline renderer without rewriting the legacy xmeml parser, PRIMARY calculation, SHOT identity, reference mapping, or Job safety code.
 
-The current production input is Final Cut Pro 7 XML (`xmeml`), including XML exported by Adobe Premiere Pro. Modern `.fcpxml`, CapCut projects, and VIDEO ONLY automatic cut detection are not implemented.
+The current production input is Final Cut Pro 7 XML (`xmeml`), including XML exported by Adobe Premiere Pro. Modern `.fcpxml` and CapCut projects are not implemented.
 
 ## Normalized parsed timeline
 
@@ -78,7 +78,7 @@ Adding one parser file is not sufficient. Before implementation, report every af
 - public fixture, malformed-input fixture, and regression checks;
 - README, compatibility, Project Map, troubleshooting, and public-tree inclusion.
 
-The current lifecycle is intentionally hard-coded to `.xml`, `candidate.xml`, and `source/timeline.xml`. A new extension or VIDEO ONLY source must make an explicit storage/lifecycle decision. Do not disguise another format as XML or silently reuse the XML transaction without verifying rollback and recovery.
+The current lifecycle is intentionally hard-coded to `.xml`, `candidate.xml`, and `source/timeline.xml`. A new extension must make an explicit storage/lifecycle decision. Do not disguise another format as XML or silently reuse the XML transaction without verifying rollback and recovery.
 
 ## Format-specific rules
 
@@ -93,19 +93,6 @@ The current lifecycle is intentionally hard-coded to `.xml`, `candidate.xml`, an
 - Implement a separate parser that normalizes roles, resources, timing rationals, enabled state, source identity, and layered video into the shared frame model.
 - Define the sequence FPS and rounding rules before converting rational time to frames.
 - Do not add support by weakening the existing `.xml` validation or rewriting the xmeml parser.
-
-### VIDEO ONLY / automatic cut detection
-
-- Treat detected boundaries as an approximate adapter result and expose that limitation to the user.
-- Do not claim repeated-source identity when the finished video cannot provide it. A safe initial contract is one deterministic synthetic source identity per detected cut, meaning one CUT equals one SHOT.
-- Record detection warnings and sensitivity/settings needed to reproduce the same boundaries.
-- Preserve the original video import preflight and commit contract. Detection must not replace or weaken video validation.
-
-### CapCut
-
-- Do not claim official CapCut project support without an official interchange format.
-- An experimental local-draft reader must be read-only, version-gated, and isolated as a format adapter. It must never modify the user's CapCut project.
-- Prefer the editor-neutral VIDEO ONLY path when exact draft parsing is unavailable.
 
 ## Conformance and QA
 

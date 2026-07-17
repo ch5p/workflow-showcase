@@ -53,7 +53,9 @@ const SINGLE_INSTANCE_LOCK = app.requestSingleInstanceLock();
 if(!SINGLE_INSTANCE_LOCK) app.quit();
 const SOURCE_ROOT = path.join(JOB_ROOT, "source");
 const REFERENCES_ROOT = path.join(JOB_ROOT, "references");
-const OUTPUT_ROOT = path.join(JOB_ROOT, "output");
+// Keep completed renders independent from the replaceable Current Job.
+// Smoke tests use the same sibling layout inside their isolated temp root.
+const OUTPUT_ROOT = TEST_JOB_ROOT ? path.join(path.dirname(JOB_ROOT), "output") : path.join(APP_ROOT, "output");
 const LOG_ROOT = path.join(JOB_ROOT, "logs");
 const JOB_PATH = path.join(JOB_ROOT, "job.json");
 const BUNDLED_DEMO_ROOT = path.join(APP_ROOT, "fixtures", "premiere-export-kit", "public-fixture");
@@ -85,7 +87,7 @@ function ensureJobFolders(){
   ensureDirectoryNoLink(JOB_ROOT, "Current Job");
   ensureDirectoryNoLink(SOURCE_ROOT, "Current Job source");
   ensureDirectoryNoLink(REFERENCES_ROOT, "Current Job references");
-  ensureDirectoryNoLink(OUTPUT_ROOT, "Current Job output");
+  ensureDirectoryNoLink(OUTPUT_ROOT, "Export output");
   ensureDirectoryNoLink(LOG_ROOT, "Current Job logs");
 }
 

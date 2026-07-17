@@ -4,7 +4,7 @@ This is the public diagnostic entrypoint for agents. Diagnose from evidence befo
 
 ## First response
 
-1. Preserve `current-job/job.json`, transaction folders, `.tmp` files, and completed `.part.mp4` files.
+1. Preserve `current-job/job.json`, transaction folders, `.tmp` files, and completed `.part.mp4` files under the app-root `output/` folder.
 2. Read the latest 20–50 JSONL events from `current-job/logs/app.log`, not only the final line.
 3. Identify the operation and failing phase: prepare, preflight, commit, rollback, recovery, finalization, or cancel.
 4. Correlate related events by `transactionId` when present, then by operation, `jobId`, and `revision`.
@@ -33,7 +33,7 @@ Read the operation in this order:
 
 For UPDATE XML, compare `timelineShots`, `shotMappings`, and `orphanedShotMappings` with the reported `preserved`, `newShots`, `orphaned`, `ambiguous`, and `reattached` counts. The existing video and reference file hashes should remain unchanged.
 
-For NEW JOB, the source XML/video, references, mappings, title, and callout are reset. `output`, `logs`, UI language, and output settings remain.
+For NEW JOB, the source XML/video, references, mappings, title, and callout are reset. Current Job logs, UI language, and Job output settings remain. Completed files are outside the replaceable Job in the app-root `output/` folder and must remain unchanged.
 
 If a rollback-failure event appears, stop all app processes. Do not reload the same XML, delete `.job-import-*`, discard a valid primary manifest, or overwrite `job.json` with a `.tmp` file. Restart and confirm the matching `job_xml_recovery_*` sequence first.
 
@@ -58,7 +58,7 @@ Read the operation in this order:
 3. `export_encoder_fallback` when NVENC failed and the CPU retry began
 4. `export_finalize_failed`, `export_completed`, `export_failed`, or `export_cancelled`
 
-If `export_finalize_failed` appears and a `.part.mp4` remains, treat it as a completed file whose final rename failed. Do not delete it. Quit the app, preserve the file, and rename it to `.mp4` manually after confirming the event.
+If `export_finalize_failed` appears and a `.part.mp4` remains under app-root `output/`, treat it as a completed file whose final rename failed. Do not delete it. Quit the app, preserve the file, and rename it to `.mp4` manually after confirming the event.
 
 If the popup does not open, inspect `export_dialog_opened` and whether `export-preload.cjs` loaded. If progress stalls, inspect the latest Export progress state and FFmpeg log instead of repeatedly opening new Export windows.
 

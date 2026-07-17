@@ -11,6 +11,7 @@
 - Blocked symlink/junction escapes on stored paths
 - Electron decode/metadata preflight before committing a video
 - Preserve `.part.mp4` when the final rename after a render fails
+- Moved completed Export files to the app-root `output/` so replacing `current-job` cannot delete them
 - Added the Current Job reload icon and renamed the reset control to `TO START`
 - Fixed callout descender clipping and the subtitle shadow
 - Routed embedded-preview drops through the official XML/video import transaction
