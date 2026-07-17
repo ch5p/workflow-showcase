@@ -29,6 +29,7 @@
 - Removed the hidden Premiere project path from the public MP4 fixture and added binary privacy regression checks
 - Rechecked Current Job state at reference-import completion and rejected stale completion instead of overwriting newer Job edits
 - Preserved orphaned source/reference files when `job.json` is missing instead of replacing them with the starter demo
+- Split reference import/delete ownership from `main.cjs` into a focused lifecycle module with an isolated regression check
 
 ## 0.1.0-beta.1
 

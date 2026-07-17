@@ -47,6 +47,7 @@ Do not modify these files for presentation changes:
 - `persisted-timeline-state.cjs`
 - `job-lifecycle.cjs`
 - `video-lifecycle.cjs`
+- `reference-lifecycle.cjs`
 - `storage-policy.cjs`
 
 In particular, the XML parser, SHOT identity, reference mapping semantics, one-frame DURATION threshold, Job relative paths, import storage policy, IPC, and Export cancel / encoder fallback are the stable core.

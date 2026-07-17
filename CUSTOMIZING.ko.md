@@ -47,6 +47,7 @@ HTML 영역은 `src/output-preview.html`에서 다음 ID로 찾을 수 있습니
 - `persisted-timeline-state.cjs`
 - `job-lifecycle.cjs`
 - `video-lifecycle.cjs`
+- `reference-lifecycle.cjs`
 - `storage-policy.cjs`
 
 특히 XML parser, SHOT identity, reference mapping 의미, 한 프레임 DURATION 기준, Job 상대경로, 입력 저장 정책, IPC, Export 취소와 encoder fallback은 안정 코어입니다.

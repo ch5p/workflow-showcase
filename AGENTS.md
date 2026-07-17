@@ -34,6 +34,7 @@ This repository is meant to be customized by non-coders through LLM agents. Befo
 - Add new features as options that extend the existing output preview and Electron bridge; do not replace existing behavior without reporting first.
 - Never put absolute user paths or email addresses in code or Job data. Stored Job paths are relative to the `current-job` root: use `source/timeline.xml`, not an absolute path and not `current-job/source/timeline.xml`.
 - Current Job reads/writes and persistent renderer file access go only through `preload.cjs` IPC. The standalone preview may inspect a user-provided browser `File`, but do not enable Node APIs in any renderer.
+- Reference inspection, streamed import, final revision commit, mapping cleanup, and owned-file deletion belong to `reference-lifecycle.cjs`. Keep `main.cjs` limited to the picker and IPC wiring; do not duplicate this lifecycle in a renderer.
 - Before editing, leave the latest file intact enough to roll back, and describe which files you will change and why.
 
 ## Docs and encoding
