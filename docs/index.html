@@ -7,7 +7,7 @@
 <meta name="description" content="프리미어에서 뽑은 XML과 완성 영상으로, 레퍼런스 맵과 컷 타임라인이 얹힌 쇼케이스 영상을 만드는 템플릿 앱." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Shadows+Into+Light&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
 <style>
   :root{
     --bg:#f7f8f7; --panel:#ffffff; --ink:#16211d; --muted:#5b6b64;
@@ -40,6 +40,9 @@
     background:var(--accent-soft);border:1px solid #bfe9db;padding:6px 13px;border-radius:999px;margin-bottom:22px}
   h1{font-size:clamp(34px,6vw,58px);line-height:1.08;letter-spacing:-.03em;font-weight:800;margin:0 0 18px}
   h1 .accent{color:var(--accent)}
+  .productName{display:inline-block;position:relative}
+  .betaMark{position:absolute;left:calc(100% - .18em);top:calc(.04em + 5px);margin-left:0;color:#48c4a5;font-family:'Shadows Into Light','Segoe Print','Bradley Hand',cursive;
+    font-size:clamp(12px,1.6vw,20px);font-weight:500;letter-spacing:-.01em;line-height:1;transform:rotate(-12deg);transform-origin:left center;pointer-events:none}
   .lede{font-size:clamp(16px,2.4vw,20px);color:var(--muted);max-width:640px;margin:0 auto 30px}
   .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
   .install{display:inline-flex;align-items:center;gap:12px;background:#0f1a16;color:#dff5ee;font-family:var(--mono);
@@ -131,7 +134,7 @@
 <header id="top">
   <div class="wrap">
     <span class="pill">● Premiere XML → 쇼케이스 영상</span>
-    <h1>편집 데이터로 만드는<br><span class="accent">워크플로우 쇼케이스</span></h1>
+    <h1>편집 데이터로 만드는<br><span class="productName"><span class="accent">워크플로우 쇼케이스</span><span class="betaMark">beta</span></span></h1>
     <p class="lede">프리미어에서 뽑은 <b>XML 데이터</b>를 기반으로 최종 렌더링된 영상 밑에 <b>간단한 워크플로우</b>를 얹어주는 기본적인 템플릿 앱입니다.</p>
     <div class="cta-row">
       <a class="btn" href="#install">설치하기 →</a>
