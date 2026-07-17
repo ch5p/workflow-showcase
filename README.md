@@ -2,11 +2,13 @@
 
 [한국어](./README.ko.md) · **English**
 
-> `Workflow Showcase template` is a template app for AI video creators built around references used during generation and XML data exported from Premiere, making it easy to place a compact workflow beneath a final rendered video.
+> `Workflow Showcase template` is a template app for AI video creators using generation tools such as Seedance 2.0. It uses production references and XML data exported from Premiere Pro to place a compact workflow beneath the final rendered video.
 
-**Contents**: [AI customization](#customizing-with-an-ai-agent) · [Preview](#preview) · [Installation](#installation) · [How to use](#how-to-use) · [Output settings](#output-settings) · [Setting up references](#setting-up-references) · [Troubleshooting](#troubleshooting) · [Closing notes](#closing-notes)
+**Contents**: [AI customization](#make-it-yours-with-an-ai-agent) · [Preview](#preview) · [Installation](#installation) · [How to use](#how-to-use) · [Output settings](#output-settings) · [Setting up references](#setting-up-references) · [Troubleshooting](#troubleshooting) · [Closing notes](#closing-notes)
 
-## Customizing with an AI agent
+## Make it yours with an AI agent
+
+Workflow Showcase works out of the box, and there is no reason to stop there. Change the layout, callouts, aspect ratio, and reference placement to fit your own workflow and taste. The code structure and dedicated customization guides help coding agents such as Codex and Claude quickly find and modify the relevant parts. Make this repository your own Workflow Showcase.
 
 If you give this repository to Codex, Claude, or another coding agent, have it start with these documents instead of searching the code blindly:
 
