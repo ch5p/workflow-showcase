@@ -94,7 +94,7 @@ function attachSmokeHarness({
           const parsed = await window.webContents.executeJavaScript(
             `window.portableMvp.loadXmlText(${JSON.stringify(xmlText)})`
           );
-          if(parsed?.fps!==24||parsed?.durationFrames!==288||parsed?.edits!==5||parsed?.shots!==4){
+          if(parsed?.fps!==24||parsed?.durationFrames!==312||parsed?.edits!==5||parsed?.shots!==4){
             throw new Error("Public fixture contract changed: "+JSON.stringify(parsed));
           }
           await new Promise(resolve => setTimeout(resolve, 500));

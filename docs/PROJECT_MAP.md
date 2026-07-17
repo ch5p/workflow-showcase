@@ -113,6 +113,6 @@ After the XML duration is known and before FFmpeg starts, Export estimates the v
 ## Contract Verification
 
 - Document reference: the `current-job` and app-root `output/` structures above, `job.json` version 1, `jobId + revision`, and the UPDATE/NEW JOB Import Contract
-- Real sample: 24 fps, 288 frames, repeated source identity of the Premiere Pro 2026 fixture, and the app's isolated smoke result of 5 EDITS / 4 SHOTS. In a real recovery of a failed transaction, per-file SHA-256 matches for 2 sources / 11 references / the existing Job were confirmed.
+- Real sample: 24 fps, 312 frames, repeated source identity, a blended upper-track clip, an excluded Adjustment Layer, and a final one-second Color Matte generator in the Premiere Pro 2026 fixture; the app's isolated smoke result remains 5 EDITS / 4 SHOTS. In a real recovery of a failed transaction, per-file SHA-256 matches for 2 sources / 11 references / the existing Job were confirmed.
 - Code assumption: `main.cjs`'s `JOB_ROOT`, `durable-file.cjs`, `owned-path.cjs`, the XML/video lifecycles, timeline reconcile, `src/core/*`, `render-spec.cjs`, the CAS guard, and `hydrateJob()` all read the same structure.
 - Handling: never assume there is no mismatch. When the structure changes, compare this document, the real fixture/runtime sample, and the code together before implementation.

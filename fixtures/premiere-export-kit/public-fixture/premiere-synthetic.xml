@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xmeml>
 <xmeml version="4">
-	<sequence id="sequence-1" TL.SQAudioVisibleBase="0" TL.SQVideoVisibleBase="0" TL.SQVisibleBaseTime="0" TL.SQAVDividerPosition="0.5" TL.SQHideShyTracks="0" TL.SQHeaderWidth="204" Monitor.ProgramZoomOut="3048192000000" Monitor.ProgramZoomIn="0" TL.SQTimePerPixel="0.034364261168384883" MZ.EditLine="2032128000000" MZ.Sequence.PreviewFrameSizeHeight="720" MZ.Sequence.PreviewFrameSizeWidth="1280" MZ.Sequence.AudioTimeDisplayFormat="200" MZ.Sequence.PreviewRenderingClassID="1061109567" MZ.Sequence.PreviewRenderingPresetCodec="1634755443" MZ.Sequence.PreviewRenderingPresetPath="EncoderPresets\SequencePreview\9678af98-a7b7-4bdb-b477-7ac9c8df4a4e\QuickTime.epr" MZ.Sequence.PreviewUseMaxRenderQuality="false" MZ.Sequence.PreviewUseMaxBitDepth="false" MZ.Sequence.EditingModeGUID="9678af98-a7b7-4bdb-b477-7ac9c8df4a4e" MZ.Sequence.VideoTimeDisplayFormat="100" MZ.WorkOutPoint="7620480000000" MZ.WorkInPoint="0" explodedTracks="true">
+	<sequence id="sequence-2" TL.SQAudioVisibleBase="0" TL.SQVideoVisibleBase="0" TL.SQVisibleBaseTime="0" TL.SQAVDividerPosition="0.5" TL.SQHideShyTracks="0" TL.SQHeaderWidth="204" TL.SQDataTrackViewControlState="0" Monitor.ProgramZoomOut="3302208000000" Monitor.ProgramZoomIn="0" TL.SQTimePerPixel="0.0088441207944385519" MZ.EditLine="0" MZ.Sequence.PreviewFrameSizeHeight="720" MZ.Sequence.PreviewFrameSizeWidth="1280" MZ.Sequence.AudioTimeDisplayFormat="200" MZ.Sequence.PreviewRenderingClassID="1061109567" MZ.Sequence.PreviewRenderingPresetCodec="1634755443" MZ.Sequence.PreviewRenderingPresetPath="EncoderPresets\SequencePreview\9678af98-a7b7-4bdb-b477-7ac9c8df4a4e\QuickTime.epr" MZ.Sequence.PreviewUseMaxRenderQuality="false" MZ.Sequence.PreviewUseMaxBitDepth="false" MZ.Sequence.EditingModeGUID="9678af98-a7b7-4bdb-b477-7ac9c8df4a4e" MZ.Sequence.VideoTimeDisplayFormat="100" MZ.WorkOutPoint="7620480000000" MZ.WorkInPoint="0" explodedTracks="true">
 		<uuid>11111111-1111-4111-8111-111111111111</uuid>
-		<duration>288</duration>
+		<duration>312</duration>
 		<rate>
 			<timebase>24</timebase>
 			<ntsc>FALSE</ntsc>
@@ -46,8 +46,8 @@
 					</samplecharacteristics>
 				</format>
 				<track TL.SQTrackShy="0" TL.SQTrackExpandedHeight="41" TL.SQTrackExpanded="0" MZ.TrackTargeted="1">
-					<clipitem id="clipitem-1">
-						<masterclipid>masterclip-1</masterclipid>
+					<clipitem id="clipitem-9">
+						<masterclipid>masterclip-8</masterclipid>
 						<name>clip-a.mp4</name>
 						<enabled>TRUE</enabled>
 						<duration>144</duration>
@@ -64,7 +64,7 @@
 						<alphatype>none</alphatype>
 						<pixelaspectratio>square</pixelaspectratio>
 						<anamorphic>FALSE</anamorphic>
-						<file id="file-1">
+						<file id="file-7">
 							<name>clip-a.mp4</name>
 							<pathurl>file://localhost/fixtures/premiere-export-kit/media/clip-a.mp4</pathurl>
 							<rate>
@@ -117,8 +117,8 @@
 							<label2>Violet</label2>
 						</labels>
 					</clipitem>
-					<clipitem id="clipitem-2">
-						<masterclipid>masterclip-2</masterclipid>
+					<clipitem id="clipitem-10">
+						<masterclipid>masterclip-9</masterclipid>
 						<name>clip-b.mp4</name>
 						<enabled>TRUE</enabled>
 						<duration>144</duration>
@@ -135,7 +135,7 @@
 						<alphatype>none</alphatype>
 						<pixelaspectratio>square</pixelaspectratio>
 						<anamorphic>FALSE</anamorphic>
-						<file id="file-2">
+						<file id="file-8">
 							<name>clip-b.mp4</name>
 							<pathurl>file://localhost/fixtures/premiere-export-kit/media/clip-b.mp4</pathurl>
 							<rate>
@@ -188,8 +188,8 @@
 							<label2>Violet</label2>
 						</labels>
 					</clipitem>
-					<clipitem id="clipitem-3">
-						<masterclipid>masterclip-1</masterclipid>
+					<clipitem id="clipitem-11">
+						<masterclipid>masterclip-8</masterclipid>
 						<name>clip-a.mp4</name>
 						<enabled>TRUE</enabled>
 						<duration>144</duration>
@@ -204,7 +204,7 @@
 						<pproTicksIn>0</pproTicksIn>
 						<pproTicksOut>762048000000</pproTicksOut>
 						<alphatype>none</alphatype>
-						<file id="file-1"/>
+						<file id="file-7"/>
 						<logginginfo>
 							<description></description>
 							<scene></scene>
@@ -225,8 +225,8 @@
 							<label2>Violet</label2>
 						</labels>
 					</clipitem>
-					<clipitem id="clipitem-4">
-						<masterclipid>masterclip-3</masterclipid>
+					<clipitem id="clipitem-12">
+						<masterclipid>masterclip-10</masterclipid>
 						<name>clip-c.mp4</name>
 						<enabled>TRUE</enabled>
 						<duration>144</duration>
@@ -243,7 +243,7 @@
 						<alphatype>none</alphatype>
 						<pixelaspectratio>square</pixelaspectratio>
 						<anamorphic>FALSE</anamorphic>
-						<file id="file-3">
+						<file id="file-9">
 							<name>clip-c.mp4</name>
 							<pathurl>file://localhost/fixtures/premiere-export-kit/media/clip-c.mp4</pathurl>
 							<rate>
@@ -296,12 +296,42 @@
 							<label2>Violet</label2>
 						</labels>
 					</clipitem>
+					<generatoritem id="clipitem-13">
+						<name>색상 매트 (Color Matte)</name>
+						<enabled>TRUE</enabled>
+						<duration>1036800</duration>
+						<start>288</start>
+						<end>312</end>
+						<in>86400</in>
+						<out>86424</out>
+						<rate>
+							<timebase>24</timebase>
+							<ntsc>FALSE</ntsc>
+						</rate>
+						<effect>
+							<name>Color</name>
+							<effectid>Color</effectid>
+							<effectcategory>Matte</effectcategory>
+							<effecttype>generator</effecttype>
+							<mediatype>video</mediatype>
+							<parameter authoringApp="PremierePro">
+								<parameterid>fillcolor</parameterid>
+								<name>Color</name>
+								<value>
+									<alpha>0</alpha>
+									<red>0</red>
+									<green>0</green>
+									<blue>0</blue>
+								</value>
+							</parameter>
+						</effect>
+					</generatoritem>
 					<enabled>TRUE</enabled>
 					<locked>FALSE</locked>
 				</track>
 				<track TL.SQTrackShy="0" TL.SQTrackExpandedHeight="41" TL.SQTrackExpanded="0" MZ.TrackTargeted="1">
-					<clipitem id="clipitem-5">
-						<masterclipid>masterclip-4</masterclipid>
+					<clipitem id="clipitem-14">
+						<masterclipid>masterclip-12</masterclipid>
 						<name>overlay-d.mp4</name>
 						<enabled>TRUE</enabled>
 						<duration>144</duration>
@@ -315,10 +345,11 @@
 						<out>72</out>
 						<pproTicksIn>0</pproTicksIn>
 						<pproTicksOut>762048000000</pproTicksOut>
+						<compositemode>texturize</compositemode>
 						<alphatype>none</alphatype>
 						<pixelaspectratio>square</pixelaspectratio>
 						<anamorphic>FALSE</anamorphic>
-						<file id="file-4">
+						<file id="file-10">
 							<name>overlay-d.mp4</name>
 							<pathurl>file://localhost/fixtures/premiere-export-kit/media/overlay-d.mp4</pathurl>
 							<rate>
@@ -351,6 +382,98 @@
 								</video>
 							</media>
 						</file>
+						<filter>
+							<effect>
+								<name>Basic Motion</name>
+								<effectid>basic</effectid>
+								<effectcategory>motion</effectcategory>
+								<effecttype>motion</effecttype>
+								<mediatype>video</mediatype>
+								<pproBypass>false</pproBypass>
+								<parameter authoringApp="PremierePro">
+									<parameterid>scale</parameterid>
+									<name>Scale</name>
+									<valuemin>0</valuemin>
+									<valuemax>1000</valuemax>
+									<value>100</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>rotation</parameterid>
+									<name>Rotation</name>
+									<valuemin>-8640</valuemin>
+									<valuemax>8640</valuemax>
+									<value>0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>center</parameterid>
+									<name>Center</name>
+									<value>
+										<horiz>0</horiz>
+										<vert>-0.105556</vert>
+									</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>centerOffset</parameterid>
+									<name>Anchor Point</name>
+									<value>
+										<horiz>0</horiz>
+										<vert>0</vert>
+									</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>antiflicker</parameterid>
+									<name>Anti-flicker Filter</name>
+									<valuemin>0.0</valuemin>
+									<valuemax>1.0</valuemax>
+									<value>0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>leftcrop</parameterid>
+									<name>Left</name>
+									<valuemin>0.0</valuemin>
+									<valuemax>100.0</valuemax>
+									<value>0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>topcrop</parameterid>
+									<name>Top</name>
+									<valuemin>0.0</valuemin>
+									<valuemax>100.0</valuemax>
+									<value>0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>rightcrop</parameterid>
+									<name>Right</name>
+									<valuemin>0.0</valuemin>
+									<valuemax>100.0</valuemax>
+									<value>0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>bottomcrop</parameterid>
+									<name>Bottom</name>
+									<valuemin>0.0</valuemin>
+									<valuemax>100.0</valuemax>
+									<value>0</value>
+								</parameter>
+							</effect>
+						</filter>
+						<filter>
+							<effect>
+								<name>Opacity</name>
+								<effectid>opacity</effectid>
+								<effectcategory>motion</effectcategory>
+								<effecttype>motion</effecttype>
+								<mediatype>video</mediatype>
+								<pproBypass>false</pproBypass>
+								<parameter authoringApp="PremierePro">
+									<parameterid>opacity</parameterid>
+									<name>opacity</name>
+									<valuemin>0</valuemin>
+									<valuemax>100</valuemax>
+									<value>100</value>
+								</parameter>
+							</effect>
+						</filter>
 						<logginginfo>
 							<description></description>
 							<scene></scene>
@@ -368,11 +491,11 @@
 							<lut2></lut2>
 						</colorinfo>
 						<labels>
-							<label2>Violet</label2>
+							<label2>Iris</label2>
 						</labels>
 					</clipitem>
-					<clipitem id="clipitem-6">
-						<masterclipid>masterclip-5</masterclipid>
+					<clipitem id="clipitem-15">
+						<masterclipid>masterclip-13</masterclipid>
 						<name>disabled-e.mp4</name>
 						<enabled>FALSE</enabled>
 						<duration>144</duration>
@@ -389,7 +512,7 @@
 						<alphatype>none</alphatype>
 						<pixelaspectratio>square</pixelaspectratio>
 						<anamorphic>FALSE</anamorphic>
-						<file id="file-5">
+						<file id="file-11">
 							<name>disabled-e.mp4</name>
 							<pathurl>file://localhost/fixtures/premiere-export-kit/media/disabled-e.mp4</pathurl>
 							<rate>
@@ -439,9 +562,13 @@
 							<lut2></lut2>
 						</colorinfo>
 						<labels>
-							<label2>Violet</label2>
+							<label2>Iris</label2>
 						</labels>
 					</clipitem>
+					<enabled>TRUE</enabled>
+					<locked>FALSE</locked>
+				</track>
+				<track TL.SQTrackShy="0" TL.SQTrackExpandedHeight="41" TL.SQTrackExpanded="0" MZ.TrackTargeted="0">
 					<enabled>TRUE</enabled>
 					<locked>FALSE</locked>
 				</track>
