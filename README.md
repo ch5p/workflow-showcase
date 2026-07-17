@@ -1,104 +1,272 @@
 # Workflow Showcase
 
-`English` · [`한국어 →`](./README.ko.md)
+[한국어](./README.ko.md) · **English**
 
-A portable video-template source beta that turns a legacy Final Cut Pro 7 XML (xmeml) exported from Premiere Pro, plus your finished video, into a 1280 × 1080 H.264 showcase clip with a per-SHOT reference map. The tested desktop build currently targets Windows.
+> `Workflow Showcase template` is a simple template app that uses XML data exported from Premiere to place a compact workflow presentation beneath your finished rendered video.
 
-There is currently one official layout, `classic`. It does not automatically support 16:9, 9:16, or 1:1; if you need those, fork the classic presentation and render spec while keeping the stable core intact.
+**Contents**: [Preview](#preview) · [Installation](#installation) · [How to use](#how-to-use) · [Output settings](#output-settings) · [Setting up references](#setting-up-references) · [Troubleshooting](#troubleshooting) · [Closing notes](#closing-notes)
 
-## Why this exists
+# Preview
 
-Most AI-generated clips (for example, from Seedance-class models) look great on their own, but the interesting part — which references drove each shot, and how the cut was assembled — is invisible. This tool takes the timeline you already edited in Premiere and the finished video, and renders a single "process reveal": your video on top, the reference map and the PRIMARY-based cut breakdown underneath. It is meant as a ready-to-post showcase for feeds like X, with no extra compositing work.
+This is how the app works by default.
 
-It is built so that non-coders can remix it. Changing callouts, reference cards, or the cut board to your taste is meant to be driven through an LLM (Codex, Claude, etc.) rather than by editing code by hand. See [Customizing with AI](docs/CUSTOMIZING_WITH_AI.md).
+![Default demo](./docs/readme-assets/animations/demo-playback.webp)
 
-## Beta scope
+The area labeled CLIP A in the center is the user's actual finished video.
 
-- Supported: xmeml sequences and video-track timing
-- Primary validation: Final Cut Pro XML export from Adobe Premiere Pro 2026 v26.2.2 (Build 3)
-- Default output: 1280 × 1080, 60 fps, H.264, 12 Mbps
-- Storage: a single Job under `current-job`, addressed by relative paths
-- Distribution: Windows source beta
-- Not supported: modern FCPXML, CapCut projects, reproduction of Premiere effects/masks
+Below it, the references used during generation are connected directly to the work done in the editing tool.
 
-See [XML Compatibility](docs/XML_COMPATIBILITY.md) for the exact boundaries.
+---
 
-## Requirements
+![PRIMARY timeline example](./docs/readme-assets/images/primary-timeline.png)
 
-- Windows 10 or 11
+By default, only the **topmost (PRIMARY) clip** among the `enabled clips` is imported.
+
+
+
+You can also output it in a different style like this. Ask your agent to customize it however you like.
+
+![Rail-style template](./docs/readme-assets/animations/alternate-rail-layout.webp)
+
+---
+
+Here is an example made from the samples used during development.
+
+Please focus on how the reference/clip interactions change.
+
+The number of final SHOTS matches the number of original video clips used. Splitting one SHOT into multiple edits still counts as one SHOT, while the number of cuts appears as a small EDIT count at the top right of the timeline.
+
+![Three interaction samples](./docs/readme-assets/animations/interaction-samples.webp)
+
+---
+
+# Installation
+
+The easiest method: give the URL below to an agent such as Codex or Claude and ask it to install the app.
+
+```
+https://github.com/ch5p/workflow-showcase
+```
+
+If you want to install it yourself, the requirements are:
+
+- Windows 10 / 11
 - Node.js 22.12 or later
-- npm
-- FFmpeg — required for Export. If WinGet is available, install it with the command below.
+- FFmpeg (required only for Export)
+- NVIDIA GPU recommended (falls back to CPU when unavailable)
 
-This repository does not bundle the FFmpeg binary. On a Windows 10/11 system with WinGet, paste this into Command Prompt or PowerShell. If setup is unfamiliar, you can ask an LLM to run the command for you.
+```
+git clone https://github.com/ch5p/workflow-showcase
+cd workflow-showcase
 
-    winget install -e --id Gyan.FFmpeg
+winget install -e --id Gyan.FFmpeg
 
-Fully quit and restart the app after installation so it can see the updated `PATH`. You can also place a downloaded `ffmpeg.exe` in the project's `ffmpeg/` folder.
+npm.cmd ci
+npm.cmd start
+```
 
-## Quick start
+After that, double-click `START_APP.cmd` inside the folder whenever you want to launch the app.
 
-    npm.cmd ci
-    npm.cmd start
+On the first launch, you can play the sample Job. Load your own XML to replace it.
 
-Or run `START_APP.cmd` after installing.
+The app opens in Korean or English according to your Windows language. You can switch it with the `EN/KR` button in the header.
 
-When no language has been chosen for the Current Job, the first preferred Windows UI language selects Korean or English automatically. The `EN` / `KR` control in the header switches immediately and saves that choice with the Current Job.
+---
 
-The first launch opens the bundled public fixture as a ready-to-play `SAMPLE JOB`:
+# How to use
 
-- XML: `fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml`
-- Video: `fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4`
+Here is the basic workflow.
 
-The sample is 24 fps and 12 seconds, with 5 EDITS, 4 SHOTS, and a PRIMARY order of A → D → B → A → C. To start your own project, click or drop your XML on the top `XML` zone. A valid XML automatically replaces the disposable sample as a new Job; then load the matching finished video from the top `VIDEO` zone. Existing non-sample Jobs still show the safe UPDATE XML / NEW JOB choice.
+![Workflow Showcase workspace](./docs/readme-assets/images/app-workspace.webp)
 
-## Job safety
+## 1. In Premiere, choose Export > Final Cut Pro XML... to export an XML file.
 
-- The app opens the Current Job from a single process at a time; a second launch returns to the existing window.
-- Ordinary `job.json` saves fsync a unique staging file and retry Windows file locks. If the replace ultimately fails, both the existing Job and the completed staging file are preserved.
-- Symlinks/junctions inside `current-job` are rejected to prevent reading, deleting, or writing files outside the Job.
-- UPDATE XML: keeps the existing video, references, GLOBAL/SHOT mappings, title, and output settings, and refreshes only the timeline.
-- NEW JOB: resets source, video, references, mappings, title, and callout only when the user explicitly chooses it. The bundled first-run sample is the only exception: the first valid user XML replaces that disposable sample automatically.
-- A video is committed to the Current Job only after Electron actually reads its metadata and first frame.
-- If the final rename after a completed render fails, the finished `.part.mp4` is not deleted.
+- WS does not currently support effect layers such as Adjustment Layers and automatically excludes them when importing XML. The default UI displays only actual video clips. Exposing effect layers as an `FX` lane requires a separate input adapter and UI implementation.
 
-Jobs live under `current-job`. Copy the whole app folder and it reopens elsewhere via internal relative paths. User data in `current-job` is excluded from Git.
+## 2. Launch the app, then add the XML and VIDEO files by drag-and-drop or by clicking their zones.
 
-## Tests
+- Loading XML and VIDEO together is not currently supported. Add them separately.
 
-Regression fixtures and smoke runs use an OS temp folder instead of the real `current-job`. To verify that tests did not mutate user data, `check` locally compares only the before/after SHA-256 of `current-job/job.json`; it does not print or modify its contents.
+![Importing XML and VIDEO](./docs/readme-assets/animations/import-xml-video.webp)
 
-    npm.cmd run check
-    npm.cmd run smoke
-    npm.cmd run smoke:export
+It is easier to begin by adding references that should appear throughout the project to GLOBAL BASE. You can add references with the `ADD FILES` button as well as drag-and-drop.
 
-`smoke:export` requires FFmpeg, creates a 1-second temporary output, and then deletes it. For visual QA, make a separate file with the real app's `EXPORT H.264` control and inspect that result.
+## 3. Register individual references on each SHOT where the references should change.
 
-## Customizing
+More details are provided below.
 
-- Fixed output width/height and default fps/bitrate: `render-spec.cjs`
-- Shared classic color/font tokens: `src/layouts/classic/tokens.css`
-- Classic placement, region sizing, and style: `src/layouts/classic/classic.css`
-- Parser and PRIMARY calculation: `src/core/` — do not modify for layout work
+## 4. Select EXPORT H.264 and render. That is it.
 
-To customize via an LLM without reading code, see [Customizing with AI](docs/CUSTOMIZING_WITH_AI.md). For a fixed aspect-ratio fork and the safety lines, see [CUSTOMIZING.md](CUSTOMIZING.md) and [Classic Layout](docs/CLASSIC_LAYOUT.md).
+![Export H.264 window](./docs/readme-assets/images/export-dialog.png)
 
-## Known limitations
+- Choosing a custom output folder is not supported.
+- The current Beta UI outputs at 1280 × 1080 / 60 fps. A 24 fps source video is also exported at 60 fps so the UI `interactions` appear smooth.
+- The bitrate can be set to 12 or 24 Mbps.
+- If an NVIDIA encoder is unavailable, the app falls back to CPU rendering. I do not know how slow that may be on your system.
 
-- XML is edit-structure data; it does not reproduce Premiere filters, horizontal flips, Transform, Crop, masks, keyframes, or color grading. Premiere Adjustment Layers are ignored before EDIT/SHOT detection rather than shown as timeline content.
-- Transitions are used only for some boundary calculations and are not rendered as visual effects.
-- The final visual truth is the finished video you load, not the XML.
-- The editor UI is not a responsive product UI, and classic output is 1280 × 1080 only.
-- This source beta has been validated on Windows only.
-- It is not a frame-accurate mastering tool; duplicate paint frames may appear under heavy load.
-- UPDATE XML preserves SHOT mappings that cannot be matched unambiguously for a later UPDATE, but this beta has no screen to list, manually reattach, or individually discard those orphaned mappings.
-- Export copies source audio without transcoding. Some MOV/M4V files whose audio codec is incompatible with MP4 may fail to export.
-- Video and reference imports do not show copy progress or check free disk space in advance. Very large files may appear stalled or fail when space runs out.
+Share the result on social media or in your community.
 
-## Contributing and security
+---
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution process and [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+# Output settings
 
-## License
+## Rendering
 
-The code and the synthetic fixtures included in this repository are under the [MIT License](LICENSE) unless noted otherwise. Adobe, Premiere Pro, Final Cut Pro, and CapCut are trademarks of their respective owners; this project is not affiliated with those companies.
+The rendering process works as follows. This section is excerpted from a ChatGPT 5.6 PRO review.
+
+#### Assessment of the current rendering method
+
+The app does not first create an intermediate lossy-compressed file and then encode it again.
+
+The current exporter:
+
+1. Renders an Electron offscreen window at `1280 × 1080`.
+2. Receives a BGRA raw bitmap from the `paint` event.
+3. Sends each raw frame directly to FFmpeg through stdin.
+4. Creates a 12 Mbps H.264 file with `h264_nvenc` by default.
+5. Retries the entire output with `libx264` if NVENC is unavailable or fails.
+6. Applies `bt709`, `yuv420p`, and `+faststart`.
+
+Therefore, the UI canvas receives **only one final lossy encode**. The source video itself is decoded and re-encoded into the final composite, but it does not pass through a separate lossy screen-recording file.
+
+---
+
+## Additional menu notes
+
+![Header menu](./docs/readme-assets/images/main-toolbar.png)
+
+TO START: Return to the beginning (0 seconds), identical to the Home key
+
+EDIT PANEL: Identical to the collapsible side button
+
+OUTPUT: Open the output folder (custom folder selection is not implemented)
+
+EXPORT H.264: Render the output
+
+![Reload Current Job button](./docs/readme-assets/images/current-job-reload.png)
+
+The ↻ button at the top right of the app is **Reload Current Job**. See [Storage and backup](#storage-and-backup).
+
+EN/KR: Switch the UI language
+
+## Keyboard shortcuts
+
+- Spacebar: Play/pause
+- Home/End: Move to the first/last SHOT
+- Arrow keys: Move between SHOTS
+
+---
+
+## Callout
+
+The title callout provides only minimal styles. You can also use your own distinctive watermark.
+
+![Title callout settings](./docs/readme-assets/images/callout-panel.png)
+
+| LINE | LABEL | MINIMAL |
+| :---: | :---: | :---: |
+| ![LINE](./docs/readme-assets/animations/callout-line.webp) | ![LABEL](./docs/readme-assets/animations/callout-label.webp) | ![MINIMAL](./docs/readme-assets/animations/callout-minimal.webp) |
+
+
+---
+
+## Setting up references
+
+![GLOBAL BASE](./docs/readme-assets/images/global-base.png)
+
+**GLOBAL BASE**: References registered here appear in every SHOT. (Global references)
+
+---
+
+![SHOT reference modes](./docs/readme-assets/images/shot-reference-modes.png)
+
+### SHOT ## references (how to replace references while that SHOT is playing)
+
+- ADD: Add these references beside GLOBAL BASE (default).
+- REPLACE: Ignore GLOBAL BASE and show only these references.
+- HIDE: Hide references during this SHOT.
+- LEAD-IN: Fixed at 1 second with no built-in option. Ask your agent if you want to change it.
+
+LEAD-IN places a reference on the neighboring SHOT one second early when the scene using that reference is too short to register clearly.
+
+![LEAD-IN](./docs/readme-assets/animations/lead-in.webp)
+
+---
+
+## When the durations do not match (DURATION Δ)
+
+If the XML and finished video differ in length by at least one frame, a `DURATION Δ` badge appears at the top left of the paused video.
+
+This is especially likely after an In/Out export because the XML may include the final Out frame.
+
+(You can ignore it. It does not appear during playback or in the rendered output.)
+
+![DURATION Δ badge](./docs/readme-assets/images/duration-delta.webp)
+
+The badge above means that **the XML endpoint is 45.79 seconds while the actual video is 48.79 seconds**. The exported result will stop at **45.79 seconds**, following the XML. If your `video ends at 10 seconds but you want to leave one second of breathing room`, extend the timeline to the desired endpoint with a Color Matte before exporting the XML.
+
+![Matching the timeline length with a Color Matte](./docs/readme-assets/images/duration-matte.png)
+
+---
+
+## Storage and backup
+
+![XML import mode dialog](./docs/readme-assets/images/xml-import-mode.png)
+
+This dialog appears when an XML already exists and you load another XML.
+
+Use **UPDATE XML** when the finished video has gained a SHOT, a SHOT has become shorter or longer, or you need another final_final_really-final.mp4-style update. It preserves the video, references, GLOBAL, title, callout, and output settings, then safely reconnects existing SHOT mappings to the new timeline.
+
+Use **NEW JOB** after finishing one project and moving on to a different one. It resets the existing XML, video, references, mappings, title, and callout, but preserves rendered Export files, logs, UI language, and output settings.
+
+**CANCEL** closes the dialog without changing anything.
+
+The app operates a single `current-job` folder. New information replaces the current work and is not automatically stored in a separate Job slot.
+
+![BACKUP JOB](./docs/readme-assets/images/backup-job.webp)
+
+A small BACKUP JOB button appears at the bottom of the EDIT PANEL. It copies `job.json`, the registered XML, references, and hash information to the `backup` folder. Source video, Export files, and logs are not included, so keep the MP4 used by the Job separately for restoration. You can also quit the app completely and preserve a copy of the entire `current-job` folder.
+
+# Troubleshooting
+
+**Export says FFmpeg is missing**
+→ Run `winget install -e --id Gyan.FFmpeg`, then completely quit and reopen the app. If WinGet is unavailable, place `ffmpeg.exe` in the app folder's `ffmpeg` directory.
+
+**My video is rejected when I add it**
+→ If the app cannot play its codec, it blocks the replacement before changing the existing Job. Export it again as MP4 (H.264) and try loading that file.
+
+**The rendered result is shorter than expected**
+→ See [DURATION Δ](#when-the-durations-do-not-match-duration-δ) above. The app renders only the XML timeline duration.
+
+**I launched the app, but no window appeared**
+→ Check whether another instance is already running. A second launch brings the existing window forward and then exits quietly to protect the Job data.
+
+**Something is wrong, but I do not know why**
+→ Everything is recorded in `current-job/logs/app.log`. The fastest option is to ask an agent, “Read this log and tell me what is wrong.”
+
+---
+
+# Closing notes
+
+- The supported input is Final Cut Pro 7 XML (`xmeml`), including XML exported from Adobe Premiere Pro. Modern Final Cut Pro `.fcpxml` is not currently supported and requires a separate input adapter.
+- The output resolution is `1280 x 1080`, which is reasonably viewable on a phone.
+- I hope people who, like me, cannot be bothered to build an entire workflow presentation but still want to show that some work went into the process will take this and use it in different ways. I paid attention to making it easy to customize, so put your agent to work and tailor it to your taste.
+- I do not have a programming background, so I picked the strongest model I could and asked it to make sure that **when a user types [do it] once, an agent can quickly locate and modify only that part**. During the public-release refactor, the stable core was separated from the presentation areas intended for free customization. I expect modifications to be approachable.
+
+---
+
+Tested in the following environment:
+
+- Windows 11
+- Adobe Premiere 2026 (26.2.2 Build 3)
+
+Not validated in the following environment:
+
+- The app has not been validated on macOS.
+- Modern Final Cut Pro XML (`.fcpxml`) is not supported. A separate input adapter must be created. Ask your agent if needed.
+
+This program does not work with:
+
+- CapCut — it does not provide an official timeline XML export, so it is not supported.
+
+The installation includes AI customization guides. Tell your agent what you want to change, and the documents are organized so it can trace the relevant area quickly. Just give the instruction.
