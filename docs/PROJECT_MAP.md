@@ -11,21 +11,25 @@
 
 ## App
 
-- `main.cjs`: Electron window, file selection, the XML UPDATE/NEW JOB decision boundary, portable copy, `job.json` CAS save, app log
+- `main.cjs`: Electron window and IPC composition, file selection, the XML UPDATE/NEW JOB decision boundary, `job.json` CAS save, and app log
 - `durable-file.cjs`: UUID staging, fsync, Windows rename retry, and preservation of failed staging for ordinary Jobs and completed Exports
 - `owned-path.cjs`: lexical, lstat, and realpath no-follow checks for the Current Job owned root
 - `strings.cjs`: EN/KR user-facing strings for the Main process and the exporter, plus the `ui.language` → preferred OS UI-language resolution rule
 - `preload.cjs`: the minimal local file API exposed to the screen, plus restricted IPC for XML/video/reference drop
 - `job-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for XML UPDATE/NEW JOB
 - `video-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for source video replacement
+- `storage-policy.cjs`: destination free-space checks, bounded safety reserves, asynchronous exclusive copy, streaming SHA-256, progress, and partial-file cleanup
 - `job-backup.cjs`: manual dated snapshot of `job.json`, the recorded timeline XML, registered references, and a hash manifest; source video, Export output, and logs are excluded
 - `timeline-reconcile.cjs`: 1:1 rematching of anonymous SHOT descriptors and orphan preservation
+- `persisted-timeline-state.cjs`: pure validation boundary for legacy/current persisted timeline descriptors, mappings, and orphans
 - `render-spec.cjs`: the central classic width/height and pixel/color contract, plus default output fps/bitrate; an existing Job may override fps/bitrate through `output`
-- `export-preload.cjs`: the start/cancel/progress/open-folder API exposed only to the Export popup
+- `ui-capture.cjs`: maintainer DPR-2 capture controller and exact PNG-dimension verification
+- `smoke-harness.cjs`: isolated Electron smoke orchestration, including the responsive secondary-instance probe and sandboxed Export-dialog probe
+- `export-preload.cjs`: the start/cancel/progress/open-folder API exposed only to the sandboxed Export popup
 - `exporter.cjs`: offscreen BGRA frame capture, FFmpeg H.264 output with optional source-audio stream copy, progress, cancel, and fallback
 - `src/index.html`: the editing screen and the SHOT rail
 - `src/mvp-app.js`: the editing screen, Job store, and output-preview wiring
-- `src/core/*`: the pure core for the legacy xmeml parser, PRIMARY timeline, SHOT descriptor, and reference mapping
+- `src/core/*`: the pure core for the legacy xmeml parser, PRIMARY timeline, SHOT descriptor, reference mapping, and one-frame DURATION-delta threshold
 - `src/adapters/xmeml-unsupported-layers.js`: excludes pathless Premiere Adjustment Layers before the stable PRIMARY/SHOT core runs; effect metadata is not exposed or persisted
 - `src/layouts/classic/tokens.css`, `classic.css`: the official classic presentation tokens and placement
 - `src/output-preview.html`: named presentation regions, the playback clock, and the `window.portablePreview` bridge
@@ -71,6 +75,7 @@ All stored Job paths are relative to the `current-job` root. Store `source/timel
 - UPDATE replaces only `source/timeline.xml` and preserves video/reference/GLOBAL/title/callout/`ui`/`output`. It prefers exact source identity, falls back only when there is unique name + source range/occurrence evidence, and keeps ambiguous/unmatched mappings as orphans.
 - NEW JOB cleans up the source XML/video and reference files when explicitly chosen for an ordinary Job, or automatically after a valid XML is selected for `demo: true`. It resets `references`, `globalReferenceIds`, previous `shotMappings`/orphans, `projectTitle`, and `callout`. It stores the new XML's anonymous descriptors in `timelineShots`, preserves `current-job/logs/`, existing `ui`, and Job `output` settings, and cannot delete the separate app-root `output/` files.
 - The `VIDEO` click/drop zone uses one two-step transaction. A candidate releases the renderer media handle and commits only after a detached Electron video probe reads metadata and the first frame. A preflight failure discards only the candidate and does not change the existing video, Job, or revision. Main owns the existing video/Job backup, replacement, and rollback.
+- Video and reference limits remain generous sanity caps (512 GiB per video, 64 GiB per reference), not the primary disk-protection mechanism. Before copying, the destination must have the selected bytes plus a reserve of `max(512 MiB, 10%)`, capped at 8 GiB. Video/reference payloads are copied asynchronously to exclusive destinations, SHA-256 is calculated while streaming, progress is sent to the editor, and any partial destination is removed after a failed copy. Video commit still re-hashes the prepared candidate before installation.
 - Every mutation compares `jobId + revision`, so an earlier debounced save arriving after an XML UPDATE or NEW JOB cannot overwrite the current state.
 - XML/video transactions retry Windows rename lock errors 4 times, and on persistent failure replace the manifest and Job files via durable copy, fsync, and SHA-256 verification. A valid primary manifest is always the reference; a staging manifest is used only when the primary is missing or corrupted.
 - Locked fixed staging files are bypassed with UUID staging. The rollback completion marker is also fsync'd to UUID staging, then verified and swapped, recording `state: rolled_back`. An interruption before the marker re-runs candidate removal idempotently based on the `moved` inventory and any remaining backup. Transaction cleanup restores the fallback to primary, then removes staging and backup/candidate, and deletes the primary manifest last. A transient cleanup failure of a `prepared`/`committed`/`rolled_back` transaction is recorded as `deferred` and does not block current Job mutation or Export.
@@ -89,9 +94,11 @@ The raw XML that Premiere first produced and the original attachments are not ad
 
 Lifecycle regression checks run only in an OS temp Job root and forcibly verify: persistent `EPERM` on manifest/Job backup/install/restore, valid primary + stale `.tmp`, corrupted primary + valid UUID fallback, locked fixed-staging bypass, cleanup interruption after rollback, candidate-install interruption when there was no prior timeline/video, re-recovery after a marker write failure, a valid `.partial` + a truncated Job backup final, and the identical-Job hash replace skip. Real `current-job` access is failed by a guard.
 
-`scripts/check-runtime-safety.cjs` checks, in an OS temp folder, the ordinary Job atomic save, staging/existing-Job preservation under a persistent lock, symlink/junction escape blocking, and Export final collision avoidance and completed-part preservation in a sibling `output/` outside the test Job. The isolated smoke uses the same temporary sibling layout, additionally checks normal/corrupted video preflight and Job invariance, and uses an asynchronous secondary probe to verify that a second Electron is blocked on the same test `userData` without blocking the primary event loop.
+`scripts/check-runtime-safety.cjs` checks, in an OS temp folder, the ordinary Job atomic save, staging/existing-Job preservation under a persistent lock, symlink/junction escape blocking, and Export final collision avoidance and completed-part preservation in a sibling `output/` outside the test Job. Separate checks cover persisted-timeline compatibility, one-frame DURATION boundaries, copy reserves/stream cleanup, the smoke harness, and DPR-2 capture helpers. The isolated smoke uses the same temporary sibling layout, additionally checks normal/corrupted video preflight and Job invariance, completes one streamed reference import, opens the sandboxed Export popup and verifies its preload API, and uses an asynchronous secondary probe to verify that a second Electron is blocked on the same test `userData` without blocking the primary event loop.
 
 Before the Export popup shows `READY`, `main.cjs` resolves the stored XML, video, and every registered reference with `mustExist: true` inside its owned Current Job directory. The actual Export start repeats its own source/reference checks; the readiness display does not replace that final guard.
+
+After the XML duration is known and before FFmpeg starts, Export estimates the video payload from duration and selected bitrate, adds a 512 kbps audio allowance, 5% container overhead, and the same bounded safety reserve. Insufficient free space fails before encoding with `INSUFFICIENT_DISK_SPACE`; a successful check records `export_space_checked`.
 
 ## Contract Verification
 

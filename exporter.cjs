@@ -9,6 +9,7 @@ const { fsyncExistingFile, replaceByRenameWithRetry } = require("./durable-file.
 const { assertDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
 const { resolveRenderSpec } = require("./render-spec.cjs");
 const { exporterText } = require("./strings.cjs");
+const { assertExportSpace } = require("./storage-policy.cjs");
 
 // One export runs at a time (guarded by `active`), so a module-level language is safe.
 let activeLanguage = "en";
@@ -195,6 +196,26 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       const durationSeconds = Number.isFinite(testSeconds)&&testSeconds>0
         ? Math.min(fullDurationSeconds,testSeconds)
         : fullDurationSeconds;
+      let space;
+      try{
+        space = assertExportSpace({
+          destinationPath: outputRoot,
+          durationSeconds,
+          bitrateMbps,
+        });
+      }catch(error){
+        if(error.code !== "INSUFFICIENT_DISK_SPACE") throw error;
+        const failure = new Error(t("disk_space_insufficient"));
+        failure.code = error.code;
+        failure.requiredBytes = error.requiredBytes;
+        failure.availableBytes = error.availableBytes;
+        throw failure;
+      }
+      logEvent("export_space_checked", {
+        estimatedBytes: space.estimatedBytes,
+        reserveBytes: space.reserveBytes,
+        availableBytes: space.availableBytes.toString(),
+      });
       const totalFrames = Math.ceil(durationSeconds * fps);
       const ffmpegArgs = [
         "-y", "-hide_banner", "-loglevel", "warning",
@@ -319,7 +340,10 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       }
       emit(sender, { state: "error", progress: 0, message: error.message });
       logEvent("export_failed", {
+        code: error.code || "EXPORT_FAILED",
         message: error.message,
+        requiredBytes: error.requiredBytes || null,
+        availableBytes: error.availableBytes || null,
         partPreserved: encodingCompleted && fs.existsSync(temporaryPath) ? path.basename(temporaryPath) : null,
       });
       throw error;

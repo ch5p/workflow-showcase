@@ -42,11 +42,14 @@ Do not modify these files for presentation changes:
 - `src/core/primary-timeline.js`
 - `src/core/shot-model.js`
 - `src/core/reference-mapping.js`
+- `src/core/duration-math.js`
 - `timeline-reconcile.cjs`
+- `persisted-timeline-state.cjs`
 - `job-lifecycle.cjs`
 - `video-lifecycle.cjs`
+- `storage-policy.cjs`
 
-In particular, the XML parser, SHOT identity, reference mapping semantics, Job relative paths, IPC, and Export cancel / encoder fallback are the stable core.
+In particular, the XML parser, SHOT identity, reference mapping semantics, one-frame DURATION threshold, Job relative paths, import storage policy, IPC, and Export cancel / encoder fallback are the stable core.
 
 ## Making a fixed aspect-ratio fork
 

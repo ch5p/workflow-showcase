@@ -711,6 +711,14 @@
     getLanguage:()=>language,setLanguage,
   };
   bridge?.onProjectTitleUpdated(projectTitle=>{if(!transitioning&&!runtimeBlocked)applyProjectTitle(projectTitle)});
+  bridge?.onFileCopyProgress?.(detail=>{
+    if(detail?.state!=="copying"&&detail?.state!=="prepared"&&detail?.state!=="complete")return;
+    const percent=Math.max(0,Math.min(100,Number(detail.percent)||0));
+    const label=language==="ko"
+      ?(detail.kind==="video"?"영상 복사":"레퍼런스 복사")
+      :(detail.kind==="video"?"COPYING VIDEO":"COPYING REFERENCES");
+    ui.showToast(label+" · "+percent+"%");
+  });
   window.addEventListener("wireframechange",scheduleSave);
   const projectTitleInput=document.getElementById("overlayProjectTitle");
   projectTitleInput?.addEventListener("input",event=>scheduleProjectTitleSave(event.currentTarget.value));

@@ -2,7 +2,6 @@
 
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { randomUUID } = require("node:crypto");
-const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -21,6 +20,10 @@ const {
   recoverXmlTransactions,
 } = require("./job-lifecycle.cjs");
 const { reconcileTimelineMappings } = require("./timeline-reconcile.cjs");
+const { validatePersistedTimelineState } = require("./persisted-timeline-state.cjs");
+const { assertCopySpace, copyFileWithHash } = require("./storage-policy.cjs");
+const { createUiCaptureController } = require("./ui-capture.cjs");
+const { attachSmokeHarness } = require("./smoke-harness.cjs");
 const {
   prepareVideoCandidate,
   discardPreparedVideoCandidate,
@@ -79,7 +82,6 @@ const PREPARED_XML_TTL_MS = 10 * 60 * 1000;
 const PREPARED_VIDEO_TTL_MS = 10 * 60 * 1000;
 const preparedXmlImports = new Map();
 const preparedVideoImports = new Map();
-const uiCaptureInProgress = new Set();
 let recoveryRequired = false;
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -195,19 +197,7 @@ function validateJobShape(job){
       throw new Error("shotMappings record is invalid");
     }
   }
-  if(job.timelineShots !== undefined && !Array.isArray(job.timelineShots)) throw new Error("timelineShots must be an array");
-  if(job.orphanedShotMappings !== undefined && !Array.isArray(job.orphanedShotMappings)){
-    throw new Error("orphanedShotMappings must be an array");
-  }
-  if((job.timelineShots?.length || 0) > 0 || (job.orphanedShotMappings?.length || 0) > 0){
-    // RED ZONE: persisted reconcile metadata must stay anonymous and exhaustive.
-    reconcileTimelineMappings({
-      previousShots: job.timelineShots || [],
-      nextShots: job.timelineShots || [],
-      shotMappings: job.shotMappings,
-      orphanedShotMappings: job.orphanedShotMappings || [],
-    });
-  }
+  validatePersistedTimelineState(job);
   if(job.projectTitle !== undefined && typeof job.projectTitle !== "string") throw new Error("projectTitle must be a string");
   if(job.callout !== undefined && !isPlainObject(job.callout)) throw new Error("callout must be an object");
   if(job.demo !== undefined && typeof job.demo !== "boolean") throw new Error("demo must be a boolean");
@@ -326,12 +316,6 @@ function normalizeCallout(value){
       ? DEFAULT_CALLOUT.subtitle
       : String(source.subtitle).replace(/\s+/g, " ").trim().slice(0, 60),
   };
-}
-
-function copyInto(sourcePath, destinationPath){
-  if(path.resolve(sourcePath).toLowerCase() !== path.resolve(destinationPath).toLowerCase()){
-    fs.copyFileSync(sourcePath, destinationPath);
-  }
 }
 
 function staleJobError(operation){
@@ -529,18 +513,38 @@ function discardPreparedVideoForOwner(ownerId){
   }
 }
 
-function prepareVideoImport(event, sourcePath, inputMethod){
+function sendFileCopyProgress(event, detail){
+  try{
+    if(!event?.sender?.isDestroyed()) event.sender.send("file-copy:progress", detail);
+  }catch{}
+}
+
+async function prepareVideoImport(event, sourcePath, inputMethod){
   requireRuntimeReady("video_prepare");
   if(exportController.isRunning()) throw new Error(T("export_block_video"));
   prunePreparedVideoImports();
   discardPreparedVideoForOwner(event.sender.id);
-  const preparation = prepareVideoCandidate({
-    sourcePath,
-    logRoot: LOG_ROOT,
-    inputMethod,
-    allowedExtensions: VIDEO_EXTENSIONS,
-    maxBytes: VIDEO_MAX_BYTES,
-  });
+  const operationId = randomUUID();
+  let preparation;
+  try{
+    preparation = await prepareVideoCandidate({
+      sourcePath,
+      logRoot: LOG_ROOT,
+      inputMethod,
+      allowedExtensions: VIDEO_EXTENSIONS,
+      maxBytes: VIDEO_MAX_BYTES,
+      onProgress: progress => sendFileCopyProgress(event, {
+        operationId,
+        kind: "video",
+        state: "copying",
+        ...progress,
+      }),
+    });
+  }catch(error){
+    sendFileCopyProgress(event, { operationId, kind: "video", state: "failed" });
+    logEvent("video_import_prepare_failed", { code: error.code || "PREPARE_FAILED", inputMethod });
+    throw error;
+  }
   const entry = {
     token: preparation.transactionId,
     preparation,
@@ -550,6 +554,14 @@ function prepareVideoImport(event, sourcePath, inputMethod){
     expiresAt: Date.now() + PREPARED_VIDEO_TTL_MS,
   };
   preparedVideoImports.set(entry.token, entry);
+  sendFileCopyProgress(event, {
+    operationId,
+    kind: "video",
+    state: "prepared",
+    copiedBytes: preparation.inputSize,
+    totalBytes: preparation.inputSize,
+    percent: 100,
+  });
   logEvent("video_import_prepared", {
     transactionId: entry.token,
     videoName: entry.name,
@@ -627,6 +639,14 @@ const exportController = createExportController({
   jobRoot: JOB_ROOT,
   outputRoot: OUTPUT_ROOT,
   logEvent,
+});
+const uiCaptureController = createUiCaptureController({
+  app,
+  dialog,
+  shell,
+  appRoot: APP_ROOT,
+  logEvent,
+  text: T,
 });
 
 let exportWindow = null;
@@ -735,7 +755,7 @@ function openExportWindow(sender, context = {}){
       preload: path.join(APP_ROOT, "export-preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       minimumFontSize: 0,
     },
   });
@@ -750,239 +770,6 @@ function openExportWindow(sender, context = {}){
     exportWindow = null;
   });
   return true;
-}
-
-function runSecondarySmoke(){
-  return new Promise(resolve => {
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    let timer = null;
-    let killGraceTimer = null;
-    let timeoutError = null;
-    let child = null;
-    const appendTail = (current, chunk) => (current + String(chunk || "")).slice(-4000);
-    const finish = result => {
-      if(settled) return;
-      settled = true;
-      if(timer) clearTimeout(timer);
-      if(killGraceTimer) clearTimeout(killGraceTimer);
-      resolve({ ...result, stdout, stderr });
-    };
-    try{
-      // RED ZONE: keep the primary event loop alive so Electron can reject the secondary instance.
-      child = spawn(process.execPath, [APP_ROOT, "--smoke-test"], {
-        cwd: APP_ROOT,
-        env: process.env,
-        windowsHide: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-    }catch(error){
-      finish({ status: null, error });
-      return;
-    }
-    child.stdout?.on("data", chunk => { stdout = appendTail(stdout, chunk); });
-    child.stderr?.on("data", chunk => { stderr = appendTail(stderr, chunk); });
-    child.once("error", error => finish({ status: null, error }));
-    child.once("close", status => finish({ status, error: timeoutError }));
-    timer = setTimeout(() => {
-      timeoutError = new Error("Secondary instance timed out after 10000ms");
-      try{
-        if(child.exitCode == null && !child.killed) child.kill();
-      }catch{}
-      // Let Windows release the child handles before the outer smoke runner removes its temp root.
-      killGraceTimer = setTimeout(() => finish({ status: null, error: timeoutError }), 1500);
-    }, 10000);
-  });
-}
-
-function readPngDimensions(buffer){
-  if(!Buffer.isBuffer(buffer)||buffer.length<24||buffer.toString("ascii",1,4)!=="PNG"){
-    throw new Error("UI capture did not produce a valid PNG.");
-  }
-  return {width:buffer.readUInt32BE(16),height:buffer.readUInt32BE(20)};
-}
-
-async function readUiCaptureGeometry(contents){
-  return contents.executeJavaScript(`(()=>{
-    const viewport={width:window.innerWidth,height:window.innerHeight};
-    const normalize=(rect,padding=0)=>{
-      if(!rect||rect.width<=0||rect.height<=0)return null;
-      const x=Math.max(0,Math.floor(rect.left-padding));
-      const y=Math.max(0,Math.floor(rect.top-padding));
-      const right=Math.min(viewport.width,Math.ceil(rect.right+padding));
-      const bottom=Math.min(viewport.height,Math.ceil(rect.bottom+padding));
-      if(right<=x||bottom<=y)return null;
-      return {x,y,width:right-x,height:bottom-y};
-    };
-    const appRoot=document.querySelector(".app");
-    const preview=document.getElementById("previewShell");
-    const edit=document.getElementById("editOverlay");
-    let callout=null;
-    try{
-      const frame=document.getElementById("renderPreview");
-      const frameRect=frame?.getBoundingClientRect();
-      const frameWindow=frame?.contentWindow;
-      const element=frameWindow?.document.getElementById("videoCallout");
-      const style=element?frameWindow.getComputedStyle(element):null;
-      if(frameRect&&element&&style&&Number.parseFloat(style.opacity)>.01){
-        const inner=element.getBoundingClientRect();
-        const scaleX=frameRect.width/Math.max(1,frameWindow.innerWidth);
-        const scaleY=frameRect.height/Math.max(1,frameWindow.innerHeight);
-        callout=normalize({
-          left:frameRect.left+inner.left*scaleX,
-          top:frameRect.top+inner.top*scaleY,
-          right:frameRect.left+inner.right*scaleX,
-          bottom:frameRect.top+inner.bottom*scaleY,
-          width:inner.width*scaleX,
-          height:inner.height*scaleY,
-        },18);
-      }
-    }catch{}
-    return {
-      viewport,
-      scopes:{
-        full:normalize(appRoot?.getBoundingClientRect()),
-        preview:normalize(preview?.getBoundingClientRect()),
-        edit:edit&&!edit.classList.contains("closed")?normalize(edit.getBoundingClientRect()):null,
-        callout,
-      },
-    };
-  })()`,true);
-}
-
-async function captureUiSnapshots2x(contents){
-  const initial=await readUiCaptureGeometry(contents);
-  const viewport=initial?.viewport;
-  if(!viewport||viewport.width<1||viewport.height<1)throw new Error("UI capture viewport is unavailable.");
-  const captureDebugger=contents.debugger;
-  const attachedByCapture=!captureDebugger.isAttached();
-  if(attachedByCapture)captureDebugger.attach("1.3");
-  try{
-    await captureDebugger.sendCommand("Emulation.setDeviceMetricsOverride",{
-      width:viewport.width,
-      height:viewport.height,
-      deviceScaleFactor:2,
-      mobile:false,
-      screenWidth:viewport.width,
-      screenHeight:viewport.height,
-    });
-    await contents.executeJavaScript("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",true);
-    const geometry=await readUiCaptureGeometry(contents);
-    const snapshots={};
-    for(const [scope,rect] of Object.entries(geometry.scopes||{})){
-      if(!rect)continue;
-      try{
-        const result=await captureDebugger.sendCommand("Page.captureScreenshot",{
-          format:"png",
-          fromSurface:true,
-          captureBeyondViewport:false,
-          clip:{x:rect.x,y:rect.y,width:rect.width,height:rect.height,scale:1},
-        });
-        const png=Buffer.from(result.data||"","base64");
-        const size=readPngDimensions(png);
-        const expectedWidth=rect.width*2;
-        const expectedHeight=rect.height*2;
-        if(Math.abs(size.width-expectedWidth)>3||Math.abs(size.height-expectedHeight)>3){
-          throw new Error(`DPR 2 verification failed for ${scope}: ${size.width}x${size.height}, expected ${expectedWidth}x${expectedHeight}.`);
-        }
-        snapshots[scope]={png,...size};
-      }catch(error){
-        snapshots[scope]={error:error.message};
-      }
-    }
-    return snapshots;
-  }finally{
-    try{await captureDebugger.sendCommand("Emulation.clearDeviceMetricsOverride")}catch{}
-    if(attachedByCapture&&captureDebugger.isAttached())captureDebugger.detach();
-  }
-}
-
-function captureFileStamp(date=new Date()){
-  const pad=value=>String(value).padStart(2,"0");
-  return `${date.getFullYear()}${pad(date.getMonth()+1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
-}
-
-async function showUiCaptureError(owner,key="ui_capture_failed"){
-  await dialog.showMessageBox(owner,{
-    type:"error",
-    title:"Capture UI 2X",
-    message:T(key),
-    buttons:["CLOSE"],
-    defaultId:0,
-    cancelId:0,
-    noLink:true,
-  });
-}
-
-async function openUiCaptureTool(owner){
-  if(!owner||owner.isDestroyed())return;
-  const ownerId=owner.webContents.id;
-  if(uiCaptureInProgress.has(ownerId))return;
-  uiCaptureInProgress.add(ownerId);
-  try{
-    // Capture before opening the chooser so a playing preview keeps the hotkey-time frame.
-    const snapshots=await captureUiSnapshots2x(owner.webContents);
-    const scopes=["full","preview","edit","callout"];
-    const choice=await dialog.showMessageBox(owner,{
-      type:"question",
-      title:"Capture UI 2X",
-      message:T("ui_capture_choose"),
-      detail:T("ui_capture_detail"),
-      buttons:["FULL APP","PREVIEW AREA","EDIT PANEL","TITLE CALLOUT","CANCEL"],
-      defaultId:1,
-      cancelId:4,
-      noLink:true,
-    });
-    if(choice.response===4){
-      logEvent("ui_capture_cancelled",{phase:"scope"});
-      return;
-    }
-    const scope=scopes[choice.response];
-    const snapshot=snapshots[scope];
-    if(!snapshot){
-      logEvent("ui_capture_failed",{scope,code:"SCOPE_UNAVAILABLE",message:"Scope is not visible."});
-      await showUiCaptureError(owner,"ui_capture_scope_unavailable");
-      return;
-    }
-    if(snapshot.error){
-      logEvent("ui_capture_failed",{scope,code:"CAPTURE_FAILED",message:snapshot.error});
-      await showUiCaptureError(owner);
-      return;
-    }
-    const slug={full:"full-app",preview:"preview-area",edit:"edit-panel",callout:"title-callout"}[scope];
-    let defaultFolder="";
-    try{defaultFolder=app.getPath("pictures")}catch{}
-    const save=await dialog.showSaveDialog(owner,{
-      title:"Save 2X PNG",
-      defaultPath:path.join(defaultFolder||APP_ROOT,`workflow-showcase-${slug}-2x-${captureFileStamp()}.png`),
-      buttonLabel:"SAVE PNG",
-      filters:[{name:"PNG Image",extensions:["png"]}],
-      properties:["showOverwriteConfirmation"],
-    });
-    if(save.canceled||!save.filePath){
-      logEvent("ui_capture_cancelled",{phase:"save",scope});
-      return;
-    }
-    const outputPath=save.filePath.toLowerCase().endsWith(".png")?save.filePath:save.filePath+".png";
-    fs.writeFileSync(outputPath,snapshot.png);
-    logEvent("ui_capture_completed",{scope,width:snapshot.width,height:snapshot.height});
-    shell.showItemInFolder(outputPath);
-  }catch(error){
-    logEvent("ui_capture_failed",{code:error.code||"CAPTURE_FAILED",message:error.message});
-    await showUiCaptureError(owner);
-  }finally{
-    uiCaptureInProgress.delete(ownerId);
-  }
-}
-
-function registerUiCaptureShortcut(window){
-  window.webContents.on("before-input-event",(event,input)=>{
-    const command=process.platform==="darwin"?input.meta:input.control;
-    if(input.type!=="keyDown"||input.isAutoRepeat||!command||!input.shift||String(input.key).toLowerCase()!=="p")return;
-    event.preventDefault();
-    void openUiCaptureTool(window);
-  });
 }
 
 function createWindow(){
@@ -1006,202 +793,24 @@ function createWindow(){
   window.loadFile(path.join(APP_ROOT, "src", "index.html"));
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", event => event.preventDefault());
-  registerUiCaptureShortcut(window);
+  uiCaptureController.registerShortcut(window);
   const ownerId = window.webContents.id;
   window.webContents.once("destroyed", () => {
     discardPreparedXmlForOwner(ownerId);
     discardPreparedVideoForOwner(ownerId);
   });
-  if(SMOKE_TEST){
-    window.webContents.once("did-finish-load", async () => {
-      try{
-        const secondary = await runSecondarySmoke();
-        if(secondary.error || secondary.status !== 0 || !String(secondary.stdout || "").includes("SINGLE_INSTANCE_REJECTED")){
-          throw new Error("Single-instance smoke failed: " + JSON.stringify({
-            status: secondary.status,
-            error: secondary.error?.message || null,
-            stdout: String(secondary.stdout || "").slice(-500),
-            stderr: String(secondary.stderr || "").slice(-500),
-          }));
-        }
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        const starterJob = loadJob();
-        const starterDemo = {
-          enabled: starterJob.demo === true,
-          hasXml: starterJob.xml?.relativePath === "source/timeline.xml",
-          hasVideo: starterJob.video?.relativePath === "source/video.mp4",
-          title: starterJob.projectTitle,
-        };
-        if(!starterDemo.enabled || !starterDemo.hasXml || !starterDemo.hasVideo || starterDemo.title !== "SYNTHETIC TIMELINE"){
-          throw new Error("Bundled starter demo contract failed: " + JSON.stringify(starterDemo));
-        }
-        const smokeXmlPath = process.env.PORTABLE_SMOKE_XML;
-        if(smokeXmlPath && fs.existsSync(smokeXmlPath)){
-          const xmlText = fs.readFileSync(smokeXmlPath, "utf8");
-          const parsed = await window.webContents.executeJavaScript(
-            `window.portableMvp.loadXmlText(${JSON.stringify(xmlText)})`
-          );
-          if(parsed?.fps!==24||parsed?.durationFrames!==288||parsed?.edits!==5||parsed?.shots!==4){
-            throw new Error("Public fixture contract changed: "+JSON.stringify(parsed));
-          }
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        await window.webContents.executeJavaScript('document.getElementById("calloutSettings").setAttribute("open", "")');
-        const result = await window.webContents.executeJavaScript(`({
-          title: document.title,
-          hasApi: Boolean(window.portableApi),
-          hasWireframe: Boolean(window.wireframeApi),
-          hasPreview: Boolean(document.getElementById("renderPreview")?.contentWindow?.portablePreview),
-          shotRail: Boolean(document.getElementById("shotRail")),
-          editOverlay: Boolean(document.getElementById("editOverlay")),
-          calloutSettingsOpen: document.getElementById("calloutSettings")?.open,
-          previewState: document.getElementById("renderPreview")?.contentWindow?.portablePreview?.getState(),
-          shotItems: document.querySelectorAll("#shotRailList .shotRailItem").length,
-          editStatus: document.getElementById("editCountStatus")?.textContent,
-          jobName: document.getElementById("jobName")?.textContent
-        })`);
-        if(!result.hasApi || !result.hasWireframe || !result.hasPreview || !result.shotRail || !result.editOverlay || !result.calloutSettingsOpen){
-          throw new Error("Smoke contract failed: " + JSON.stringify(result));
-        }
-        if(!String(result.jobName || "").startsWith("SAMPLE JOB / ")){
-          throw new Error("Starter demo label is missing: " + JSON.stringify(result));
-        }
-        result.starterDemo = starterDemo;
-        if(process.env.PORTABLE_SMOKE_XML && (!result.shotItems || result.editStatus==="0 EDITS")){
-          throw new Error("XML did not reach the parent SHOT rail: " + JSON.stringify(result));
-        }
-        const smokeVideoPath = process.env.PORTABLE_SMOKE_VIDEO;
-        const smokeInvalidVideoPath = process.env.PORTABLE_SMOKE_INVALID_VIDEO;
-        if(smokeVideoPath && smokeInvalidVideoPath){
-          const videoPreflight = await window.webContents.executeJavaScript(`(async()=>{
-            const api=window.portableApi;
-            const preview=document.getElementById("renderPreview").contentWindow.portablePreview;
-            const before=await api.getJob();
-            const good=await api.prepareDroppedVideo(${JSON.stringify(smokeVideoPath)});
-            const metadata=await preview.preflightVideo(good.candidateUrl,10000);
-            await api.discardPreparedVideo(good.token,"smoke-preflight-passed");
-            const bad=await api.prepareDroppedVideo(${JSON.stringify(smokeInvalidVideoPath)});
-            let rejected=false;
-            try{await preview.preflightVideo(bad.candidateUrl,5000)}catch(error){rejected=true}
-            await api.discardPreparedVideo(bad.token,"smoke-preflight-failed");
-            const after=await api.getJob();
-            return {
-              valid:metadata.readyState>=2&&metadata.width>0&&metadata.height>0,
-              invalidRejected:rejected,
-              jobUnchanged:before.jobId===after.jobId&&before.revision===after.revision,
-            };
-          })()`);
-          if(!videoPreflight.valid || !videoPreflight.invalidRejected || !videoPreflight.jobUnchanged){
-            throw new Error("Video preflight smoke failed: "+JSON.stringify(videoPreflight));
-          }
-          result.videoPreflight=videoPreflight;
-        }
-        result.singleInstance=true;
-        const job = loadJob();
-        if(job.xml?.relativePath && job.video?.relativePath){
-          const playback = await window.webContents.executeJavaScript(`(async()=>{
-            const bridge=document.getElementById("renderPreview").contentWindow.portablePreview;
-            for(let attempt=0;attempt<30&&bridge.getState().readyState<1;attempt+=1){
-              await new Promise(resolve=>setTimeout(resolve,100));
-            }
-            const items=document.querySelectorAll("#shotRailList .shotRailItem");
-            (items[1]||items[0])?.click();
-            await new Promise(resolve=>setTimeout(resolve,150));
-            const sought=bridge.getState();
-             bridge.playPause();
-             await new Promise(resolve=>setTimeout(resolve,600));
-             const playing=bridge.getState();
-             const expectedPlayingSeek=window.wireframeApi.snapshot().shots[2]?.start||0;
-             (items[2]||items[1]||items[0])?.click();
-             await new Promise(resolve=>setTimeout(resolve,500));
-             const playingSeek=bridge.getState();
-             bridge.playPause();
-             const shots=window.wireframeApi.snapshot().shots;
-             const crossingStart=Math.max(0,(shots[1]?.end||0)-.1);
-             bridge.seekFrame(crossingStart*bridge.getState().fps);
-             document.activeElement?.blur?.();
-             document.body.dispatchEvent(new KeyboardEvent("keydown",{key:" ",code:"Space",bubbles:true,cancelable:true}));
-             await new Promise(resolve=>setTimeout(resolve,500));
-             const shortcutPlaying=bridge.getState();
-             const syncedShot=document.querySelector("#shotRailList .shotRailItem.selected")?.dataset.shot||null;
-             document.body.dispatchEvent(new KeyboardEvent("keyup",{key:" ",code:"Space",bubbles:true,cancelable:true}));
-             document.body.dispatchEvent(new KeyboardEvent("keydown",{key:" ",code:"Space",bubbles:true,cancelable:true}));
-             return {sought,playing,playingSeek,expectedPlayingSeek,shortcutPlaying,syncedShot,expectedSyncedShot:String(shots[2]?.id||"")};
-          })()`);
-          if(playback.sought.readyState<1 || playback.sought.currentTime<.5){
-            throw new Error("SHOT seek failed: " + JSON.stringify(playback));
-          }
-           if(playback.playing.paused || playback.playing.currentTime<=playback.sought.currentTime+.1){
-             throw new Error("Video playback failed: " + JSON.stringify(playback));
-           }
-           if(playback.playingSeek.paused || Math.abs(playback.playingSeek.currentTime-playback.expectedPlayingSeek)>.9){
-             throw new Error("Playing SHOT seek drifted: " + JSON.stringify(playback));
-           }
-           if(playback.shortcutPlaying.paused || playback.syncedShot!==playback.expectedSyncedShot){
-             throw new Error("Space shortcut or SHOT follow failed: " + JSON.stringify(playback));
-           }
-          result.playback=playback;
-        }
-        await window.webContents.executeJavaScript(`(()=>{
-          const bridge=document.getElementById("renderPreview").contentWindow.portablePreview;
-          bridge.setCalloutConfig({enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:30,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"});
-          bridge.seekFrame(2*bridge.getState().fps);
-        })()`);
-        await new Promise(resolve => setTimeout(resolve, 180));
-        const image = await window.webContents.capturePage();
-        fs.writeFileSync(path.join(OUTPUT_ROOT, "mvp-smoke.png"), image.toPNG());
-        if(smokeXmlPath && fs.existsSync(smokeXmlPath)){
-          const demoReplacement = await window.webContents.executeJavaScript(`(async()=>{
-            const api=window.portableApi;
-            const preview=document.getElementById("renderPreview").contentWindow.portablePreview;
-            const before=await api.getJob();
-            const prepared=await api.prepareDroppedXml(${JSON.stringify(smokeXmlPath)});
-            const candidate=preview.inspectXml(prepared.text);
-            const mode=await api.chooseXmlImportMode(prepared.token);
-            await preview.releaseMedia({references:true});
-            const result=await api.commitXmlImport({
-              token:prepared.token,
-              expectedJobId:before.jobId,
-              expectedRevision:before.revision,
-              previousTimelineShots:[],
-              nextTimelineShots:candidate.shots,
-            });
-            return {
-              mode,
-              previousJobId:before.jobId,
-              nextJobId:result.job.jobId,
-              demo:result.job.demo===true,
-              video:result.job.video,
-            };
-          })()`);
-          if(demoReplacement.mode!=="new" || demoReplacement.demo || demoReplacement.video!==null ||
-              demoReplacement.previousJobId===demoReplacement.nextJobId){
-            throw new Error("Starter demo replacement contract failed: "+JSON.stringify(demoReplacement));
-          }
-          result.demoReplacement=demoReplacement;
-        }
-        logEvent("smoke_passed", result);
-        console.log("SMOKE_OK " + JSON.stringify(result));
-        app.exit(0);
-      }catch(error){
-        logEvent("smoke_failed", { message: error.message });
-        console.error("SMOKE_FAILED " + error.stack);
-        app.exit(1);
-      }
-    });
-  }
-  if(EXPORT_SMOKE){
-    window.webContents.once("did-finish-load", async () => {
-      try{
-        const result = await exportController.start(window.webContents, loadJob());
-        console.log("EXPORT_SMOKE_OK " + JSON.stringify(result));
-        app.exit(0);
-      }catch(error){
-        console.error("EXPORT_SMOKE_FAILED " + error.stack);
-        app.exit(1);
-      }
-    });
-  }
+  attachSmokeHarness({
+    window,
+    app,
+    appRoot: APP_ROOT,
+    outputRoot: OUTPUT_ROOT,
+    loadJob,
+    logEvent,
+    exportController,
+    BrowserWindow,
+    smokeTest: SMOKE_TEST,
+    exportSmoke: EXPORT_SMOKE,
+  });
 }
 
 if(SINGLE_INSTANCE_LOCK){
@@ -1553,30 +1162,60 @@ ipcMain.handle("job:discard-prepared-video", (event, payload) => {
   return discardPreparedVideoEntry(entry, payload?.reason);
 });
 
-function importReferencePaths(sourcePaths, expectedJobId, expectedRevision){
+async function importReferencePaths(event, sourcePaths, expectedJobId, expectedRevision){
   const current = requireExpectedJob(expectedJobId, expectedRevision, "reference_import");
   const added = [];
   const createdPaths = [];
+  const inspectedInputs = [];
   let next = null;
+  for(const candidate of sourcePaths || []){
+    if(typeof candidate !== "string") continue;
+    try{
+      const inspected = inspectInputFile(candidate, REFERENCE_EXTENSIONS, REFERENCE_MAX_BYTES);
+      const type = referenceType(inspected.absolutePath);
+      if(type) inspectedInputs.push({ inspected, type });
+    }catch(error){
+      logEvent("reference_import_skipped", { code: error.code || "INVALID_INPUT" });
+    }
+  }
+  const totalBytes = inspectedInputs.reduce((sum, item) => {
+    const nextTotal = sum + item.inspected.size;
+    if(!Number.isSafeInteger(nextTotal)) throw new RangeError("Reference import selection is too large");
+    return nextTotal;
+  }, 0);
+  const operationId = randomUUID();
+  if(totalBytes){
+    try{
+      assertCopySpace({ destinationPath: REFERENCES_ROOT, contentBytes: totalBytes, label: "Reference import" });
+    }catch(error){
+      sendFileCopyProgress(event, { operationId, kind: "references", state: "failed" });
+      logEvent("reference_import_prepare_failed", { code: error.code || "PREPARE_FAILED" });
+      throw error;
+    }
+  }
+  let completedBytes = 0;
   try{
-    for(const candidate of sourcePaths || []){
-      if(typeof candidate !== "string") continue;
-      let inspected = null;
-      try{
-        inspected = inspectInputFile(candidate, REFERENCE_EXTENSIONS, REFERENCE_MAX_BYTES);
-      }catch(error){
-        logEvent("reference_import_skipped", { code: error.code || "INVALID_INPUT" });
-        continue;
-      }
+    for(const { inspected, type } of inspectedInputs){
       const sourcePath = inspected.absolutePath;
-      const type = referenceType(sourcePath);
-      if(!type) continue;
       const nextNumber = current.references.filter(reference => reference.type === type).length + 1;
       const id = type + "-" + String(nextNumber).padStart(2, "0") + "-" + Date.now().toString(36);
       const destinationName = id + "_" + safeName(path.basename(sourcePath));
       const destinationPath = path.join(REFERENCES_ROOT, destinationName);
-      copyInto(sourcePath, destinationPath);
+      await copyFileWithHash({
+        sourcePath,
+        destinationPath,
+        expectedBytes: inspected.size,
+        onProgress: progress => sendFileCopyProgress(event, {
+          operationId,
+          kind: "references",
+          state: "copying",
+          copiedBytes: completedBytes + progress.copiedBytes,
+          totalBytes,
+          percent: totalBytes ? Math.min(100, Math.round((completedBytes + progress.copiedBytes) / totalBytes * 100)) : 100,
+        }),
+      });
       createdPaths.push(destinationPath);
+      completedBytes += inspected.size;
       const reference = {
         id,
         type,
@@ -1590,12 +1229,23 @@ function importReferencePaths(sourcePaths, expectedJobId, expectedRevision){
     current.references = normalizeReferenceLabels(current.references);
     next = added.length ? writeJob(current) : current;
   }catch(error){
+    sendFileCopyProgress(event, { operationId, kind: "references", state: "failed" });
     for(const createdPath of createdPaths){
       try{if(fs.existsSync(createdPath)) fs.unlinkSync(createdPath)}catch(cleanupError){
         logEvent("reference_import_cleanup_failed", { code: cleanupError.code || "CLEANUP_FAILED" });
       }
     }
     throw error;
+  }
+  if(totalBytes){
+    sendFileCopyProgress(event, {
+      operationId,
+      kind: "references",
+      state: "complete",
+      copiedBytes: totalBytes,
+      totalBytes,
+      percent: 100,
+    });
   }
   logEvent("references_imported", { count: added.length });
   return hydrateJob(next);
@@ -1614,11 +1264,11 @@ ipcMain.handle("job:add-references", async (event, payload) => {
     ? await dialog.showOpenDialog(owner, options)
     : await dialog.showOpenDialog(options);
   if(result.canceled || !result.filePaths.length) return null;
-  return importReferencePaths(result.filePaths, payload?.expectedJobId, payload?.expectedRevision);
+  return importReferencePaths(event, result.filePaths, payload?.expectedJobId, payload?.expectedRevision);
 });
 
-ipcMain.handle("job:add-reference-paths", (_event, payload) => (
-  importReferencePaths(payload?.paths, payload?.expectedJobId, payload?.expectedRevision)
+ipcMain.handle("job:add-reference-paths", (event, payload) => (
+  importReferencePaths(event, payload?.paths, payload?.expectedJobId, payload?.expectedRevision)
 ));
 
 ipcMain.handle("job:delete-reference", (_event, payload) => {

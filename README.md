@@ -130,7 +130,7 @@ Share the result on social media or in your community.
 
 ## Rendering
 
-The rendering process works as follows. This section is excerpted from a ChatGPT 5.6 PRO review.
+The current exporter works as follows.
 
 #### Assessment of the current rendering method
 

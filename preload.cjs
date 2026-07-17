@@ -30,5 +30,10 @@ contextBridge.exposeInMainWorld("portableApi", {
     ipcRenderer.on("project:title-updated", listener);
     return () => ipcRenderer.removeListener("project:title-updated", listener);
   },
+  onFileCopyProgress: callback => {
+    const listener = (_event, detail) => callback(detail);
+    ipcRenderer.on("file-copy:progress", listener);
+    return () => ipcRenderer.removeListener("file-copy:progress", listener);
+  },
   log: (event, detail = {}) => ipcRenderer.invoke("app:log", event, detail),
 });

@@ -19,7 +19,7 @@ fs.mkdirSync(target,{recursive:true});
 
 const rootFiles=[
   ".gitattributes",".gitignore","AGENTS.md","CHANGELOG.md","CONTRIBUTING.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","LICENSE","README.md","README.ko.md","ROADMAP.md","SECURITY.md","START_APP.cmd",
-  "durable-file.cjs","export-preload.cjs","exporter.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","preload.cjs","render-spec.cjs","strings.cjs","timeline-reconcile.cjs","video-lifecycle.cjs",
+  "durable-file.cjs","export-preload.cjs","exporter.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","persisted-timeline-state.cjs","preload.cjs","render-spec.cjs","smoke-harness.cjs","storage-policy.cjs","strings.cjs","timeline-reconcile.cjs","ui-capture.cjs","video-lifecycle.cjs",
 ];
 // Keep the entire tracked docs surface together so README assets, the Pages landing page,
 // and agent contracts cannot silently disappear from a later public-tree build.

@@ -49,18 +49,23 @@ Read the operation in this order:
 
 A preflight failure must not have a commit event. The previous video, `job.json`, `jobId`, and `revision` must remain unchanged. A commit failure must restore the previous video and Job together.
 
+If `video_import_prepare_failed` reports `INSUFFICIENT_DISK_SPACE`, the copy was rejected before video preflight or Job replacement. Free space on the Current Job drive and retry. Video/reference copies reserve the selected bytes plus `max(512 MiB, 10%)`, capped at 8 GiB. A failed streaming copy removes its partial destination; do not weaken the reserve or switch back to a blocking copy to work around the error.
+
 ## Export
 
 Read the operation in this order:
 
 1. `export_dialog_opened`
 2. `export_started`
-3. `export_encoder_fallback` when NVENC failed and the CPU retry began
-4. `export_finalize_failed`, `export_completed`, `export_failed`, or `export_cancelled`
+3. `export_space_checked` after the duration-based output estimate passes
+4. `export_encoder_fallback` when NVENC failed and the CPU retry began
+5. `export_finalize_failed`, `export_completed`, `export_failed`, or `export_cancelled`
+
+`INSUFFICIENT_DISK_SPACE` before `export_space_checked` means FFmpeg did not start. Free space in the app-root `output/` drive and retry; there is no completed part to recover from that attempt.
 
 If `export_finalize_failed` appears and a `.part.mp4` remains under app-root `output/`, treat it as a completed file whose final rename failed. Do not delete it. Quit the app, preserve the file, and rename it to `.mp4` manually after confirming the event.
 
-If the popup does not open, inspect `export_dialog_opened` and whether `export-preload.cjs` loaded. If progress stalls, inspect the latest Export progress state and FFmpeg log instead of repeatedly opening new Export windows.
+If the popup does not open, inspect `export_dialog_opened`, its `sandbox: true` window preference, and whether `export-preload.cjs` loaded. If progress stalls, inspect the latest Export progress state and FFmpeg log instead of repeatedly opening new Export windows.
 
 Source audio is copied without transcoding. AAC is the validated fixture codec; other audio codecs are not preflighted or transcoded. If video import succeeds but Export fails while attaching audio, create an H.264 MP4 with AAC audio and load that version.
 

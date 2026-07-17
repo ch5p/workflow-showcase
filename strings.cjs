@@ -96,6 +96,7 @@ const EXPORTER = {
     video_missing: "No video is loaded.",
     finalize_rename: "The render finished but the file could not be renamed to its final name. The completed .part.mp4 was preserved.",
     finalize_verify: "The render finished but final file verification failed. Check the output folder and the app log.",
+    disk_space_insufficient: "The output folder does not have enough free space for the estimated render and its safety reserve. Free some space and try again.",
   },
   ko: {
     output_name_failed: "새 Export 파일명을 할당하지 못했습니다.",
@@ -108,6 +109,7 @@ const EXPORTER = {
     video_missing: "영상이 없습니다.",
     finalize_rename: "렌더는 완료됐지만 최종 파일명으로 바꾸지 못했습니다. 완성된 .part.mp4 파일은 보존했습니다.",
     finalize_verify: "렌더는 완료됐지만 최종 파일 검증에 실패했습니다. output 폴더와 앱 로그를 확인하세요.",
+    disk_space_insufficient: "output 폴더에 예상 렌더 파일과 안전 여유분을 저장할 공간이 부족합니다. 공간을 확보한 뒤 다시 시도하세요.",
   },
 };
 

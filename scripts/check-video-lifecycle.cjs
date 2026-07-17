@@ -161,10 +161,10 @@ function assertManifestHasNoAbsoluteInput(preparation, inputPath){
   assert.equal(strings.some(value => path.isAbsolute(value) || /^file:/i.test(value)), false);
 }
 
-function prepareInput(root, layout, label, content = NEW_VIDEO){
+async function prepareInput(root, layout, label, content = NEW_VIDEO){
   const inputPath = path.join(root, "inputs", label + ".mp4");
   writeFile(inputPath, content);
-  const preparation = prepareVideoCandidate({
+  const preparation = await prepareVideoCandidate({
     sourcePath: inputPath,
     logRoot: layout.logRoot,
     inputMethod: "test-drop",
@@ -177,7 +177,7 @@ function prepareInput(root, layout, label, content = NEW_VIDEO){
   return { inputPath, preparation };
 }
 
-function runInvalidInputChecks(root){
+async function runInvalidInputChecks(root){
   const invalidPath = path.join(root, "inputs", "invalid.txt");
   const emptyPath = path.join(root, "inputs", "empty.mp4");
   const logRoot = path.join(root, "invalid-logs");
@@ -192,7 +192,7 @@ function runInvalidInputChecks(root){
     () => inspectVideoCandidate({ sourcePath: emptyPath, allowedExtensions: [".mp4"], maxBytes: VIDEO_LIMIT }),
     /file is empty/i,
   );
-  assert.throws(
+  await assert.rejects(
     () => prepareVideoCandidate({
       sourcePath: emptyPath,
       logRoot,
@@ -218,9 +218,9 @@ function runInvalidInputChecks(root){
   }
 }
 
-function runDiscardCheck(root){
+async function runDiscardCheck(root){
   const layout = createLayout(root, "discard");
-  const { preparation } = prepareInput(root, layout, "discard-video");
+  const { preparation } = await prepareInput(root, layout, "discard-video");
   assert.equal(discardPreparedVideoCandidate(preparation), true);
   assert.equal(discardPreparedVideoCandidate(preparation), false);
   assert.deepEqual(transactionNames(layout.logRoot), []);
@@ -228,9 +228,9 @@ function runDiscardCheck(root){
   assertPreservedSentinels(layout);
 }
 
-function runSuccessCheck(root){
+async function runSuccessCheck(root){
   const layout = createLayout(root, "success");
-  const { inputPath, preparation } = prepareInput(root, layout, "success-video");
+  const { inputPath, preparation } = await prepareInput(root, layout, "success-video");
   const inspected = inspectVideoCandidate({
     sourcePath: inputPath,
     allowedExtensions: [".mp4"],
@@ -260,9 +260,9 @@ function runSuccessCheck(root){
   assert.ok(events.some(item => item.event === "job_video_commit_committed"));
 }
 
-function runPersistentManifestEpermCheck(root){
+async function runPersistentManifestEpermCheck(root){
   const layout = createLayout(root, "manifest-eperm");
-  const { preparation } = prepareInput(root, layout, "manifest-eperm-video");
+  const { preparation } = await prepareInput(root, layout, "manifest-eperm-video");
   const originalRename = fs.renameSync;
   let renameAttempts = 0;
   fs.renameSync = function(sourcePath, destinationPath){
@@ -293,9 +293,9 @@ function runPersistentManifestEpermCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runLockedStaleManifestTempCheck(root){
+async function runLockedStaleManifestTempCheck(root){
   const layout = createLayout(root, "locked-stale-manifest");
-  const { preparation } = prepareInput(root, layout, "locked-stale-manifest-video");
+  const { preparation } = await prepareInput(root, layout, "locked-stale-manifest-video");
   const staleTemporaryPath = preparation.manifestPath + ".tmp";
   fs.copyFileSync(preparation.manifestPath, staleTemporaryPath);
   const originalUnlink = fs.unlinkSync;
@@ -343,9 +343,9 @@ function runLockedStaleManifestTempCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runFallbackAuthorityCleanupInterruptionCheck(root){
+async function runFallbackAuthorityCleanupInterruptionCheck(root){
   const layout = createLayout(root, "fallback-authority-cleanup");
-  const { preparation } = prepareInput(root, layout, "fallback-authority-cleanup-video");
+  const { preparation } = await prepareInput(root, layout, "fallback-authority-cleanup-video");
   const uniqueTemporaryPath = preparation.manifestPath + ".tmp-" + require("node:crypto").randomUUID();
   fs.copyFileSync(preparation.manifestPath, uniqueTemporaryPath);
   fs.writeFileSync(preparation.manifestPath, "{BROKEN PRIMARY\n");
@@ -384,9 +384,9 @@ function runFallbackAuthorityCleanupInterruptionCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runManifestReadFallbackChecks(root){
+async function runManifestReadFallbackChecks(root){
   const fallbackLayout = createLayout(root, "manifest-fallback");
-  const { preparation: fallbackPreparation } = prepareInput(root, fallbackLayout, "manifest-fallback-video");
+  const { preparation: fallbackPreparation } = await prepareInput(root, fallbackLayout, "manifest-fallback-video");
   const temporaryManifestPath = fallbackPreparation.manifestPath + ".tmp";
   fs.copyFileSync(fallbackPreparation.manifestPath, temporaryManifestPath);
   fs.writeFileSync(fallbackPreparation.manifestPath, "{BROKEN PRIMARY\n");
@@ -394,7 +394,7 @@ function runManifestReadFallbackChecks(root){
   assert.deepEqual(transactionNames(fallbackLayout.logRoot), []);
 
   const primaryLayout = createLayout(root, "manifest-primary-first");
-  const { preparation: primaryPreparation } = prepareInput(root, primaryLayout, "manifest-primary-first-video");
+  const { preparation: primaryPreparation } = await prepareInput(root, primaryLayout, "manifest-primary-first-video");
   const staleTemporary = JSON.parse(fs.readFileSync(primaryPreparation.manifestPath, "utf8"));
   staleTemporary.state = "rolling_back";
   staleTemporary.phase = "rolling_back";
@@ -407,9 +407,9 @@ function runManifestReadFallbackChecks(root){
   assert.deepEqual(transactionNames(primaryLayout.logRoot), []);
 }
 
-function runPersistentJobInstallEpermCheck(root){
+async function runPersistentJobInstallEpermCheck(root){
   const layout = createLayout(root, "job-install-eperm");
-  const { preparation } = prepareInput(root, layout, "job-install-eperm-video");
+  const { preparation } = await prepareInput(root, layout, "job-install-eperm-video");
   const nextJob = nextJobFor(layout, "job-install-eperm-video.mp4");
   const originalRename = fs.renameSync;
   let renameAttempts = 0;
@@ -440,9 +440,9 @@ function runPersistentJobInstallEpermCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runCommitFailureRollbackCheck(root){
+async function runCommitFailureRollbackCheck(root){
   const layout = createLayout(root, "commit-failure");
-  const { preparation } = prepareInput(root, layout, "rollback-video");
+  const { preparation } = await prepareInput(root, layout, "rollback-video");
   const oldJobText = fs.readFileSync(layout.jobPath, "utf8");
   const originalRename = fs.renameSync;
   fs.renameSync = function(sourcePath, destinationPath){
@@ -472,9 +472,9 @@ function runCommitFailureRollbackCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runRecoveryCheck(root){
+async function runRecoveryCheck(root){
   const layout = createLayout(root, "recovery");
-  const { preparation } = prepareInput(root, layout, "recovery-video");
+  const { preparation } = await prepareInput(root, layout, "recovery-video");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const backupRoot = path.join(preparation.transactionRoot, "backup");
   const sourceBackupRoot = path.join(backupRoot, "source");
@@ -510,9 +510,9 @@ function runRecoveryCheck(root){
   assert.ok(events.some(item => item.event === "job_video_recovery_rolled_back"));
 }
 
-function runRollbackCleanupInterruptionCheck(root){
+async function runRollbackCleanupInterruptionCheck(root){
   const layout = createLayout(root, "rollback-cleanup-interruption");
-  const { preparation } = prepareInput(root, layout, "rollback-cleanup-interruption-video");
+  const { preparation } = await prepareInput(root, layout, "rollback-cleanup-interruption-video");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const backupRoot = path.join(preparation.transactionRoot, "backup");
   const sourceBackupRoot = path.join(backupRoot, "source");
@@ -567,10 +567,10 @@ function runRollbackCleanupInterruptionCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runEmptyPreviousVideoRollbackCheck(root){
+async function runEmptyPreviousVideoRollbackCheck(root){
   const layout = createLayout(root, "empty-previous-video");
   fs.unlinkSync(path.join(layout.sourceRoot, "video.mp4"));
-  const { preparation } = prepareInput(root, layout, "empty-previous-video-candidate");
+  const { preparation } = await prepareInput(root, layout, "empty-previous-video-candidate");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const backupRoot = path.join(preparation.transactionRoot, "backup");
   fs.mkdirSync(backupRoot, { recursive: true });
@@ -596,9 +596,9 @@ function runEmptyPreviousVideoRollbackCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runRollbackMarkerWriteFailureRetryCheck(root){
+async function runRollbackMarkerWriteFailureRetryCheck(root){
   const layout = createLayout(root, "rollback-marker-write-failure");
-  const { preparation } = prepareInput(root, layout, "rollback-marker-write-failure-video");
+  const { preparation } = await prepareInput(root, layout, "rollback-marker-write-failure-video");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const backupRoot = path.join(preparation.transactionRoot, "backup");
   const sourceBackupRoot = path.join(backupRoot, "source");
@@ -656,9 +656,9 @@ function runRollbackMarkerWriteFailureRetryCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runPersistentJobRestoreEpermCheck(root){
+async function runPersistentJobRestoreEpermCheck(root){
   const layout = createLayout(root, "job-restore-eperm");
-  const { preparation } = prepareInput(root, layout, "job-restore-eperm-video");
+  const { preparation } = await prepareInput(root, layout, "job-restore-eperm-video");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const backupRoot = path.join(preparation.transactionRoot, "backup");
   const sourceBackupRoot = path.join(backupRoot, "source");
@@ -708,9 +708,9 @@ function runPersistentJobRestoreEpermCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runIdenticalJobRestoreSkipsReplaceCheck(root){
+async function runIdenticalJobRestoreSkipsReplaceCheck(root){
   const layout = createLayout(root, "job-restore-identical");
-  const { preparation } = prepareInput(root, layout, "job-restore-identical-video");
+  const { preparation } = await prepareInput(root, layout, "job-restore-identical-video");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const backupRoot = path.join(preparation.transactionRoot, "backup");
   const sourceBackupRoot = path.join(backupRoot, "source");
@@ -758,9 +758,9 @@ function runIdenticalJobRestoreSkipsReplaceCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runMissingJobBackupRecoveryCheck(root){
+async function runMissingJobBackupRecoveryCheck(root){
   const layout = createLayout(root, "missing-job-backup");
-  const { preparation } = prepareInput(root, layout, "missing-job-backup-video");
+  const { preparation } = await prepareInput(root, layout, "missing-job-backup-video");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const backupRoot = path.join(preparation.transactionRoot, "backup");
   const sourceBackupRoot = path.join(backupRoot, "source");
@@ -794,9 +794,9 @@ function runMissingJobBackupRecoveryCheck(root){
   assert.equal(transactionNames(layout.logRoot).length, 1);
 }
 
-function runEarlyCommittingRecoveryCheck(root){
+async function runEarlyCommittingRecoveryCheck(root){
   const layout = createLayout(root, "early-recovery");
-  const { preparation } = prepareInput(root, layout, "early-recovery-video");
+  const { preparation } = await prepareInput(root, layout, "early-recovery-video");
   const oldJobText = fs.readFileSync(layout.jobPath, "utf8");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   const nextJobText = JSON.stringify(nextJobFor(layout, "early-recovery-video.mp4"), null, 2) + "\n";
@@ -824,9 +824,9 @@ function runEarlyCommittingRecoveryCheck(root){
   assert.deepEqual(transactionNames(layout.logRoot), []);
 }
 
-function runOrphanCleanupChecks(root){
+async function runOrphanCleanupChecks(root){
   const preparedLayout = createLayout(root, "prepared-orphan");
-  prepareInput(root, preparedLayout, "prepared-orphan-video");
+  await prepareInput(root, preparedLayout, "prepared-orphan-video");
   const preparedRecovery = recoverVideoTransactions({
     logRoot: preparedLayout.logRoot,
     sourceRoot: preparedLayout.sourceRoot,
@@ -838,7 +838,7 @@ function runOrphanCleanupChecks(root){
   assert.deepEqual(fs.readFileSync(path.join(preparedLayout.sourceRoot, "video.mp4")), OLD_VIDEO);
 
   const committedLayout = createLayout(root, "committed-orphan");
-  const { preparation } = prepareInput(root, committedLayout, "committed-orphan-video");
+  const { preparation } = await prepareInput(root, committedLayout, "committed-orphan-video");
   const manifest = JSON.parse(fs.readFileSync(preparation.manifestPath, "utf8"));
   manifest.state = "committed";
   manifest.phase = "committed";
@@ -867,33 +867,38 @@ function safeCleanup(root){
   fs.rmSync(resolved, { recursive: true, force: true });
 }
 
-let temporaryRoot = null;
-let accessGuard = null;
-try{
-  temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
-  assertOutsideRealCurrentJob(temporaryRoot);
-  accessGuard = installCurrentJobAccessGuard();
-  runInvalidInputChecks(temporaryRoot);
-  runDiscardCheck(temporaryRoot);
-  runSuccessCheck(temporaryRoot);
-  runPersistentManifestEpermCheck(temporaryRoot);
-  runLockedStaleManifestTempCheck(temporaryRoot);
-  runFallbackAuthorityCleanupInterruptionCheck(temporaryRoot);
-  runManifestReadFallbackChecks(temporaryRoot);
-  runPersistentJobInstallEpermCheck(temporaryRoot);
-  runCommitFailureRollbackCheck(temporaryRoot);
-  runRecoveryCheck(temporaryRoot);
-  runRollbackCleanupInterruptionCheck(temporaryRoot);
-  runEmptyPreviousVideoRollbackCheck(temporaryRoot);
-  runRollbackMarkerWriteFailureRetryCheck(temporaryRoot);
-  runPersistentJobRestoreEpermCheck(temporaryRoot);
-  runIdenticalJobRestoreSkipsReplaceCheck(temporaryRoot);
-  runMissingJobBackupRecoveryCheck(temporaryRoot);
-  runEarlyCommittingRecoveryCheck(temporaryRoot);
-  runOrphanCleanupChecks(temporaryRoot);
-  assert.equal(accessGuard.blockedAccesses(), 0, "real current-job access was attempted");
-  console.log("VIDEO_LIFECYCLE_CHECK_OK");
-}finally{
-  accessGuard?.restore();
-  safeCleanup(temporaryRoot);
-}
+(async () => {
+  let temporaryRoot = null;
+  let accessGuard = null;
+  try{
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
+    assertOutsideRealCurrentJob(temporaryRoot);
+    accessGuard = installCurrentJobAccessGuard();
+    await runInvalidInputChecks(temporaryRoot);
+    await runDiscardCheck(temporaryRoot);
+    await runSuccessCheck(temporaryRoot);
+    await runPersistentManifestEpermCheck(temporaryRoot);
+    await runLockedStaleManifestTempCheck(temporaryRoot);
+    await runFallbackAuthorityCleanupInterruptionCheck(temporaryRoot);
+    await runManifestReadFallbackChecks(temporaryRoot);
+    await runPersistentJobInstallEpermCheck(temporaryRoot);
+    await runCommitFailureRollbackCheck(temporaryRoot);
+    await runRecoveryCheck(temporaryRoot);
+    await runRollbackCleanupInterruptionCheck(temporaryRoot);
+    await runEmptyPreviousVideoRollbackCheck(temporaryRoot);
+    await runRollbackMarkerWriteFailureRetryCheck(temporaryRoot);
+    await runPersistentJobRestoreEpermCheck(temporaryRoot);
+    await runIdenticalJobRestoreSkipsReplaceCheck(temporaryRoot);
+    await runMissingJobBackupRecoveryCheck(temporaryRoot);
+    await runEarlyCommittingRecoveryCheck(temporaryRoot);
+    await runOrphanCleanupChecks(temporaryRoot);
+    assert.equal(accessGuard.blockedAccesses(), 0, "real current-job access was attempted");
+    console.log("VIDEO_LIFECYCLE_CHECK_OK");
+  }finally{
+    accessGuard?.restore();
+    safeCleanup(temporaryRoot);
+  }
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

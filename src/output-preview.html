@@ -129,6 +129,7 @@
 <script src="./core/primary-timeline.js"></script>
 <script src="./core/shot-model.js"></script>
 <script src="./core/reference-mapping.js"></script>
+<script src="./core/duration-math.js"></script>
 <script>
 "use strict";
 /* ============ CONFIG (사용자 수정 영역) ============ */
@@ -1142,11 +1143,14 @@ function updateDurationDelta(){
   // Visible only while not running, so the offscreen Export capture (body.running) never bakes it into output.
   const badge=$("durationDelta");
   if(!badge)return;
-  const xmlSeconds=DATA&&Number(DATA.fps)>0?DATA.duration/DATA.fps:null;
-  if(xmlSeconds===null||!hasSyncVideo()){ badge.hidden=true; return; }
-  const delta=mainVideo.duration-xmlSeconds;
-  if(Math.abs(delta)<1/DATA.fps-1e-6){ badge.hidden=true; return; }
-  badge.textContent="DURATION Δ "+(delta>0?"+":"-")+Math.abs(delta).toFixed(2)
+  const result=DATA&&hasSyncVideo()?window.PortableDurationMath?.resolveDurationDelta({
+    videoSeconds:mainVideo.duration,
+    durationFrames:DATA.duration,
+    fps:DATA.fps,
+  }):null;
+  if(!result||!result.visible){ badge.hidden=true; return; }
+  const {xmlSeconds,deltaSeconds}=result;
+  badge.textContent="DURATION Δ "+(deltaSeconds>0?"+":"-")+Math.abs(deltaSeconds).toFixed(2)
     +"s · XML "+xmlSeconds.toFixed(2)+"s / VIDEO "+mainVideo.duration.toFixed(2)+"s";
   badge.hidden=false;
 }

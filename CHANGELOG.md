@@ -21,6 +21,11 @@
 - Made the Export popup verify that its stored XML, video, and reference files still exist before showing `READY`
 - Removed the unimplemented `DURATION Δ` claim and documented the actual orphan behavior and audio-codec limits
 - Limited GitHub Actions to read-only repository access and a bounded run time
+- Added free-space preflight, bounded safety reserves, non-blocking streamed video/reference copies, progress, streaming SHA-256, and partial-file cleanup while keeping generous sanity caps
+- Added duration-based Export space estimation before FFmpeg starts
+- Split persisted timeline validation, DURATION boundary math, UI capture, and smoke orchestration into focused modules with regression checks
+- Sandboxed the Export confirmation window and verified its preload API in the isolated desktop smoke
+- Replaced the README's model-review attribution with a direct description of the current exporter behavior
 
 ## 0.1.0-beta.1
 

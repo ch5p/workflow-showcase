@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { assertCopySpace, copyFileWithHash } = require("./storage-policy.cjs");
 
 const DEFAULT_VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
 const DEFAULT_VIDEO_MAX_BYTES = 512 * 1024 * 1024 * 1024;
@@ -460,21 +461,32 @@ function validatePreparation(preparation){
   };
 }
 
-function prepareVideoCandidate({
+async function prepareVideoCandidate({
   sourcePath,
   logRoot,
   inputMethod,
   allowedExtensions = DEFAULT_VIDEO_EXTENSIONS,
   maxBytes = DEFAULT_VIDEO_MAX_BYTES,
+  onProgress,
 } = {}){
   const inspected = inspectVideoCandidate({ sourcePath, allowedExtensions, maxBytes });
   const resolvedLogRoot = ensureDirectoryNoLink(logRoot, "logRoot");
+  assertCopySpace({
+    destinationPath: resolvedLogRoot,
+    contentBytes: inspected.size,
+    label: "Video import",
+  });
   const transactionId = crypto.randomUUID().toLowerCase();
   const transactionRoot = path.join(resolvedLogRoot, TRANSACTION_PREFIX + transactionId);
   fs.mkdirSync(transactionRoot, { recursive: false });
   const paths = transactionPaths(transactionRoot, inspected.extension);
   try{
-    fs.copyFileSync(inspected.absolutePath, paths.candidatePath, fs.constants.COPYFILE_EXCL);
+    const copied = await copyFileWithHash({
+      sourcePath: inspected.absolutePath,
+      destinationPath: paths.candidatePath,
+      expectedBytes: inspected.size,
+      onProgress,
+    });
     const candidate = inspectVideoCandidate({
       sourcePath: paths.candidatePath,
       allowedExtensions: [inspected.extension],
@@ -490,7 +502,7 @@ function prepareVideoCandidate({
         name: safeDisplayName(inspected.name, inspected.extension),
         extension: inspected.extension,
         size: candidate.size,
-        sha256: hashFile(paths.candidatePath),
+        sha256: copied.sha256,
         method: safeMethod(inputMethod),
       },
       hadJob: null,

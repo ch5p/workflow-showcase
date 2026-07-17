@@ -10,6 +10,7 @@ const root=path.resolve(__dirname,"..");
 const fixtureRoot=path.join(root,"fixtures","premiere-export-kit","public-fixture");
 const fixtureXml=path.join(fixtureRoot,"premiere-synthetic.xml");
 const fixtureVideo=path.join(fixtureRoot,"premiere-synthetic-final.mp4");
+const fixtureReference=path.join(fixtureRoot,"..","media","clip-a.mp4");
 const temporaryRoot=fs.mkdtempSync(path.join(os.tmpdir(),"workflow-showcase-smoke-"));
 const jobRoot=path.join(temporaryRoot,"current-job");
 const invalidVideo=path.join(temporaryRoot,"invalid-video.mp4");
@@ -67,6 +68,7 @@ try{
     PORTABLE_SMOKE_XML:fixtureXml,
     PORTABLE_SMOKE_VIDEO:fixtureVideo,
     PORTABLE_SMOKE_INVALID_VIDEO:invalidVideo,
+    PORTABLE_SMOKE_REFERENCE:fixtureReference,
   };
   if(exportMode)env.PORTABLE_EXPORT_TEST_SECONDS=process.env.PORTABLE_EXPORT_TEST_SECONDS||"1";
   result=spawnSync(electronPath,[root,exportMode?"--export-smoke":"--smoke-test"],{
