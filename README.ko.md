@@ -8,6 +8,12 @@
 
 # 미리보기
 
+## 데모 영상
+
+[![Workflow Showcase 데모 영상](https://img.youtube.com/vi/PEgAahhQ0S8/hqdefault.jpg)](https://youtu.be/PEgAahhQ0S8?si=GPWo128m4cGhtP9S)
+
+▶ **유튜브에서 데모 영상 보기**
+
 앱의 기본 구동은 이렇습니다.
 
 ![기본 데모](./docs/readme-assets/animations/demo-playback.webp)

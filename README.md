@@ -8,6 +8,12 @@
 
 # Preview
 
+## Demo video
+
+[![Workflow Showcase demo video](https://img.youtube.com/vi/PEgAahhQ0S8/hqdefault.jpg)](https://youtu.be/PEgAahhQ0S8?si=GPWo128m4cGhtP9S)
+
+▶ **Watch the demo video on YouTube**
+
 This is how the app works by default.
 
 ![Default demo](./docs/readme-assets/animations/demo-playback.webp)
@@ -211,7 +217,7 @@ The badge above means that **the XML endpoint is 45.79 seconds while the actual 
 
 ## Storage and backup
 
-![XML import mode dialog](./docs/readme-assets/images/xml-import-mode.png)
+![XML import mode dialog](./docs/readme-assets/images/xml-import-mode-en.webp)
 
 This dialog appears when an XML already exists and you load another XML.
 
