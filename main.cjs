@@ -79,6 +79,7 @@ const DEFAULT_CALLOUT = {
   subtitle: "WORKFLOW SHOWCASE · EDIT WORKFLOW",
 };
 const DEFAULT_PROJECT_TITLE = "UNTITLED PROJECT";
+const DEFAULT_REFERENCE_MOTION = "classic";
 const LOG_PATH = path.join(LOG_ROOT, "app.log");
 const VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
 const VIDEO_MAX_BYTES = 512 * 1024 * 1024 * 1024;
@@ -126,6 +127,7 @@ function emptyJob(){
     orphanedShotMappings: [],
     projectTitle: DEFAULT_PROJECT_TITLE,
     callout: { ...DEFAULT_CALLOUT },
+    referenceMotion: DEFAULT_REFERENCE_MOTION,
     ui: { scale: 1.25 },
     output: { codec: CLASSIC_RENDER_SPEC.codec, bitrateMbps: CLASSIC_RENDER_SPEC.bitrateMbps, fps: CLASSIC_RENDER_SPEC.fps },
   };
@@ -204,6 +206,9 @@ function validateJobShape(job){
   validatePersistedTimelineState(job);
   if(job.projectTitle !== undefined && typeof job.projectTitle !== "string") throw new Error("projectTitle must be a string");
   if(job.callout !== undefined && !isPlainObject(job.callout)) throw new Error("callout must be an object");
+  if(job.referenceMotion !== undefined && !["classic", "pop3d"].includes(job.referenceMotion)){
+    throw new Error("referenceMotion must be classic or pop3d");
+  }
   if(job.demo !== undefined && typeof job.demo !== "boolean") throw new Error("demo must be a boolean");
   if(!isPlainObject(job.ui) || !isPlainObject(job.output)) throw new Error("ui and output must be objects");
   if(job.ui.language !== undefined && !["en", "ko"].includes(job.ui.language)) throw new Error("ui.language must be en or ko");
@@ -307,6 +312,10 @@ function writeJob(job, { preserveDemo = false } = {}){
 function normalizeProjectTitle(value){
   if(value === undefined || value === null) return DEFAULT_PROJECT_TITLE;
   return String(value).replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+function normalizeReferenceMotion(value){
+  return value === "pop3d" ? "pop3d" : DEFAULT_REFERENCE_MOTION;
 }
 
 function normalizeCallout(value){
@@ -612,6 +621,7 @@ function hydrateJob(job){
     ...job,
     projectTitle: normalizeProjectTitle(job.projectTitle),
     callout: normalizeCallout(job.callout),
+    referenceMotion: normalizeReferenceMotion(job.referenceMotion),
     xml: job.xml ? { ...job.xml, ...publicFile(job.xml.relativePath, SOURCE_ROOT, "xml") } : null,
     video: job.video ? { ...job.video, ...publicFile(job.video.relativePath, SOURCE_ROOT, "video") } : null,
     references: normalizeReferenceLabels(job.references).map(reference => ({
@@ -944,6 +954,9 @@ ipcMain.handle("job:save", (_event, payload) => {
     shotMappings: safeMappings,
     projectTitle: payload?.projectTitle === undefined ? current.projectTitle : normalizeProjectTitle(payload.projectTitle),
     callout: payload?.callout === undefined ? current.callout : normalizeCallout(payload.callout),
+    referenceMotion: payload?.referenceMotion === undefined
+      ? normalizeReferenceMotion(current.referenceMotion)
+      : normalizeReferenceMotion(payload.referenceMotion),
     ui: payload?.ui && typeof payload.ui === "object" ? { ...current.ui, ...payload.ui } : current.ui,
   });
   logEvent("job_saved", {

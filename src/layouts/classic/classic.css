@@ -216,12 +216,39 @@ body.running #durationDelta{display:none}
   backface-visibility:hidden;will-change:opacity,transform;
   transition:opacity .2s ease-out,transform .42s cubic-bezier(.16,1.18,.3,1)}
 .referenceDockItem.revealed{opacity:1;transform:translate3d(0,0,0) scale(1)}
+#referenceDock[data-motion="classic"] .referenceDockItem.revealed.referenceEnter{animation:referenceDockClassic .42s cubic-bezier(.16,1.18,.3,1) both;
+  animation-delay:var(--reference-enter-delay,0s)}
+#referenceDock[data-motion="pop3d"]{perspective:640px;perspective-origin:48% 62%;transform-style:preserve-3d}
+#referenceDock[data-motion="pop3d"] .referenceDockItem{opacity:.62;filter:brightness(.84) saturate(.86);
+  transform:translate3d(-18px,18px,-118px) scale(.82) rotateX(18deg) rotateY(-22deg);transform-origin:left bottom;
+  transform-style:preserve-3d;box-shadow:18px 20px 24px rgba(22,28,25,.22);
+  will-change:opacity,transform,box-shadow,filter;transition:opacity .18s ease-out}
+#referenceDock[data-motion="pop3d"] .referenceDockItem.revealed{opacity:1;
+  transform:translate3d(0,0,0) scale(1) rotateX(0) rotateY(0);filter:brightness(1) saturate(1);
+  box-shadow:0 2px 7px rgba(22,28,25,.08)}
+#referenceDock[data-motion="pop3d"] .referenceDockItem.revealed.referenceEnter{animation:referenceDockPop3d .56s cubic-bezier(.18,.84,.24,1) both;
+  animation-delay:var(--reference-enter-delay,0s)}
 .referenceDockItem.leadInEnter{opacity:1;transition:transform .42s cubic-bezier(.16,1.18,.3,1)}
 .referenceDockItem.leaving{position:absolute;left:var(--leaving-left,0);top:0;z-index:3;width:var(--leaving-width,176px);
   height:88px;flex:0 0 auto;border-width:1px;opacity:1;transform:none;pointer-events:none;
-  transition:opacity .32s ease,transform .32s ease}
+  animation:none;transition:opacity .32s ease,transform .32s ease}
 .referenceDockItem.leaving.fadeOut{opacity:0;transform:translate3d(-8px,0,0) scale(.98)}
 .referenceDockItem:not(.revealed):not(.leaving){position:absolute;visibility:hidden;pointer-events:none}
+@keyframes referenceDockClassic{
+  0%{visibility:hidden;opacity:0;transform:translate3d(-18px,8px,0) scale(.9) rotate(-.6deg)}
+  1%{visibility:visible;opacity:0;transform:translate3d(-18px,8px,0) scale(.9) rotate(-.6deg)}
+  100%{visibility:visible;opacity:1;transform:translate3d(0,0,0) scale(1) rotate(0)}
+}
+@keyframes referenceDockPop3d{
+  0%{visibility:hidden;transform:translate3d(-18px,18px,-118px) scale(.82) rotateX(18deg) rotateY(-22deg);
+    filter:brightness(.84) saturate(.86);box-shadow:18px 20px 24px rgba(22,28,25,.22)}
+  1%{visibility:visible;transform:translate3d(-18px,18px,-118px) scale(.82) rotateX(18deg) rotateY(-22deg);
+    filter:brightness(.84) saturate(.86);box-shadow:18px 20px 24px rgba(22,28,25,.22)}
+  70%{visibility:visible;transform:translate3d(1.5px,-1.5px,12px) scale(1.016) rotateX(-1.2deg) rotateY(.8deg);
+    filter:brightness(1.025) saturate(1.015);box-shadow:0 5px 10px rgba(22,28,25,.12)}
+  100%{visibility:visible;transform:translate3d(0,0,0) scale(1) rotateX(0) rotateY(0);
+    filter:brightness(1) saturate(1);box-shadow:0 2px 7px rgba(22,28,25,.08)}
+}
 .referenceDockItem video,.referenceDockItem img{display:block;width:100%;height:100%}
 .referenceDockItem video{object-fit:cover}
 .referenceDockItem img{object-fit:contain;background:#fff}

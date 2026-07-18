@@ -31,6 +31,7 @@ Two visual requests also have narrow JavaScript-owned presentation values in `sr
 
 - Fixed aspect ratio: `CONFIG.panelHeight`, `applyLayout()`, and `fitScale()` write the panel height and resolved canvas size. Account for them together with `render-spec.cjs` and `classic.css`.
 - Reference-card size/density: `positionReferenceDock()` calculates the `72`–`176` px card width, `8` px gap assumption, `--reference-item-width`, and the `visibleCount > 6` crop state.
+- Reference entrance: `referenceMotion` selects the `classic` or `pop3d` presentation in `classic.css`. Both motions deliberately share the same hidden-to-visible trigger, stagger, LEAD-IN, replacement, and cleanup path in `output-preview.html`; customize the scoped keyframes without splitting that timing path.
 
 Treat only those values as presentation plumbing. Do not rewrite `positionReferenceDock()` or alter visible-reference selection, LEAD-IN, crossfade, ghost-card cleanup, the playback clock, or parser/core behavior.
 

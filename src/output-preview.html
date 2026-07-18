@@ -438,12 +438,19 @@ function prepareLeadInEntries(nextIds){
     item.leadInTimer=setTimeout(()=>cancelLeadInEntry(item),460);
   });
 }
+function restartReferenceEntrance(item,delaySeconds=0){
+  // RED ZONE: restart only on a real hidden-to-visible change; reflowing an existing card must not replay its entrance.
+  item.el.style.setProperty("--reference-enter-delay",Math.max(0,Number(delaySeconds)||0)+"s");
+  item.el.classList.remove("referenceEnter");
+  void item.el.offsetWidth;
+  item.el.classList.add("referenceEnter");
+}
 function clearOutgoingReferences(nextIds){
   REF_ITEMS.filter(item=>item.revealed&&!nextIds.includes(item.config.id)).forEach(item=>{
     cancelReferenceExit(item);
     cancelLeadInEntry(item);
     item.revealed=false;
-    item.el.classList.remove("revealed");
+    item.el.classList.remove("revealed","referenceEnter");
     if(item.media.tagName==="VIDEO"){item.media.pause();item.media.currentTime=0}
   });
 }
@@ -574,8 +581,10 @@ function positionReferenceDock(frame){
   }
   REF_ITEMS.forEach(item=>{
     let revealed=frame>=item.triggerFrame&&frame<item.endFrame;
+    let portableIndex=-1;
     if(portableVisible){
       const index=portableVisible.indexOf(item.config.id);
+      portableIndex=index;
       item.el.style.order=index>=0?String(index):"";
       const globals=PORTABLE_REFERENCE_STATE.globalReferenceIds||[];
       const isShotSpecific=portableMapping?.refs?.includes(item.config.id)
@@ -604,11 +613,21 @@ function positionReferenceDock(frame){
     previousPositions??=captureReferencePositions();
     item.revealed=revealed;
     item.el.classList.toggle("revealed",revealed);
+    if(revealed){
+      const entranceDelay=instantReplacement&&portableIndex>=0
+        ?portableIndex*REFERENCE_REVEAL_DELAY_SECONDS
+        :0;
+      restartReferenceEntrance(item,entranceDelay);
+    }else{
+      item.el.classList.remove("referenceEnter");
+      item.el.style.removeProperty("--reference-enter-delay");
+    }
     if(!revealed&&item.media.tagName==="VIDEO") item.media.currentTime=0;
     changed=true;
   });
   const leavingCount=REF_ITEMS.filter(item=>item.el.classList.contains("leaving")).length;
   const dock=$("referenceDock");
+  dock.dataset.motion=PORTABLE_REFERENCE_STATE?.referenceMotion==="pop3d"?"pop3d":"classic";
   const availableWidth=dock.clientWidth-Math.max(0,visibleCount-1)*8;
   const itemWidth=visibleCount?Math.min(176,Math.max(72,availableWidth/visibleCount)):176;
   dock.style.setProperty("--reference-item-width",itemWidth+"px");

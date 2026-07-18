@@ -18,6 +18,7 @@
   let calloutSaveTimer=0;
   let pendingSavePromise=Promise.resolve();
   const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",motion:"fade",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
+  const DEFAULT_REFERENCE_MOTION="classic";
   const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4",".mov",".m4v"])};
 
   function preview(){ return iframe.contentWindow?.portablePreview||null; }
@@ -75,10 +76,28 @@
       })),
       globalReferenceIds:snapshot.globalReferenceIds,
       shotMappings:snapshot.shotMappings,
+      referenceMotion:normalizeReferenceMotion(job?.referenceMotion),
       shots:(timeline?.shots||[]).map(shot=>({id:String(shot.id),startFrame:shot.startFrame,endFrame:shot.endFrame})),
     };
   }
   function applyPreviewReferences(snapshot){ preview()?.setReferences(previewReferenceState(snapshot)); }
+  function normalizeReferenceMotion(value){ return value==="pop3d"?"pop3d":DEFAULT_REFERENCE_MOTION; }
+  function applyReferenceMotion(value=job?.referenceMotion,{syncControl=true,syncPreview=true}={}){
+    const motion=normalizeReferenceMotion(value);
+    if(job)job.referenceMotion=motion;
+    if(syncControl){
+      const control=document.getElementById("referencePop3d");
+      if(control)control.checked=motion==="pop3d";
+    }
+    if(syncPreview)applyPreviewReferences();
+    return motion;
+  }
+  async function persistReferenceMotion(){
+    if(!bridge||!job||transitioning||runtimeBlocked||activeInputOperation)return;
+    const control=document.getElementById("referencePop3d");
+    const motion=applyReferenceMotion(control?.checked?"pop3d":"classic");
+    await saveJobPatch({referenceMotion:motion});
+  }
   function normalizeProjectTitle(projectTitle){
     if(projectTitle===undefined||projectTitle===null)return "UNTITLED PROJECT";
     return String(projectTitle).replace(/\s+/g," ").trim().slice(0,40);
@@ -348,6 +367,7 @@
   }
   async function hydrateJobState(nextJob,{xmlText=null}={}){
     job=nextJob;
+    applyReferenceMotion(job.referenceMotion,{syncPreview:false});
     const target=await waitForPreview();
     ui.replaceAssets(job.references||[],job.globalReferenceIds||[]);
     await target?.clearVideo?.();
@@ -735,5 +755,6 @@
       control?.addEventListener("blur",()=>persistCalloutSettings(true).catch(reportError));
     }
   }
+  document.getElementById("referencePop3d")?.addEventListener("change",()=>persistReferenceMotion().catch(reportError));
   initialize();
 })();

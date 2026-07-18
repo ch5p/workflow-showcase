@@ -194,6 +194,8 @@ The title callout provides only minimal styles. You can also use your own distin
 
 **GLOBAL BASE**: References registered here appear in every SHOT. (Global references)
 
+**REFERENCE 3D POP**: This project-wide switch sits below GLOBAL BASE. Leave it off for the original flat staggered entrance, or turn it on for the 3D pop entrance. The selected motion is used by both the preview and Export, including references shown early by LEAD-IN.
+
 ---
 
 ![SHOT reference modes](./docs/readme-assets/images/shot-reference-modes.png)

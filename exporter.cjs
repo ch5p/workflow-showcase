@@ -120,6 +120,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       })),
       globalReferenceIds: job.globalReferenceIds || [],
       shotMappings: job.shotMappings || {},
+      referenceMotion: job.referenceMotion === "pop3d" ? "pop3d" : "classic",
       shots: parsed.shots.map(shot => ({
         id: String(shot.id),
         startFrame: shot.startFrame,

@@ -194,6 +194,8 @@ EN/KR: UI 언어 전환
 
 **GLOBAL BASE**: 이 곳에 등록된 레퍼런스는 모든 샷에 보여집니다. (전역 레퍼런스)
 
+**REFERENCE 3D POP**: GLOBAL BASE 아래에 있는 전체 적용 옵션입니다. 체크를 끄면 기존처럼 평면으로 하나씩 등장하고, 켜면 3D POP으로 등장합니다. 선택한 연출은 LEAD-IN으로 미리 나오는 레퍼런스를 포함해 미리보기와 Export에 동일하게 적용됩니다.
+
 ---
 
 ![SHOT 레퍼런스 모드](./docs/readme-assets/images/shot-reference-modes.png)

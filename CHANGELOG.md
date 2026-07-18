@@ -31,6 +31,7 @@
 - Preserved orphaned source/reference files when `job.json` is missing instead of replacing them with the starter demo
 - Split reference import/delete ownership from `main.cjs` into a focused lifecycle module with an isolated regression check
 - Refreshed the public Premiere fixture to 13 seconds with a real blended upper-track clip, excluded Adjustment Layer, final Color Matte, and matching README/landing demo animation
+- Added a persistent project-wide `REFERENCE 3D POP` option while keeping the original flat stagger as the default, with both motions sharing the same LEAD-IN and SHOT-transition timing
 
 ## 0.1.0-beta.1
 
