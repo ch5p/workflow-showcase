@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>WS Intro Pre-roll — Compact Grow (1280x1080)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#111;overflow:hidden}
+  #stage{position:relative;width:1280px;height:1080px;overflow:hidden;background:#e9edea;
+    font-family:Inter,"Segoe UI",Arial,sans-serif;cursor:none}
+  .mono{font-family:"Cascadia Mono","JetBrains Mono",Consolas,monospace}
+  #hint{position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,14,12,.55);color:#fff;font-size:26px;letter-spacing:.04em}
+  #bg,#bgImg{position:absolute;inset:0;width:100%;height:100%}
+  #bgImg{object-fit:cover;display:none}
+  #clipTag{position:absolute;left:44px;top:38px;font-size:21px;letter-spacing:.14em;color:#0d6b52;
+    background:rgba(255,255,255,.55);backdrop-filter:blur(10px);padding:10px 20px;border-radius:14px;opacity:0}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #question{position:absolute;left:50%;top:308px;z-index:4;width:900px;transform:translateX(-50%);
+    color:#151a18;text-align:center;font-size:38px;font-weight:400;letter-spacing:-.025em}
+
+  /* Starts as a compact composer. Conversation space grows only after Send. */
+  #console{position:absolute;left:50%;top:52%;width:820px;transform:translate(-50%,-50%);
+    overflow:hidden;background:rgba(255,255,255,.52);backdrop-filter:blur(30px) saturate(1.5);
+    -webkit-backdrop-filter:blur(30px) saturate(1.5);border:1.5px solid rgba(255,255,255,.75);
+    border-radius:30px;box-shadow:0 30px 80px rgba(20,40,32,.2)}
+  #chat{height:0;overflow:hidden;padding:0 28px;display:flex;flex-direction:column;gap:18px}
+  #uMsg{align-self:flex-end;max-width:88%;background:rgba(255,255,255,.72);
+    border:1.5px solid rgba(255,255,255,.8);border-radius:22px 22px 6px 22px;padding:17px 22px;
+    flex-shrink:0;opacity:0;box-shadow:0 7px 22px rgba(20,40,32,.08)}
+  #uText{font-size:23px;line-height:1.62;color:#1d2a24}
+  #aRow{display:none;flex-shrink:0;align-items:flex-start;justify-content:flex-start;opacity:0}
+  #dots{display:inline-flex;gap:8px;background:rgba(255,255,255,.6);border:1.5px solid rgba(255,255,255,.75);
+    border-radius:22px;padding:18px 22px}
+  #dots i{width:9px;height:9px;border-radius:50%;background:#12b28a}
+  #aMsg{display:none;max-width:640px;background:rgba(255,255,255,.6);border:1.5px solid rgba(255,255,255,.75);
+    border-radius:6px 22px 22px 22px;padding:17px 22px;box-shadow:0 7px 22px rgba(20,40,32,.07)}
+  #aText{font-size:23px;line-height:1.66;color:#1d2a24}
+  #aStatus{font-size:18px;color:#0d8a68;margin-top:14px;opacity:0}
+
+  #composer{position:relative}
+  #inputBox{margin:16px 24px 0;border-radius:26px;background:rgba(255,255,255,.62);
+    border:1.5px solid rgba(255,255,255,.8);padding:10px 22px 8px;
+    transition:border-color .18s,box-shadow .18s}
+  #inputBox.focus{border-color:rgba(255,255,255,.8);box-shadow:none}
+  #promptLine{display:flex;align-items:flex-start;height:60px;overflow:hidden}
+  #inText{font-size:23px;line-height:30px;color:#1d2a24;word-break:break-word}
+  #placeholder{font-size:23px;line-height:30px;color:#8a978f}
+  #caret{display:inline-block;width:2px;height:28px;background:#12b28a;vertical-align:-4px;margin-left:1px;border-radius:1px}
+  #controls{display:flex;align-items:center;gap:12px;margin-top:8px}
+  .ctl{display:inline-flex;align-items:center;gap:8px;font-size:17px;font-weight:400;letter-spacing:-.025em;color:#4c5f57}
+  .ctl.plus{width:38px;height:38px;justify-content:center;border:0;font-size:30px;font-weight:400;line-height:1;transform:translate(-8px,-2px)}
+  .ctl.approve{color:#4e7770;font-size:16px;font-weight:400}
+  .ctl.approve svg{flex:none}
+  .spacer{flex:1}
+  #modelPill{display:inline-flex;align-items:center;gap:7px;font-size:17px;font-weight:400;letter-spacing:-.025em;color:#3a4b43}
+  #modelPill .modelName{color:#3a4b43}
+  #modelPill .modelEffort{color:#69766f}
+  #modelPill .modelCaret{display:inline-flex;color:#69766f;transform:translateY(2px)}
+  .iconBtn{width:34px;height:34px;display:grid;place-items:center;color:#4c5f57}
+  #send{width:46px;height:46px;background:#171918;color:#fff;border:0;border-radius:50%;display:grid;place-items:center;
+    box-shadow:0 5px 16px rgba(10,12,11,.22)}
+  #projectRow{height:48px;margin:0 30px 14px;padding:0 8px;display:flex;align-items:center;gap:11px;
+    color:#43534c;font-size:17px;font-weight:400;letter-spacing:-.025em;opacity:.78}
+  #projectRow svg{flex:none}
+  #genBar{height:5px;width:0;background:#12b28a;border-radius:0 0 30px 30px}
+  #sendTip{position:absolute;left:0;top:0;z-index:45;transform:translate(-50%,-100%);padding:6px 10px;
+    border-radius:8px;background:#fff;color:#171918;font-size:15px;font-weight:500;
+    box-shadow:0 5px 18px rgba(20,30,26,.15);opacity:0;pointer-events:none}
+  #cursor{position:absolute;width:36px;height:36px;left:0;top:0;z-index:40;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));pointer-events:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1280" height="1080"></canvas>
+  <img id="bgImg" alt="" />
+  <div id="clipTag" class="mono">CLIP A · SHOT 01</div>
+  <div id="flash"></div>
+  <div id="question"></div>
+
+  <div id="console">
+    <div id="chat">
+      <div id="uMsg"><div id="uText"></div></div>
+      <div id="aRow">
+        <div>
+          <div id="dots"><i></i><i></i><i></i></div>
+          <div id="aMsg"><div id="aText"></div><div id="aStatus" class="mono"></div></div>
+        </div>
+      </div>
+    </div>
+    <div id="composer">
+      <div id="inputBox">
+        <div id="promptLine"><span id="placeholder"></span><span id="inText"></span><span id="caret"></span></div>
+        <div id="controls"></div>
+      </div>
+      <div id="projectRow"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h6l2 2h9v9.5a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V7.5z"/><path d="M3.5 7.5V6A1.5 1.5 0 0 1 5 4.5h4.2l2 2h7.8A1.5 1.5 0 0 1 20.5 8v1.5"/></svg><span id="projectLabel"></span></div>
+    </div>
+    <div id="genBar"></div>
+  </div>
+
+  <div id="sendTip">Send</div>
+  <svg id="cursor" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10.5 19z" fill="#fff" stroke="#3a4540" stroke-width="1.2"/></svg>
+  <div id="hint">SPACE — play (press SPACE again to restart)</div>
+</div>
+
+<script>
+/* ================= CONFIG — edit here only ================= */
+const CONFIG={
+  question:"What should we get done?",
+  projectLabel:"Project None",
+  placeholder:"Work with ChatGPT",
+  prompt:"Three rescuers, one moment. Firefighter, swiftwater, paramedic — intercut at their limits. 15s, 24fps.",
+  reply:"Understood. Rise from boots to eyes, fragment burst, then the reverse descent to gripping hands. Rolling now.",
+  statusText:"► queued → rendering · ",
+  modelName:"5.6 Sol",
+  modelEffort:"High", /* "High" | "Extra High" */
+  backgroundImage:null,
+  clipTagText:"CLIP A · SHOT 01",
+  t:{focus:.55,type:.85,typingSeconds:1,cursorRevealDelay:.3,submitTravel:.4,submitHover:.25},
+  audio:{
+    enabled:true,useSamples:true,
+    clickFile:"./intro-click.wav",keyboardFile:"./intro-keyboard.wav",
+    clickOffset:.075,keyboardOffset:.1,clickSampleVolume:1,keyboardSampleVolume:1,
+    typingVolume:.16,clickVolume:.22,sendVolume:.28,
+  },
+};
+/* =========================================================== */
+
+const ICONS={
+  approve:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7 3.2v5.1c0 4.2-2.8 7.3-7 8.7-4.2-1.4-7-4.5-7-8.7V6.7l7-3.2z"/><path d="M9.4 12l1.7 1.7 3.7-3.9"/></svg>',
+  mic:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  send:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  caret:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>',
+};
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const eo=x=>1-Math.pow(1-x,3);
+const lerp=(a,b,x)=>a+(b-a)*x;
+function resolveTimeline(){
+  const b=CONFIG.t,typeDur=b.typingSeconds===2?2:1;
+  const send=b.type+typeDur+b.cursorRevealDelay+b.submitTravel+b.submitHover;
+  const stream=send+.9,streamDur=1,status=stream+streamDur+.25,cut=status+.55;
+  return {focus:b.focus,type:b.type,typeDur,send,dots:send+.45,stream,streamDur,
+    status,cut,end:cut+.8,cursorRevealDelay:b.cursorRevealDelay,
+    submitTravel:b.submitTravel,submitHover:b.submitHover};
+}
+const TIMELINE=resolveTimeline();
+const CURSOR_HOTSPOT={x:7.5,y:4.5};
+let audioContext=null,audioBus=null;
+let audioFrame={previousTime:0,lastTypedCount:0,lastTypeBucket:0};
+const sampleAudio={
+  click:new Audio(CONFIG.audio.clickFile),keyboard:new Audio(CONFIG.audio.keyboardFile),
+  failed:false,keyboardPlaying:false,
+};
+sampleAudio.click.preload="auto";sampleAudio.keyboard.preload="auto";
+sampleAudio.click.volume=CONFIG.audio.clickSampleVolume;sampleAudio.keyboard.volume=CONFIG.audio.keyboardSampleVolume;
+async function ensureAudio(){
+  if(!CONFIG.audio.enabled)return false;
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextClass)return false;
+  try{
+    if(!audioContext){
+      audioContext=new AudioContextClass();
+      const master=audioContext.createGain(),compressor=audioContext.createDynamicsCompressor();
+      master.gain.value=.9;
+      compressor.threshold.value=-18;compressor.knee.value=8;compressor.ratio.value=4;
+      compressor.attack.value=.003;compressor.release.value=.08;
+      master.connect(compressor);compressor.connect(audioContext.destination);audioBus=master;
+    }
+    if(audioContext.state!=="running")await audioContext.resume();
+    return audioContext.state==="running";
+  }catch(error){
+    console.warn("[intro-audio] AudioContext resume failed",error);
+    return false;
+  }
+}
+function synthNoiseBurst(seed,duration,volume,frequency,q=.9,delay=0){
+  if(!audioContext||audioContext.state!=="running")return;
+  const now=audioContext.currentTime+delay;
+  const frameCount=Math.max(1,Math.ceil(audioContext.sampleRate*duration));
+  const buffer=audioContext.createBuffer(1,frameCount,audioContext.sampleRate),data=buffer.getChannelData(0);
+  let state=(seed>>>0)||1;
+  for(let i=0;i<frameCount;i++){
+    state=(Math.imul(state,1664525)+1013904223)>>>0;
+    const noise=(state/4294967296)*2-1,envelope=Math.pow(1-i/frameCount,3.2);
+    data[i]=noise*envelope;
+  }
+  const source=audioContext.createBufferSource(),filter=audioContext.createBiquadFilter(),gain=audioContext.createGain();
+  source.buffer=buffer;filter.type="bandpass";filter.frequency.value=frequency;filter.Q.value=q;gain.gain.value=volume;
+  source.connect(filter);filter.connect(gain);gain.connect(audioBus||audioContext.destination);source.start(now);
+}
+function synthKnock(frequency,duration,volume,delay=0){
+  if(!audioContext||audioContext.state!=="running")return;
+  const now=audioContext.currentTime+delay;
+  const oscillator=audioContext.createOscillator(),gain=audioContext.createGain();
+  oscillator.type="sine";oscillator.frequency.setValueAtTime(frequency,now);
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(70,frequency*.62),now+duration);
+  gain.gain.setValueAtTime(Math.max(.0001,volume),now);gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+  oscillator.connect(gain);gain.connect(audioBus||audioContext.destination);
+  oscillator.start(now);oscillator.stop(now+duration+.004);
+}
+function playFocusClick(){
+  synthNoiseBurst(1101,.02,CONFIG.audio.clickVolume,1500,.75);
+  synthKnock(175,.025,CONFIG.audio.clickVolume*.3);
+}
+function playTypingTick(bucket){
+  const color=2200+((bucket*83)%520);
+  synthNoiseBurst(2000+bucket,.017,CONFIG.audio.typingVolume,color,1.1);
+  synthNoiseBurst(4000+bucket,.011,CONFIG.audio.typingVolume*.38,color+650,1.2,.03);
+}
+function playSendClick(){
+  synthNoiseBurst(3101,.022,CONFIG.audio.sendVolume,1250,.8);
+  synthKnock(145,.03,CONFIG.audio.sendVolume*.34);
+  synthNoiseBurst(3102,.014,CONFIG.audio.sendVolume*.52,1850,1,.05);
+}
+function playSample(element,offset,onFailure){
+  if(!CONFIG.audio.useSamples||sampleAudio.failed||element.readyState<2){onFailure();return false}
+  try{
+    element.pause();element.currentTime=offset;
+    const playback=element.play();
+    if(playback)playback.catch(error=>{console.warn("[intro-audio] Sample playback failed; using synthesis",error);onFailure()});
+    return true;
+  }catch(error){
+    console.warn("[intro-audio] Sample playback failed; using synthesis",error);onFailure();return false;
+  }
+}
+function playClickSample(onFailure){return playSample(sampleAudio.click,CONFIG.audio.clickOffset,onFailure)}
+function startKeyboardSample(){
+  sampleAudio.keyboardPlaying=playSample(sampleAudio.keyboard,CONFIG.audio.keyboardOffset,()=>{sampleAudio.keyboardPlaying=false});
+}
+function stopKeyboardSample(){
+  sampleAudio.keyboard.pause();sampleAudio.keyboardPlaying=false;
+}
+function resetSampleAudio(){
+  sampleAudio.click.pause();sampleAudio.keyboard.pause();sampleAudio.keyboardPlaying=false;
+}
+function updateAudio(s,typedCount){
+  if(!audioContext||audioContext.state!=="running")return;
+  const previous=audioFrame.previousTime;
+  if(previous<TIMELINE.focus&&s>=TIMELINE.focus)playClickSample(playFocusClick);
+  if(previous<TIMELINE.type&&s>=TIMELINE.type)startKeyboardSample();
+  const maxTicks=Math.max(1,Math.round(TIMELINE.typeDur*18));
+  const charactersPerTick=Math.max(1,Math.ceil(CONFIG.prompt.length/maxTicks));
+  const bucket=Math.floor(typedCount/charactersPerTick);
+  if(!sampleAudio.keyboardPlaying&&bucket>audioFrame.lastTypeBucket&&typedCount>0)playTypingTick(bucket);
+  const typeEnd=TIMELINE.type+TIMELINE.typeDur;
+  if(previous<typeEnd&&s>=typeEnd)stopKeyboardSample();
+  const sendPress=TIMELINE.send-.1;
+  if(previous<sendPress&&s>=sendPress)playClickSample(playSendClick);
+  audioFrame={previousTime:s,lastTypedCount:typedCount,lastTypeBucket:Math.max(audioFrame.lastTypeBucket,bucket)};
+}
+function cursorLocalPoint(element,xRatio=.5,yRatio=.5){
+  const stage=$("stage"),stageRect=stage.getBoundingClientRect(),rect=element.getBoundingClientRect();
+  const scaleX=stage.clientWidth/stageRect.width,scaleY=stage.clientHeight/stageRect.height;
+  return {x:(rect.left-stageRect.left+rect.width*xRatio)*scaleX-CURSOR_HOTSPOT.x,
+    y:(rect.top-stageRect.top+rect.height*yRatio)*scaleY-CURSOR_HOTSPOT.y};
+}
+
+$("question").textContent=CONFIG.question;
+$("projectLabel").textContent=CONFIG.projectLabel;
+$("placeholder").textContent=CONFIG.placeholder;
+$("uText").textContent=CONFIG.prompt;
+const controls=$("controls");
+const plus=document.createElement("div");plus.className="ctl plus";plus.textContent="+";controls.appendChild(plus);
+const approve=document.createElement("div");approve.className="ctl approve";
+approve.innerHTML=ICONS.approve+"<span>Approve for me</span>"+ICONS.caret;controls.appendChild(approve);
+const spacer=document.createElement("div");spacer.className="spacer";controls.appendChild(spacer);
+const model=document.createElement("div");model.id="modelPill";
+const modelName=document.createElement("span");modelName.className="modelName";modelName.textContent=CONFIG.modelName;model.appendChild(modelName);
+const modelEffort=document.createElement("span");modelEffort.className="modelEffort";modelEffort.textContent=CONFIG.modelEffort;model.appendChild(modelEffort);
+const modelCaret=document.createElement("span");modelCaret.className="modelCaret";modelCaret.innerHTML=ICONS.caret;model.appendChild(modelCaret);controls.appendChild(model);
+const mic=document.createElement("div");mic.className="iconBtn";mic.innerHTML=ICONS.mic;controls.appendChild(mic);
+const sendEl=document.createElement("button");sendEl.id="send";sendEl.innerHTML=ICONS.send;controls.appendChild(sendEl);
+
+if(CONFIG.backgroundImage){$("bgImg").src=CONFIG.backgroundImage;$("bgImg").style.display="block";$("bg").style.display="none"}
+if(!CONFIG.clipTagText)$("clipTag").style.display="none";else $("clipTag").textContent=CONFIG.clipTagText;
+
+const cv=$("bg"),cx=cv.getContext("2d");
+function scene(ts){
+  const g0=cx.createLinearGradient(0,0,0,1080);g0.addColorStop(0,"#dfe9e4");g0.addColorStop(1,"#cdd9d2");
+  cx.fillStyle=g0;cx.fillRect(0,0,1280,1080);
+  for(let i=0;i<6;i++){
+    const px=640+Math.sin(ts*.6+i*2.1)*(380+i*46),py=540+Math.cos(ts*.5+i*1.7)*240;
+    const r=190+((i*79)%130)+Math.sin(ts+i)*26;
+    const g=cx.createRadialGradient(px,py,0,px,py,r),col=i%3===0?"#ff8a4d":i%3===1?"#12b28a":"#e0533a";
+    g.addColorStop(0,col+"55");g.addColorStop(1,"transparent");cx.fillStyle=g;cx.beginPath();cx.arc(px,py,r,0,7);cx.fill();
+  }
+}
+function getCursorTargets(){
+  const stage=$("stage"),input=cursorLocalPoint($("promptLine"),.12,.5),submit=cursorLocalPoint(sendEl,.5,.5);
+  return {start:{x:stage.clientWidth+50-CURSOR_HOTSPOT.x,y:stage.clientHeight-44-CURSOR_HOTSPOT.y},
+    input,submit,submitTop:cursorLocalPoint(sendEl,.5,0).y+CURSOR_HOTSPOT.y};
+}
+
+let rafId=0,t0=0,startToken=0;
+function render(s){
+  const T=TIMELINE;
+  if(!CONFIG.backgroundImage)scene(s);
+  const focused=s>=T.focus,typeP=clamp((s-T.type)/T.typeDur,0,1),accel=typeP*typeP;
+  const typing=s>=T.type,sent=s>=T.send+.1;
+  $("inputBox").classList.toggle("focus",focused&&s<T.send+.1);
+  $("placeholder").style.display=(typing||sent)?"none":"inline";
+  const typedCount=sent?CONFIG.prompt.length:Math.ceil(CONFIG.prompt.length*accel);
+  $("inText").textContent=sent?"":CONFIG.prompt.slice(0,typedCount);
+  $("caret").style.opacity=sent?0:(focused?(Math.floor(s*3)%2===0?1:.15):.9);
+  updateAudio(s,typedCount);
+
+  const target=getCursorTargets(),travelStart=T.type+T.typeDur+T.cursorRevealDelay;
+  let x,y;
+  if(s<T.focus){const p=eo(clamp((s-.15)/(T.focus-.15),0,1));x=lerp(target.start.x,target.input.x,p);y=lerp(target.start.y,target.input.y,p)}
+  else if(s<travelStart){x=target.input.x;y=target.input.y}
+  else{const p=eo(clamp((s-travelStart)/T.submitTravel,0,1));x=lerp(target.input.x,target.submit.x,p);y=lerp(target.input.y,target.submit.y,p)}
+  $("cursor").style.left=x+"px";$("cursor").style.top=y+"px";
+  $("cursor").style.opacity=(s>.1&&s<T.focus+.08)||(s>=travelStart&&s<T.send+.3)?1:0;
+  $("sendTip").style.left=(target.submit.x+CURSOR_HOTSPOT.x)+"px";
+  $("sendTip").style.top=(target.submitTop-7)+"px";
+  $("sendTip").style.opacity=s>=T.send-T.submitHover&&s<T.send+.04?1:0;
+  const press=s>=T.send-.1&&s<T.send+.03;sendEl.style.transform=press?"scale(.88)":"scale(1)";sendEl.style.opacity=sent?.45:1;
+  $("question").style.opacity=1-clamp((s-(T.send-.08))/.28,0,1);
+
+  const userGrow=eo(clamp((s-T.send-.08)/.42,0,1));
+  const answerGrow=eo(clamp((s-T.dots)/.48,0,1));
+  $("chat").style.height=(145*userGrow+215*answerGrow)+"px";
+  $("chat").style.paddingTop=(24*Math.max(userGrow,answerGrow))+"px";
+  $("chat").style.paddingBottom=(4*Math.max(userGrow,answerGrow))+"px";
+  $("uMsg").style.opacity=userGrow;$("uMsg").style.transform="translateY("+((1-userGrow)*14)+"px)";
+  $("aRow").style.display=s>=T.dots?"flex":"none";
+  $("aRow").style.opacity=clamp((s-T.dots)/.25,0,1);
+  const streaming=s>=T.stream;$("dots").style.display=streaming?"none":"inline-flex";
+  [...document.querySelectorAll("#dots i")].forEach((d,i)=>{d.style.opacity=.3+.7*Math.abs(Math.sin(s*5-i*.9))});
+  $("aMsg").style.display=streaming?"block":"none";
+  const replyP=clamp((s-T.stream)/T.streamDur,0,1);$("aText").textContent=CONFIG.reply.slice(0,Math.ceil(CONFIG.reply.length*replyP));
+  const genP=clamp((s-T.status)/.45,0,1);$("aStatus").style.opacity=s>T.status?1:0;
+  $("aStatus").textContent=CONFIG.statusText+Math.round(genP*100)+"%";$("genBar").style.width=(genP*100)+"%";
+
+  const cut=clamp((s-T.cut)/.14,0,1);$("console").style.opacity=1-cut;
+  $("console").style.transform="translate(-50%,-50%) scale("+(1+cut*.05)+")";$("console").style.filter="blur("+(cut*8)+"px)";
+  $("flash").style.opacity=s>T.cut-.02&&s<T.cut+.2?(1-Math.abs((s-(T.cut+.09))/.11))*.85:0;
+  $("clipTag").style.opacity=clamp((s-T.cut-.17)/.3,0,1);
+}
+function loop(now){const s=Math.min((now-t0)/1000,TIMELINE.end);render(s);if(s>=TIMELINE.end)return;rafId=requestAnimationFrame(loop)}
+async function start(){
+  const token=++startToken;
+  cancelAnimationFrame(rafId);$("hint").style.display="none";
+  audioFrame={previousTime:0,lastTypedCount:0,lastTypeBucket:0};resetSampleAudio();
+  await ensureAudio();
+  if(token!==startToken)return;
+  t0=performance.now();rafId=requestAnimationFrame(loop);
+}
+window.addEventListener("keydown",e=>{if(e.code==="Space"){e.preventDefault();start()}});
+render(0);
+</script>
+</body>
+</html>
