@@ -15,7 +15,7 @@
       <video id="thumbnailVideo" muted preload="metadata" playsinline aria-hidden="true"></video>
       <div id="videoHint">상단 XML과 VIDEO에서 파일을 불러오세요</div>
       <div id="durationDelta" hidden></div>
-      <div id="videoCallout" data-position="left" data-style="line" aria-hidden="true">
+      <div id="videoCallout" data-position="left" data-style="line" data-motion="fade" aria-hidden="true">
         <span class="videoCalloutRule"></span>
         <span class="videoCalloutCopy">
           <span class="videoCalloutEyebrow">EDIT WORKFLOW</span>
@@ -157,7 +157,7 @@ const CONFIG = {
   },
   // match는 XML 클립 이름의 일부와 일치시킨다. thumbnail이 비어 있으면 placeholder가 표시된다.
 };
-let CALLOUT_CONFIG={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
+let CALLOUT_CONFIG={enabled:true,position:"left",style:"line",motion:"fade",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
 let RENDER_SPEC={width:1280,height:1080,fps:60,bitrateMbps:12};
 
 /* ============ 공개 synthetic fallback ============ */
@@ -1062,6 +1062,7 @@ function setProjectTitle(value){
   CONFIG.projectTitle=value===undefined||value===null?"UNTITLED PROJECT":String(value).replace(/\s+/g," ").trim().slice(0,40);
   $("projectTitle").textContent=CONFIG.projectTitle;
   $("videoCalloutTitle").textContent=CONFIG.projectTitle;
+  $("videoCalloutTitle").dataset.glitchText=CONFIG.projectTitle;
   updateVideoCallout(mainVideo.currentTime||0);
   return CONFIG.projectTitle;
 }
@@ -1075,6 +1076,7 @@ function setCalloutConfig(value){
     enabled:source.enabled===undefined?true:Boolean(source.enabled),
     position:source.position==="right"?"right":"left",
     style:["line","label","minimal"].includes(source.style)?source.style:"line",
+    motion:["fade","snap","mask","type","glitch"].includes(source.motion)?source.motion:"fade",
     startSeconds:number(source.startSeconds,.08,0,60),
     durationSeconds:number(source.durationSeconds,3.5,.5,30),
     subtitle:source.subtitle===undefined?"WORKFLOW SHOWCASE · EDIT WORKFLOW":String(source.subtitle).replace(/\s+/g," ").trim().slice(0,60),
@@ -1082,6 +1084,7 @@ function setCalloutConfig(value){
   const callout=$("videoCallout");
   callout.dataset.position=CALLOUT_CONFIG.position;
   callout.dataset.style=CALLOUT_CONFIG.style;
+  callout.dataset.motion=CALLOUT_CONFIG.motion;
   $("videoCalloutSubtitle").textContent=CALLOUT_CONFIG.subtitle;
   updateVideoCallout(mainVideo.currentTime||0);
   return {...CALLOUT_CONFIG};
@@ -1089,15 +1092,92 @@ function setCalloutConfig(value){
 function updateVideoCallout(seconds){
   const time=Math.max(0,Number(seconds)||0);
   const clamp=value=>Math.max(0,Math.min(1,value));
-  const enter=clamp((time-CALLOUT_CONFIG.startSeconds)/.58);
+  const motion=CALLOUT_CONFIG.motion;
+  const enterSeconds=motion==="snap"?.34:motion==="mask"?.48:motion==="type"?1.05:motion==="glitch"?.62:.58;
+  const enter=clamp((time-CALLOUT_CONFIG.startSeconds)/enterSeconds);
   const leave=1-clamp((time-(CALLOUT_CONFIG.startSeconds+CALLOUT_CONFIG.durationSeconds))/.55);
-  const visibility=CALLOUT_CONFIG.enabled&&CONFIG.projectTitle?enter*leave:0;
-  const eased=1-Math.pow(1-enter,3);
+  const active=CALLOUT_CONFIG.enabled&&CONFIG.projectTitle;
+  const fadeEased=1-Math.pow(1-enter,3);
   const direction=CALLOUT_CONFIG.position==="right"?1:-1;
   const callout=$("videoCallout");
+  const copy=callout.querySelector(".videoCalloutCopy");
+  const rule=callout.querySelector(".videoCalloutRule");
+  const eyebrow=callout.querySelector(".videoCalloutEyebrow");
+  const title=$("videoCalloutTitle");
+  const meta=$("videoCalloutSubtitle");
+  let visibility=active?enter*leave:0;
+  let translateX=direction*22*(1-fadeEased);
+  let scale=1;
+  let ruleScale=.25+.75*fadeEased;
+  copy.style.clipPath="inset(0 0 0 0)";
+  copy.style.transform="translate3d(0,0,0)";
+  eyebrow.style.opacity="1";
+  eyebrow.style.transform="translate3d(0,0,0)";
+  title.textContent=CONFIG.projectTitle;
+  title.dataset.glitchText=CONFIG.projectTitle;
+  title.style.opacity="1";
+  title.style.transform="translate3d(0,0,0) scale(1)";
+  title.style.filter="none";
+  title.style.setProperty("--glitch-before-x","0px");
+  title.style.setProperty("--glitch-after-x","0px");
+  title.style.setProperty("--glitch-split-opacity","0");
+  meta.style.opacity="1";
+  meta.style.transform="translate3d(0,0,0)";
+  if(motion==="snap"){
+    const c1=1.70158,c3=c1+1,back=1+c3*Math.pow(enter-1,3)+c1*Math.pow(enter-1,2);
+    translateX=direction*28*(1-back);
+    scale=.92+.08*back;
+    ruleScale=.08+.92*clamp(back);
+  }else if(motion==="mask"){
+    const ruleProgress=clamp(enter/.42);
+    const textProgress=1-Math.pow(1-clamp((enter-.18)/.82),3);
+    visibility=active?clamp(enter*4)*leave:0;
+    translateX=0;
+    ruleScale=.05+.95*ruleProgress;
+    copy.style.clipPath=direction<0
+      ?`inset(0 ${((1-textProgress)*100).toFixed(2)}% 0 0)`
+      :`inset(0 0 0 ${((1-textProgress)*100).toFixed(2)}%)`;
+    copy.style.transform=`translate3d(${(direction*10*(1-textProgress)).toFixed(2)}px,0,0)`;
+  }else if(motion==="type"){
+    const ruleProgress=clamp(enter/.2);
+    const eyebrowProgress=1-Math.pow(1-clamp((enter-.12)/.2),3);
+    const titleProgress=clamp((enter-.25)/.53);
+    const metaProgress=1-Math.pow(1-clamp((enter-.78)/.22),3);
+    const characters=Array.from(CONFIG.projectTitle);
+    const visibleCharacters=Math.min(characters.length,Math.ceil(characters.length*titleProgress));
+    visibility=active?clamp(enter*7)*leave:0;
+    translateX=0;
+    ruleScale=.03+.97*ruleProgress;
+    eyebrow.style.opacity=eyebrowProgress.toFixed(4);
+    eyebrow.style.transform=`translate3d(0,${((1-eyebrowProgress)*-5).toFixed(2)}px,0)`;
+    title.textContent=characters.slice(0,visibleCharacters).join("");
+    meta.style.opacity=metaProgress.toFixed(4);
+    meta.style.transform=`translate3d(0,${((1-metaProgress)*5).toFixed(2)}px,0)`;
+  }else if(motion==="glitch"){
+    const pull=1-Math.pow(1-enter,3);
+    const ruleProgress=clamp(enter/.32);
+    const copyProgress=1-Math.pow(1-clamp((enter-.08)/.72),3);
+    const metaProgress=1-Math.pow(1-clamp((enter-.62)/.38),3);
+    const pulse=Math.sin(enter*Math.PI*12);
+    const amplitude=Math.pow(1-enter,1.7)*(10+Math.abs(pulse)*10);
+    const splitOpacity=clamp((1-enter)*1.6)*(.55+.35*Math.abs(pulse));
+    visibility=active?clamp(enter*8)*leave:0;
+    translateX=0;
+    ruleScale=.04+.96*ruleProgress;
+    title.style.opacity=clamp(enter*5).toFixed(4);
+    title.style.transform=`translate3d(${(pulse*amplitude*.16).toFixed(2)}px,0,0) scale(${(.84+.16*pull).toFixed(4)})`;
+    title.style.filter=`blur(${((1-pull)*4.5).toFixed(2)}px)`;
+    title.style.setProperty("--glitch-before-x",`${(direction*amplitude).toFixed(2)}px`);
+    title.style.setProperty("--glitch-after-x",`${(-direction*amplitude*.72).toFixed(2)}px`);
+    title.style.setProperty("--glitch-split-opacity",splitOpacity.toFixed(4));
+    eyebrow.style.opacity=copyProgress.toFixed(4);
+    eyebrow.style.transform=`translate3d(${(direction*8*(1-copyProgress)).toFixed(2)}px,0,0)`;
+    meta.style.opacity=metaProgress.toFixed(4);
+    meta.style.transform=`translate3d(0,${((1-metaProgress)*5).toFixed(2)}px,0)`;
+  }
   callout.style.opacity=visibility.toFixed(4);
-  callout.style.transform=`translate3d(${(direction*22*(1-eased)).toFixed(2)}px,0,0)`;
-  callout.querySelector(".videoCalloutRule").style.transform=`scaleY(${(.25+.75*eased).toFixed(4)})`;
+  callout.style.transform=`translate3d(${translateX.toFixed(2)}px,0,0) scale(${scale.toFixed(4)})`;
+  rule.style.transform=`scaleY(${ruleScale.toFixed(4)})`;
 }
 
 function updateConnectors(){}

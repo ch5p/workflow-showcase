@@ -17,7 +17,7 @@
   let titleSaveTimer=0;
   let calloutSaveTimer=0;
   let pendingSavePromise=Promise.resolve();
-  const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
+  const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",motion:"fade",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
   const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4",".mov",".m4v"])};
 
   function preview(){ return iframe.contentWindow?.portablePreview||null; }
@@ -101,6 +101,7 @@
       enabled:source.enabled===undefined?DEFAULT_CALLOUT.enabled:Boolean(source.enabled),
       position:source.position==="right"?"right":"left",
       style:["line","label","minimal"].includes(source.style)?source.style:"line",
+      motion:["fade","snap","mask","type","glitch"].includes(source.motion)?source.motion:DEFAULT_CALLOUT.motion,
       startSeconds:number(source.startSeconds,DEFAULT_CALLOUT.startSeconds,0,60),
       durationSeconds:number(source.durationSeconds,DEFAULT_CALLOUT.durationSeconds,.5,30),
       subtitle:source.subtitle===undefined?DEFAULT_CALLOUT.subtitle:String(source.subtitle).replace(/\s+/g," ").trim().slice(0,60),
@@ -111,6 +112,7 @@
       enabled:document.getElementById("calloutEnabled")?.checked,
       position:document.getElementById("calloutPosition")?.value,
       style:document.getElementById("calloutStyle")?.value,
+      motion:document.getElementById("calloutMotion")?.value,
       startSeconds:document.getElementById("calloutStart")?.value,
       durationSeconds:document.getElementById("calloutDuration")?.value,
       subtitle:document.getElementById("calloutSubtitle")?.value,
@@ -120,11 +122,12 @@
     const callout=normalizeCallout(value);
     if(job)job.callout=callout;
     preview()?.setCalloutConfig(callout);
-    document.getElementById("calloutSettingsState").textContent=(callout.enabled?"ON":"OFF")+" · "+callout.style.toUpperCase();
+    document.getElementById("calloutSettingsState").textContent=(callout.enabled?"ON":"OFF")+" · "+callout.style.toUpperCase()+" / "+callout.motion.toUpperCase();
     if(syncControls){
       document.getElementById("calloutEnabled").checked=callout.enabled;
       document.getElementById("calloutPosition").value=callout.position;
       document.getElementById("calloutStyle").value=callout.style;
+      document.getElementById("calloutMotion").value=callout.motion;
       document.getElementById("calloutStart").value=String(callout.startSeconds);
       document.getElementById("calloutDuration").value=String(callout.durationSeconds);
       document.getElementById("calloutSubtitle").value=callout.subtitle;
@@ -724,7 +727,7 @@
   projectTitleInput?.addEventListener("input",event=>scheduleProjectTitleSave(event.currentTarget.value));
   projectTitleInput?.addEventListener("blur",()=>persistProjectTitle().catch(reportError));
   projectTitleInput?.addEventListener("keydown",event=>{if(event.key==="Enter")event.currentTarget.blur()});
-  for(const id of ["calloutEnabled","calloutPosition","calloutStyle","calloutStart","calloutDuration","calloutSubtitle"]){
+  for(const id of ["calloutEnabled","calloutPosition","calloutStyle","calloutMotion","calloutStart","calloutDuration","calloutSubtitle"]){
     const control=document.getElementById(id);
     control?.addEventListener("input",scheduleCalloutSave);
     control?.addEventListener("change",scheduleCalloutSave);

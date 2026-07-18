@@ -73,6 +73,7 @@ const DEFAULT_CALLOUT = {
   enabled: true,
   position: "left",
   style: "line",
+  motion: "fade",
   startSeconds: 0.08,
   durationSeconds: 3.5,
   subtitle: "WORKFLOW SHOWCASE · EDIT WORKFLOW",
@@ -312,6 +313,7 @@ function normalizeCallout(value){
   const source = value && typeof value === "object" ? value : {};
   const position = source.position === "right" ? "right" : "left";
   const style = ["line", "label", "minimal"].includes(source.style) ? source.style : "line";
+  const motion = ["fade", "snap", "mask", "type", "glitch"].includes(source.motion) ? source.motion : DEFAULT_CALLOUT.motion;
   const startValue = source.startSeconds === undefined ? DEFAULT_CALLOUT.startSeconds : Number(source.startSeconds);
   const startSeconds = Math.max(0, Math.min(60, Number.isFinite(startValue) ? startValue : DEFAULT_CALLOUT.startSeconds));
   const durationSeconds = Math.max(0.5, Math.min(30, Number(source.durationSeconds) || DEFAULT_CALLOUT.durationSeconds));
@@ -319,6 +321,7 @@ function normalizeCallout(value){
     enabled: source.enabled === undefined ? DEFAULT_CALLOUT.enabled : Boolean(source.enabled),
     position,
     style,
+    motion,
     startSeconds,
     durationSeconds,
     subtitle: source.subtitle === undefined
