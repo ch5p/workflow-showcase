@@ -111,6 +111,7 @@ function attachSmokeHarness({
           calloutMotions: [...document.getElementById("calloutMotion")?.options||[]].map(option=>option.value),
           calloutStyles: [...document.getElementById("calloutStyle")?.options||[]].map(option=>option.value),
           editNumberTicker: document.getElementById("editNumberTicker")?.checked,
+          editDisplayOptions: [...document.querySelectorAll("#editDisplaySettings input")].map(control=>control.id),
           previewState: document.getElementById("renderPreview")?.contentWindow?.portablePreview?.getState(),
           shotItems: document.querySelectorAll("#shotRailList .shotRailItem").length,
           editStatus: document.getElementById("editCountStatus")?.textContent,
@@ -120,25 +121,39 @@ function attachSmokeHarness({
           throw new Error("Smoke contract failed: " + JSON.stringify(result));
         }
         if(result.calloutMotions.includes("snap") || !result.calloutMotions.includes("decode") ||
-            !result.calloutStyles.includes("viewfinder") || result.editNumberTicker !== false){
+            !result.calloutStyles.includes("viewfinder") || result.editNumberTicker !== false ||
+            result.editDisplayOptions.join(",")!=="editNumberTicker,referencePop3d"){
           throw new Error("Callout/Edit display options failed: " + JSON.stringify(result));
         }
         result.calloutMotionContract = await window.webContents.executeJavaScript(`(()=>{
           const frame=document.getElementById("renderPreview");
           const bridge=frame.contentWindow.portablePreview;
           const previewDocument=frame.contentDocument;
-          bridge.setProjectTitle("DECODE MOTION TEST");
+          const decodePool=frame.contentWindow.resolveDecodeGlyphPool();
+          bridge.setProjectTitle(decodePool);
           bridge.setCalloutConfig({enabled:true,position:"left",style:"viewfinder",motion:"decode",startSeconds:0,durationSeconds:3.5,subtitle:"SMOKE"});
           bridge.seekFrame(Math.round(.45*bridge.getState().fps));
           const first=previewDocument.getElementById("videoCalloutTitle").textContent;
           bridge.seekFrame(Math.round(.45*bridge.getState().fps));
           const second=previewDocument.getElementById("videoCalloutTitle").textContent;
           const glyphCount=previewDocument.querySelectorAll("#videoCalloutTitle .decodeGlyph").length;
+          const allowedGlyphs=new Set(Array.from("<>/|=+*#%█▓▒░").concat(String.fromCharCode(92)));
+          const glyphPoolValid=decodePool.length>0&&!/\d/.test(decodePool)&&Array.from(decodePool).every(glyph=>allowedGlyphs.has(glyph));
+          const scrambled=previewDocument.querySelector("#videoCalloutTitle .decodeGlyph.scrambled");
+          const decoded=previewDocument.querySelector("#videoCalloutTitle .decodeGlyph:not(.scrambled)");
+          const scrambledStyle=scrambled?getComputedStyle(scrambled):null;
+          const decodedStyle=decoded?getComputedStyle(decoded):null;
+          const decodeStyleSeparated=Boolean(scrambledStyle&&decodedStyle&&
+            scrambledStyle.fontFamily!==decodedStyle.fontFamily&&scrambledStyle.color===decodedStyle.color&&
+            scrambledStyle.opacity==="1"&&scrambledStyle.textAlign==="left");
           const viewfinderVisible=getComputedStyle(previewDocument.querySelector(".videoCalloutViewfinder")).display!=="none";
-          bridge.setEditDisplayConfig({numberTicker:true});
-          return {deterministic:first===second,glyphCount,viewfinderVisible,editDisplayApi:true};
+          const tickerEnabled=bridge.setEditDisplayConfig({numberTicker:true}).numberTicker===true;
+          const tickerDisabled=bridge.setEditDisplayConfig({numberTicker:false}).numberTicker===false;
+          return {deterministic:first===second,glyphCount,decodePool,glyphPoolValid,decodeStyleSeparated,viewfinderVisible,
+            editDisplayApi:tickerEnabled&&tickerDisabled};
         })()`);
         if(!result.calloutMotionContract.deterministic || !result.calloutMotionContract.glyphCount ||
+            !result.calloutMotionContract.glyphPoolValid || !result.calloutMotionContract.decodeStyleSeparated ||
             !result.calloutMotionContract.viewfinderVisible || !result.calloutMotionContract.editDisplayApi){
           throw new Error("Callout motion smoke failed: " + JSON.stringify(result.calloutMotionContract));
         }

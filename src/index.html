@@ -160,6 +160,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .calloutSettingsBody{padding:0 0 9px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .calloutField{min-width:0;display:grid;gap:4px;color:#aeb8b3;font-family:var(--mono);font-size:7px}
 .calloutFieldSpacer{visibility:hidden}
+#editDisplaySettings .calloutFieldSpacer{display:none}
 .calloutField.wide{grid-column:1/-1}
 .calloutField input[type="text"],.calloutField input[type="number"],.calloutField select{width:100%;height:25px;padding:0 7px;
   border:1px solid rgba(255,255,255,.2);border-radius:4px;background:#1a1f1d;color:#eef3f0;font-family:var(--mono);font-size:9px;outline:none}
@@ -187,7 +188,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .scopeState.ADD{color:#84c5df}
 .scopeState.REPLACE{color:#b8a4eb}
 .scopeState.HIDE{color:#e4a1ae}
-.libraryScope{position:relative;min-height:150px;flex:1 0 150px;display:flex;flex-direction:column;padding:10px 4px 4px;
+.libraryScope{position:relative;min-height:150px;flex:0 0 auto;display:flex;flex-direction:column;padding:10px 4px 4px;
   border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background .15s}
 .libraryScope .scopeHeading{gap:7px}
 .libraryScope .scopeHeading span{margin-left:auto}
@@ -207,12 +208,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
 .overlayGlobal.dragOver{border-color:var(--accent);background:rgba(34,168,120,.14)}
 .overlayGlobal .globalRef{border-color:rgba(255,255,255,.2);background:#1c211f}
 .overlayGlobal .globalRef span{font-size:9px}
-.referenceMotionToggle{height:25px;margin:7px 0 0;padding:0 8px;display:flex;align-items:center;justify-content:space-between;
-  border:1px solid rgba(255,255,255,.2);border-radius:4px;background:rgba(255,255,255,.05);color:#d7ddda;
-  font-family:var(--mono);font-size:9px;cursor:pointer}
-.referenceMotionToggle:has(input:checked){border-color:var(--accent);background:rgba(34,168,120,.2);color:#fff}
-.referenceMotionToggle input{width:13px;height:13px;margin:0;accent-color:var(--accent)}
-.overlayAssets{min-height:0;flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:4px}
+.overlayAssets{min-height:110px;flex:0 0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:4px}
 .overlayAssets:empty{place-items:center;border:1px dashed rgba(255,255,255,.2);border-radius:5px}
 .overlayAssets:empty::before{content:"DROP FILES HERE";color:#aeb8b3;font-family:var(--mono);font-size:9px}
 .overlayAssets .asset{height:auto;border-color:rgba(255,255,255,.2);background:#1c211f}
@@ -443,12 +439,12 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
                 <summary><span>EDIT DISPLAY</span><span class="calloutSettingsState" id="editDisplayState">STATIC</span></summary>
                 <div class="calloutSettingsBody">
                   <div class="calloutField wide"><span class="calloutFieldSpacer" aria-hidden="true">NUMBER TICKER</span><label class="calloutEnabled"><span>NUMBER TICKER</span><input id="editNumberTicker" type="checkbox"></label></div>
+                  <div class="calloutField wide"><span class="calloutFieldSpacer" aria-hidden="true">REFERENCE 3D POP</span><label class="calloutEnabled"><span>REFERENCE 3D POP</span><input id="referencePop3d" type="checkbox"></label></div>
                 </div>
               </details>
               <section class="scopeBlock globalScope">
                 <div class="scopeHeading"><strong>GLOBAL BASE</strong><span>0 FILES · ALL SHOTS</span></div>
                 <div class="overlayGlobal" id="overlayGlobalDrop"></div>
-                <label class="referenceMotionToggle"><span>REFERENCE 3D POP</span><input id="referencePop3d" type="checkbox"></label>
               </section>
               <section class="scopeBlock shotScope">
                 <div class="scopeHeading">

@@ -42,7 +42,7 @@
             <span id="tcMain">00:00:00:00</span>
             <span id="projectTitle">UNTITLED PROJECT</span>
             <div id="timelineInfo">
-              <span id="editStatus"><span>EDIT </span><span class="editTickerViewport" id="editTickerViewport"><span class="editTickerPrevious" id="editTickerPrevious" aria-hidden="true">01</span><span class="editTickerCurrent" id="editTickerCurrent">01</span></span><span id="editStatusTail"> / 01 · 24 FPS</span></span>
+              <span id="editStatus"><span>EDIT</span><span class="editTickerViewport" id="editTickerViewport"><span class="editTickerPrevious" id="editTickerPrevious" aria-hidden="true">01</span><span class="editTickerCurrent" id="editTickerCurrent">01</span></span><span id="editStatusTail">/ 01 · 24 FPS</span></span>
               <span id="pageStatus">PAGE 01 / 01</span>
               <span id="thumbnailStatus">THUMBS WAITING</span>
               <span id="sequenceMeta">NO XML</span>
@@ -755,7 +755,7 @@ function updateEditStatus(editIndex,frame){
   const rolling=Boolean(EDIT_DISPLAY_CONFIG.numberTicker&&editIndex>0&&editIndex!==editTickerSuppressedEditIndex&&continuousPlayback&&elapsedFrames<durationFrames);
   currentNode.textContent=current;
   previousNode.textContent=previous;
-  tail.textContent=" / "+String(count).padStart(digits,"0")+" · "+DATA.fps+" FPS";
+  tail.textContent="/ "+String(count).padStart(digits,"0")+" · "+DATA.fps+" FPS";
   viewport.classList.toggle("rolling",rolling);
   if(rolling){
     const progress=Math.max(0,Math.min(1,elapsedFrames/durationFrames));
@@ -767,7 +767,7 @@ function updateEditStatus(editIndex,frame){
   }else{
     previousNode.style.transform="translate3d(0,-100%,0)";
     previousNode.style.opacity="0";
-    currentNode.style.transform="translate3d(0,0,0)";
+    currentNode.style.transform="none";
     currentNode.style.opacity="1";
   }
   lastTimelinePositionFrame=frame;
@@ -1133,6 +1133,44 @@ function deterministicUnit(index,step=0){
   value^=value>>>16;value=Math.imul(value,0x7feb352d);value^=value>>>15;value=Math.imul(value,0x846ca68b);value^=value>>>16;
   return (value>>>0)/4294967295;
 }
+const DECODE_BASE_GLYPHS="<>/|\\=+*#%";
+const DECODE_BLOCK_GLYPHS="█▓▒░";
+let decodeGlyphPoolCache="";
+function glyphRasterSignature(glyph,fontFamily){
+  const canvas=document.createElement("canvas");
+  canvas.width=48;canvas.height=48;
+  const context=canvas.getContext("2d",{willReadFrequently:true});
+  if(!context)return "";
+  context.clearRect(0,0,48,48);
+  context.fillStyle="#fff";
+  context.font="32px "+fontFamily;
+  context.textAlign="center";
+  context.textBaseline="middle";
+  context.fillText(glyph,24,25);
+  const pixels=context.getImageData(0,0,48,48).data;
+  let ink=0,hash=2166136261;
+  for(let index=3;index<pixels.length;index+=4){
+    const alpha=pixels[index];
+    ink+=alpha;
+    hash^=alpha+index;
+    hash=Math.imul(hash,16777619);
+  }
+  return ink?ink+":"+(hash>>>0).toString(16):"";
+}
+function resolveDecodeGlyphPool(){
+  if(decodeGlyphPoolCache)return decodeGlyphPoolCache;
+  const mono=getComputedStyle($("videoCalloutTitle")).getPropertyValue("--mono").trim()||"monospace";
+  const missingSignatures=new Set([
+    glyphRasterSignature("\u{10ffff}",mono),
+    glyphRasterSignature("\ufffd",mono),
+  ].filter(Boolean));
+  const supportedBlocks=Array.from(DECODE_BLOCK_GLYPHS).filter(glyph=>{
+    const signature=glyphRasterSignature(glyph,mono);
+    return Boolean(signature)&&!missingSignatures.has(signature);
+  });
+  decodeGlyphPoolCache=DECODE_BASE_GLYPHS+supportedBlocks.join("");
+  return decodeGlyphPoolCache;
+}
 function typeRevealSchedule(characters){
   const key=characters.join("\u0000");
   if(key===typeScheduleKey)return typeSchedule;
@@ -1163,7 +1201,7 @@ function ensureDecodeCalloutTitle(title,characters){
   });
   calloutGlyphNodes.forEach((glyph,index)=>{
     const width=glyph.getBoundingClientRect().width;
-    glyph.style.width=Math.max(.5,width)+"px";
+    glyph.style.width=Math.max(.5,width+.75)+"px";
     glyph.dataset.finalCharacter=characters[index];
   });
   calloutTitleStructure="decode";
@@ -1207,6 +1245,14 @@ function setEditDisplayConfig(value){
   EDIT_DISPLAY_CONFIG={numberTicker:Boolean(source.numberTicker)};
   lastTimelinePositionFrame=-1;
   editTickerSuppressedEditIndex=-1;
+  if(!EDIT_DISPLAY_CONFIG.numberTicker){
+    const viewport=$("editTickerViewport");
+    const previousNode=$("editTickerPrevious");
+    const currentNode=$("editTickerCurrent");
+    viewport?.classList.remove("rolling");
+    if(previousNode){previousNode.style.transform="translate3d(0,-100%,0)";previousNode.style.opacity="0"}
+    if(currentNode){currentNode.style.transform="none";currentNode.style.opacity="1"}
+  }
   if(DATA)positionTimeline();
   return {...EDIT_DISPLAY_CONFIG};
 }
@@ -1285,11 +1331,13 @@ function updateVideoCallout(seconds){
     const eyebrowProgress=1-Math.pow(1-clamp((enter-.05)/.2),3);
     const titleProgress=clamp((enter-.1)/.78);
     const metaProgress=1-Math.pow(1-clamp((enter-.82)/.18),3);
-    const glyphPool="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%*+<>/{}[]";
+    const glyphPool=resolveDecodeGlyphPool();
     const scrambleStep=Math.floor(time*20);
     calloutGlyphNodes.forEach((glyph,index)=>{
       const finalCharacter=characters[index]||"";
-      if(/^\s$/u.test(finalCharacter)||(index+1)/Math.max(1,characters.length)<=titleProgress){
+      const decoded=/^\s$/u.test(finalCharacter)||(index+1)/Math.max(1,characters.length)<=titleProgress;
+      glyph.classList.toggle("scrambled",!decoded);
+      if(decoded){
         glyph.textContent=finalCharacter;
       }else{
         glyph.textContent=glyphPool[Math.floor(deterministicUnit(index,scrambleStep)*glyphPool.length)%glyphPool.length];

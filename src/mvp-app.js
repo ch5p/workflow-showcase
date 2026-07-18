@@ -82,6 +82,12 @@
   }
   function applyPreviewReferences(snapshot){ preview()?.setReferences(previewReferenceState(snapshot)); }
   function normalizeReferenceMotion(value){ return value==="pop3d"?"pop3d":DEFAULT_REFERENCE_MOTION; }
+  function updateEditDisplayState(){
+    const numberTicker=Boolean(job?.editNumberTicker);
+    const pop3d=normalizeReferenceMotion(job?.referenceMotion)==="pop3d";
+    const state=document.getElementById("editDisplayState");
+    if(state)state.textContent=numberTicker?(pop3d?"TICKER · 3D POP":"NUMBER TICKER"):(pop3d?"3D POP":"STATIC");
+  }
   function applyReferenceMotion(value=job?.referenceMotion,{syncControl=true,syncPreview=true}={}){
     const motion=normalizeReferenceMotion(value);
     if(job)job.referenceMotion=motion;
@@ -89,6 +95,7 @@
       const control=document.getElementById("referencePop3d");
       if(control)control.checked=motion==="pop3d";
     }
+    updateEditDisplayState();
     if(syncPreview)applyPreviewReferences();
     return motion;
   }
@@ -157,8 +164,7 @@
     const numberTicker=Boolean(value);
     if(job)job.editNumberTicker=numberTicker;
     preview()?.setEditDisplayConfig?.({numberTicker});
-    const state=document.getElementById("editDisplayState");
-    if(state)state.textContent=numberTicker?"NUMBER TICKER":"STATIC";
+    updateEditDisplayState();
     if(syncControl){
       const control=document.getElementById("editNumberTicker");
       if(control)control.checked=numberTicker;

@@ -46,11 +46,24 @@ const classicCss=fs.readFileSync(path.join(root,"src/layouts/classic/classic.css
 for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./adapters/xmeml-unsupported-layers.js","./core/primary-timeline.js","./core/shot-model.js","function parseSupportedFCPXML(text)","excludeUnsupportedXmemlLayers(text,parseFCPXML(text))","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","preflightVideo","routeDroppedFiles","id=\"videoCallout\"","class=\"videoCalloutEyebrow\"","function updateVideoCallout","setCalloutConfig"]){
   if(!preview.includes(marker))throw new Error("Parser bridge marker missing: "+marker);
 }
+for(const marker of ["DECODE_BASE_GLYPHS","DECODE_BLOCK_GLYPHS","resolveDecodeGlyphPool",'classList.toggle("scrambled",!decoded)']){
+  if(!preview.includes(marker))throw new Error("Decode motion marker missing: "+marker);
+}
+if(preview.includes("·:+×<>/|┆□◇▯"))throw new Error("Decorative decode glyph pool returned");
+const decodeBaseMatch=preview.match(/const DECODE_BASE_GLYPHS="([^"]+)";/);
+if(!decodeBaseMatch||/\d/.test(decodeBaseMatch[1]))throw new Error("Decode base glyph pool must not contain digits");
+if(!classicCss.includes(".decodeGlyph.scrambled")||!classicCss.includes("font-family:var(--mono)")||
+    !classicCss.includes("font-size:.92em")||!classicCss.includes("opacity:1;text-align:left")){
+  throw new Error("Decode scrambled/final style separation missing");
+}
 if(/<style(?:\s|>)/i.test(preview))throw new Error("Classic preview CSS returned to inline HTML");
 if(!preview.includes("build(parseSupportedFCPXML(rd.result));")||preview.includes("build(parseFCPXML(rd.result));"))throw new Error("Standalone XML drop must keep the supported xmeml adapter boundary");
 const editor=fs.readFileSync(path.join(root,"src/index.html"),"utf8");
 if(!editor.includes('id="overlayProjectTitle"'))throw new Error("Project title editor missing");
 if(!editor.includes('id="calloutSettings"'))throw new Error("Callout settings missing");
+const editDisplayMarkup=editor.match(/<details class="calloutSettings" id="editDisplaySettings">([\s\S]*?)<\/details>/)?.[1]||"";
+if(!editDisplayMarkup.includes('id="editNumberTicker"')||!editDisplayMarkup.includes('id="referencePop3d"'))throw new Error("Edit display options must keep Number Ticker and Reference 3D Pop together");
+if(editor.includes("referenceMotionToggle"))throw new Error("Reference 3D Pop returned to its legacy standalone control");
 if(editor.includes("calloutTool"))throw new Error("Removed callout tool tags returned");
 if(!editor.includes('id="resetPreviewTop"'))throw new Error("Preview reset control missing");
 if(!editor.includes('id="reloadCurrentJob"'))throw new Error("Current Job reload control missing");
@@ -64,8 +77,8 @@ for(const marker of ['class="shotRail closed" id="shotRail"','class="editOverlay
 if((editor.match(/class="modeButton active" data-mode="ADD"/g)||[]).length<2)throw new Error("ADD must be the visible default for SHOT reference modes");
 if(editor.includes('class="modeButton active" data-mode="REPLACE"'))throw new Error("REPLACE returned as the visible SHOT reference default");
 if(!/\.overlayBody\{[^}]*display:flex;flex-direction:column/.test(editor))throw new Error("Overlay body must own a stable vertical layout");
-if(!/\.libraryScope\{[^}]*min-height:150px;flex:1 0 150px;display:flex;flex-direction:column/.test(editor))throw new Error("Reference file drop zone must fill the available panel height");
-if(!/\.overlayAssets\{[^}]*min-height:0;flex:1;[^}]*align-content:start/.test(editor))throw new Error("Reference assets must use the full drop-zone height without stretching cards");
+if(!/\.libraryScope\{[^}]*min-height:150px;flex:0 0 auto;display:flex;flex-direction:column/.test(editor))throw new Error("Reference file drop zone must grow with its content");
+if(!/\.overlayAssets\{[^}]*min-height:110px;flex:0 0 auto;[^}]*align-content:start/.test(editor))throw new Error("Reference assets must preserve card size and use the panel scroll");
 for(const marker of ['class="command inputDropZone"','class="command inputDropZone video"',"./core/reference-mapping.js","loadDroppedXml","loadDroppedVideo","function replaceShots(nextShots,mappings={},emitChange=true)"]){
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }
@@ -103,6 +116,9 @@ const renderer=fs.readFileSync(path.join(root,"src/mvp-app.js"),"utf8");
 if(!renderer.includes("logPreviewEvent")||!renderer.includes("safeRendererLog(event,detail)"))throw new Error("Thumbnail diagnostics must reach current-job/logs/app.log");
 for(const marker of ["expectedJobId","expectedRevision","backupCurrentJob","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
   if(!renderer.includes(marker))throw new Error("Renderer lifecycle marker missing: "+marker);
+}
+for(const marker of ["function updateEditDisplayState()",'"TICKER · 3D POP"','"NUMBER TICKER"','"3D POP"','"STATIC"']){
+  if(!renderer.includes(marker))throw new Error("Edit display summary marker missing: "+marker);
 }
 for(const marker of ["browserLanguage","readBootLanguage","ui_language_ipc_failed","ui_language_save_failed","saveJobPatch({ui:{language:requested}})"]){
   if(!renderer.includes(marker))throw new Error("Renderer language contract missing: "+marker);
