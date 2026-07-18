@@ -119,8 +119,8 @@
     return {
       enabled:source.enabled===undefined?DEFAULT_CALLOUT.enabled:Boolean(source.enabled),
       position:source.position==="right"?"right":"left",
-      style:["line","label","minimal"].includes(source.style)?source.style:"line",
-      motion:["fade","snap","mask","type","glitch"].includes(source.motion)?source.motion:DEFAULT_CALLOUT.motion,
+      style:["line","label","minimal","viewfinder"].includes(source.style)?source.style:"line",
+      motion:["fade","mask","type","decode","glitch"].includes(source.motion)?source.motion:DEFAULT_CALLOUT.motion,
       startSeconds:number(source.startSeconds,DEFAULT_CALLOUT.startSeconds,0,60),
       durationSeconds:number(source.durationSeconds,DEFAULT_CALLOUT.durationSeconds,.5,30),
       subtitle:source.subtitle===undefined?DEFAULT_CALLOUT.subtitle:String(source.subtitle).replace(/\s+/g," ").trim().slice(0,60),
@@ -152,6 +152,23 @@
       document.getElementById("calloutSubtitle").value=callout.subtitle;
     }
     return callout;
+  }
+  function applyEditDisplaySettings(value=job?.editNumberTicker,{syncControl=true}={}){
+    const numberTicker=Boolean(value);
+    if(job)job.editNumberTicker=numberTicker;
+    preview()?.setEditDisplayConfig?.({numberTicker});
+    const state=document.getElementById("editDisplayState");
+    if(state)state.textContent=numberTicker?"NUMBER TICKER":"STATIC";
+    if(syncControl){
+      const control=document.getElementById("editNumberTicker");
+      if(control)control.checked=numberTicker;
+    }
+    return numberTicker;
+  }
+  async function persistEditDisplaySettings(){
+    if(!bridge||!job||transitioning||runtimeBlocked||activeInputOperation)return;
+    const enabled=applyEditDisplaySettings(document.getElementById("editNumberTicker")?.checked,{syncControl:false});
+    await saveJobPatch({editNumberTicker:enabled});
   }
   function clearSaveTimers(){
     clearTimeout(saveTimer);saveTimer=0;
@@ -368,6 +385,7 @@
   async function hydrateJobState(nextJob,{xmlText=null}={}){
     job=nextJob;
     applyReferenceMotion(job.referenceMotion,{syncPreview:false});
+    applyEditDisplaySettings(job.editNumberTicker);
     const target=await waitForPreview();
     ui.replaceAssets(job.references||[],job.globalReferenceIds||[]);
     await target?.clearVideo?.();
@@ -396,6 +414,7 @@
     }
     target?.setProjectTitle?.("");
     target?.setCalloutConfig?.(DEFAULT_CALLOUT);
+    target?.setEditDisplayConfig?.({numberTicker:false});
     ui.replaceAssets([],[]);
     ui.replaceShots([],{},false);
     timeline=null;
@@ -756,5 +775,6 @@
     }
   }
   document.getElementById("referencePop3d")?.addEventListener("change",()=>persistReferenceMotion().catch(reportError));
+  document.getElementById("editNumberTicker")?.addEventListener("change",()=>persistEditDisplaySettings().catch(reportError));
   initialize();
 })();

@@ -108,6 +108,9 @@ function attachSmokeHarness({
           shotRail: Boolean(document.getElementById("shotRail")),
           editOverlay: Boolean(document.getElementById("editOverlay")),
           calloutSettingsOpen: document.getElementById("calloutSettings")?.open,
+          calloutMotions: [...document.getElementById("calloutMotion")?.options||[]].map(option=>option.value),
+          calloutStyles: [...document.getElementById("calloutStyle")?.options||[]].map(option=>option.value),
+          editNumberTicker: document.getElementById("editNumberTicker")?.checked,
           previewState: document.getElementById("renderPreview")?.contentWindow?.portablePreview?.getState(),
           shotItems: document.querySelectorAll("#shotRailList .shotRailItem").length,
           editStatus: document.getElementById("editCountStatus")?.textContent,
@@ -115,6 +118,29 @@ function attachSmokeHarness({
         })`);
         if(!result.hasApi || !result.hasWireframe || !result.hasPreview || !result.shotRail || !result.editOverlay || !result.calloutSettingsOpen){
           throw new Error("Smoke contract failed: " + JSON.stringify(result));
+        }
+        if(result.calloutMotions.includes("snap") || !result.calloutMotions.includes("decode") ||
+            !result.calloutStyles.includes("viewfinder") || result.editNumberTicker !== false){
+          throw new Error("Callout/Edit display options failed: " + JSON.stringify(result));
+        }
+        result.calloutMotionContract = await window.webContents.executeJavaScript(`(()=>{
+          const frame=document.getElementById("renderPreview");
+          const bridge=frame.contentWindow.portablePreview;
+          const previewDocument=frame.contentDocument;
+          bridge.setProjectTitle("DECODE MOTION TEST");
+          bridge.setCalloutConfig({enabled:true,position:"left",style:"viewfinder",motion:"decode",startSeconds:0,durationSeconds:3.5,subtitle:"SMOKE"});
+          bridge.seekFrame(Math.round(.45*bridge.getState().fps));
+          const first=previewDocument.getElementById("videoCalloutTitle").textContent;
+          bridge.seekFrame(Math.round(.45*bridge.getState().fps));
+          const second=previewDocument.getElementById("videoCalloutTitle").textContent;
+          const glyphCount=previewDocument.querySelectorAll("#videoCalloutTitle .decodeGlyph").length;
+          const viewfinderVisible=getComputedStyle(previewDocument.querySelector(".videoCalloutViewfinder")).display!=="none";
+          bridge.setEditDisplayConfig({numberTicker:true});
+          return {deterministic:first===second,glyphCount,viewfinderVisible,editDisplayApi:true};
+        })()`);
+        if(!result.calloutMotionContract.deterministic || !result.calloutMotionContract.glyphCount ||
+            !result.calloutMotionContract.viewfinderVisible || !result.calloutMotionContract.editDisplayApi){
+          throw new Error("Callout motion smoke failed: " + JSON.stringify(result.calloutMotionContract));
         }
         if(!String(result.jobName || "").startsWith("SAMPLE JOB / ")){
           throw new Error("Starter demo label is missing: " + JSON.stringify(result));

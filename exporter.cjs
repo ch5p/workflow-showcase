@@ -184,7 +184,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       const references = referenceState(job, parsed);
       const projectTitle = job.projectTitle === undefined || job.projectTitle === null ? "UNTITLED PROJECT" : job.projectTitle;
       await renderWindow.webContents.executeJavaScript(
-        `window.portablePreview.setProjectTitle(${JSON.stringify(projectTitle)}); window.portablePreview.setCalloutConfig(${JSON.stringify(job.callout || {})}); window.portablePreview.setReferences(${JSON.stringify(references)}); window.portablePreview.prepareRealtimeExport()`
+        `window.portablePreview.setProjectTitle(${JSON.stringify(projectTitle)}); window.portablePreview.setCalloutConfig(${JSON.stringify(job.callout || {})}); window.portablePreview.setEditDisplayConfig(${JSON.stringify({ numberTicker: Boolean(job.editNumberTicker) })}); window.portablePreview.setReferences(${JSON.stringify(references)}); window.portablePreview.prepareRealtimeExport()`
       );
       renderWindow.webContents.invalidate();
       await Promise.race([

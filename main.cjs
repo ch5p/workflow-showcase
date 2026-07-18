@@ -128,6 +128,7 @@ function emptyJob(){
     projectTitle: DEFAULT_PROJECT_TITLE,
     callout: { ...DEFAULT_CALLOUT },
     referenceMotion: DEFAULT_REFERENCE_MOTION,
+    editNumberTicker: false,
     ui: { scale: 1.25 },
     output: { codec: CLASSIC_RENDER_SPEC.codec, bitrateMbps: CLASSIC_RENDER_SPEC.bitrateMbps, fps: CLASSIC_RENDER_SPEC.fps },
   };
@@ -208,6 +209,9 @@ function validateJobShape(job){
   if(job.callout !== undefined && !isPlainObject(job.callout)) throw new Error("callout must be an object");
   if(job.referenceMotion !== undefined && !["classic", "pop3d"].includes(job.referenceMotion)){
     throw new Error("referenceMotion must be classic or pop3d");
+  }
+  if(job.editNumberTicker !== undefined && typeof job.editNumberTicker !== "boolean"){
+    throw new Error("editNumberTicker must be a boolean");
   }
   if(job.demo !== undefined && typeof job.demo !== "boolean") throw new Error("demo must be a boolean");
   if(!isPlainObject(job.ui) || !isPlainObject(job.output)) throw new Error("ui and output must be objects");
@@ -321,8 +325,8 @@ function normalizeReferenceMotion(value){
 function normalizeCallout(value){
   const source = value && typeof value === "object" ? value : {};
   const position = source.position === "right" ? "right" : "left";
-  const style = ["line", "label", "minimal"].includes(source.style) ? source.style : "line";
-  const motion = ["fade", "snap", "mask", "type", "glitch"].includes(source.motion) ? source.motion : DEFAULT_CALLOUT.motion;
+  const style = ["line", "label", "minimal", "viewfinder"].includes(source.style) ? source.style : "line";
+  const motion = ["fade", "mask", "type", "decode", "glitch"].includes(source.motion) ? source.motion : DEFAULT_CALLOUT.motion;
   const startValue = source.startSeconds === undefined ? DEFAULT_CALLOUT.startSeconds : Number(source.startSeconds);
   const startSeconds = Math.max(0, Math.min(60, Number.isFinite(startValue) ? startValue : DEFAULT_CALLOUT.startSeconds));
   const durationSeconds = Math.max(0.5, Math.min(30, Number(source.durationSeconds) || DEFAULT_CALLOUT.durationSeconds));
@@ -622,6 +626,7 @@ function hydrateJob(job){
     projectTitle: normalizeProjectTitle(job.projectTitle),
     callout: normalizeCallout(job.callout),
     referenceMotion: normalizeReferenceMotion(job.referenceMotion),
+    editNumberTicker: Boolean(job.editNumberTicker),
     xml: job.xml ? { ...job.xml, ...publicFile(job.xml.relativePath, SOURCE_ROOT, "xml") } : null,
     video: job.video ? { ...job.video, ...publicFile(job.video.relativePath, SOURCE_ROOT, "video") } : null,
     references: normalizeReferenceLabels(job.references).map(reference => ({
@@ -957,6 +962,9 @@ ipcMain.handle("job:save", (_event, payload) => {
     referenceMotion: payload?.referenceMotion === undefined
       ? normalizeReferenceMotion(current.referenceMotion)
       : normalizeReferenceMotion(payload.referenceMotion),
+    editNumberTicker: payload?.editNumberTicker === undefined
+      ? Boolean(current.editNumberTicker)
+      : Boolean(payload.editNumberTicker),
     ui: payload?.ui && typeof payload.ui === "object" ? { ...current.ui, ...payload.ui } : current.ui,
   });
   logEvent("job_saved", {

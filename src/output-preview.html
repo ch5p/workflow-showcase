@@ -22,6 +22,11 @@
           <strong id="videoCalloutTitle">UNTITLED PROJECT</strong>
           <span class="videoCalloutMeta" id="videoCalloutSubtitle">WORKFLOW SHOWCASE · EDIT WORKFLOW</span>
         </span>
+        <span class="videoCalloutViewfinder" aria-hidden="true">
+          <i class="viewfinderCorner topLeft"></i><i class="viewfinderCorner topRight"></i>
+          <i class="viewfinderCorner bottomLeft"></i><i class="viewfinderCorner bottomRight"></i>
+          <span class="videoCalloutRec"><b></b> REC</span>
+        </span>
       </div>
     </div>
     <div id="panel">
@@ -37,7 +42,7 @@
             <span id="tcMain">00:00:00:00</span>
             <span id="projectTitle">UNTITLED PROJECT</span>
             <div id="timelineInfo">
-              <span id="editStatus">EDIT 01 / 01 · 24 FPS</span>
+              <span id="editStatus"><span>EDIT </span><span class="editTickerViewport" id="editTickerViewport"><span class="editTickerPrevious" id="editTickerPrevious" aria-hidden="true">01</span><span class="editTickerCurrent" id="editTickerCurrent">01</span></span><span id="editStatusTail"> / 01 · 24 FPS</span></span>
               <span id="pageStatus">PAGE 01 / 01</span>
               <span id="thumbnailStatus">THUMBS WAITING</span>
               <span id="sequenceMeta">NO XML</span>
@@ -158,6 +163,7 @@ const CONFIG = {
   // match는 XML 클립 이름의 일부와 일치시킨다. thumbnail이 비어 있으면 placeholder가 표시된다.
 };
 let CALLOUT_CONFIG={enabled:true,position:"left",style:"line",motion:"fade",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
+let EDIT_DISPLAY_CONFIG={numberTicker:false};
 let RENDER_SPEC={width:1280,height:1080,fps:60,bitrateMbps:12};
 
 /* ============ 공개 synthetic fallback ============ */
@@ -231,11 +237,15 @@ let t0=0, tPause=0, rafId=0;
 let debugOn=false, fullMode=true;
 let syncClock="virtual", videoObjectUrl=null;
 let thumbnailGeneration=0, thumbnailSeekToken=0, thumbnailRetryTimer=0, timelineFrame=0, timelinePage=-1, timelineRevealFrame=-1;
+let lastTimelinePositionFrame=-1;
+let editTickerSuppressedEditIndex=-1;
 let thumbnailFrameCache=new Map(), lastThumbnailSeekDiagnostic=null;
 let lastUiOutputFrame=-1, videoAnchorTime=0, videoAnchorWall=0;
 let lastVideoFrameWall=0, videoFrameCallbackId=0;
 let videoClockGeneration=0;
 let lastReportedShot=0;
+let calloutTitleStructure="plain",calloutTitleSource="",calloutGlyphNodes=[];
+let typeScheduleKey="",typeSchedule=[];
 /* ============ 안정 코어 bridge ============ */
 const parseFCPXML=window.PortableXmeml.parseXmeml;
 const excludeUnsupportedXmemlLayers=window.PortableUnsupportedXmeml.excludeUnsupportedLayers;
@@ -728,6 +738,40 @@ function animatePageIn(){
     el.classList.add("pageSwitch");
   }
 }
+function updateEditStatus(editIndex,frame){
+  const count=SEGS.length||1;
+  const digits=Math.max(2,String(count).length);
+  const current=String(editIndex+1).padStart(digits,"0");
+  const previous=String(Math.max(1,editIndex)).padStart(digits,"0");
+  const viewport=$("editTickerViewport");
+  const previousNode=$("editTickerPrevious");
+  const currentNode=$("editTickerCurrent");
+  const tail=$("editStatusTail");
+  const boundaryFrame=Number(SEGS[editIndex]?.start)||0;
+  const elapsedFrames=Math.max(0,frame-boundaryFrame);
+  const durationFrames=Math.max(1,.22*DATA.fps);
+  const delta=lastTimelinePositionFrame<0?0:frame-lastTimelinePositionFrame;
+  const continuousPlayback=phase==="show"&&delta>=0&&delta<=Math.max(2,DATA.fps*.25);
+  const rolling=Boolean(EDIT_DISPLAY_CONFIG.numberTicker&&editIndex>0&&editIndex!==editTickerSuppressedEditIndex&&continuousPlayback&&elapsedFrames<durationFrames);
+  currentNode.textContent=current;
+  previousNode.textContent=previous;
+  tail.textContent=" / "+String(count).padStart(digits,"0")+" · "+DATA.fps+" FPS";
+  viewport.classList.toggle("rolling",rolling);
+  if(rolling){
+    const progress=Math.max(0,Math.min(1,elapsedFrames/durationFrames));
+    const eased=1-Math.pow(1-progress,3);
+    previousNode.style.transform=`translate3d(0,${(-100*eased).toFixed(2)}%,0)`;
+    previousNode.style.opacity=(1-eased).toFixed(4);
+    currentNode.style.transform=`translate3d(0,${(100*(1-eased)).toFixed(2)}%,0)`;
+    currentNode.style.opacity=eased.toFixed(4);
+  }else{
+    previousNode.style.transform="translate3d(0,-100%,0)";
+    previousNode.style.opacity="0";
+    currentNode.style.transform="translate3d(0,0,0)";
+    currentNode.style.opacity="1";
+  }
+  lastTimelinePositionFrame=frame;
+}
 function positionTimeline(){
   if(!DATA) return;
   const frame=Math.min(DATA.duration,Math.max(0,timelineFrame));
@@ -794,9 +838,7 @@ function positionTimeline(){
   if(editIndex<0){
     editIndex=SEGS.reduce((latest,segment,index)=>segment.start<=frame?index:latest,0);
   }
-  const digits=Math.max(2,String(SEGS.length||1).length);
-  $("editStatus").textContent="EDIT "+String(editIndex+1).padStart(digits,"0")+
-    " / "+String(SEGS.length||1).padStart(digits,"0")+" · "+DATA.fps+" FPS";
+  updateEditStatus(editIndex,frame);
   positionReferenceDock(frame);
   $("overviewPlayhead").style.left=(frame/DATA.duration*100)+"%";
 }
@@ -1077,10 +1119,61 @@ function build(rawData){
   generateTimelineThumbnails();
 }
 
+function splitCalloutCharacters(value){
+  const text=String(value??"");
+  try{
+    if(typeof Intl?.Segmenter==="function"){
+      return [...new Intl.Segmenter(undefined,{granularity:"grapheme"}).segment(text)].map(item=>item.segment);
+    }
+  }catch{}
+  return Array.from(text);
+}
+function deterministicUnit(index,step=0){
+  let value=Math.imul((index|0)+1,0x9e3779b1)^Math.imul((step|0)+1,0x85ebca6b);
+  value^=value>>>16;value=Math.imul(value,0x7feb352d);value^=value>>>15;value=Math.imul(value,0x846ca68b);value^=value>>>16;
+  return (value>>>0)/4294967295;
+}
+function typeRevealSchedule(characters){
+  const key=characters.join("\u0000");
+  if(key===typeScheduleKey)return typeSchedule;
+  typeScheduleKey=key;
+  const weights=characters.map((_character,index)=>.8+deterministicUnit(index,characters.length)*.4);
+  const total=weights.reduce((sum,value)=>sum+value,0)||1;
+  let elapsed=0;
+  typeSchedule=weights.map(value=>(elapsed+=value)/total);
+  return typeSchedule;
+}
+function ensurePlainCalloutTitle(title){
+  if(calloutTitleStructure!=="plain"||title.textContent!==CONFIG.projectTitle){
+    title.textContent=CONFIG.projectTitle;
+  }
+  calloutTitleStructure="plain";
+  calloutTitleSource=CONFIG.projectTitle;
+  calloutGlyphNodes=[];
+}
+function ensureDecodeCalloutTitle(title,characters){
+  if(calloutTitleStructure==="decode"&&calloutTitleSource===CONFIG.projectTitle&&calloutGlyphNodes.length===characters.length)return;
+  title.replaceChildren();
+  calloutGlyphNodes=characters.map(character=>{
+    const glyph=document.createElement("span");
+    glyph.className="decodeGlyph";
+    glyph.textContent=character;
+    title.appendChild(glyph);
+    return glyph;
+  });
+  calloutGlyphNodes.forEach((glyph,index)=>{
+    const width=glyph.getBoundingClientRect().width;
+    glyph.style.width=Math.max(.5,width)+"px";
+    glyph.dataset.finalCharacter=characters[index];
+  });
+  calloutTitleStructure="decode";
+  calloutTitleSource=CONFIG.projectTitle;
+}
 function setProjectTitle(value){
   CONFIG.projectTitle=value===undefined||value===null?"UNTITLED PROJECT":String(value).replace(/\s+/g," ").trim().slice(0,40);
   $("projectTitle").textContent=CONFIG.projectTitle;
-  $("videoCalloutTitle").textContent=CONFIG.projectTitle;
+  calloutTitleStructure="";
+  calloutTitleSource="";
   $("videoCalloutTitle").dataset.glitchText=CONFIG.projectTitle;
   updateVideoCallout(mainVideo.currentTime||0);
   return CONFIG.projectTitle;
@@ -1094,8 +1187,8 @@ function setCalloutConfig(value){
   CALLOUT_CONFIG={
     enabled:source.enabled===undefined?true:Boolean(source.enabled),
     position:source.position==="right"?"right":"left",
-    style:["line","label","minimal"].includes(source.style)?source.style:"line",
-    motion:["fade","snap","mask","type","glitch"].includes(source.motion)?source.motion:"fade",
+    style:["line","label","minimal","viewfinder"].includes(source.style)?source.style:"line",
+    motion:["fade","mask","type","decode","glitch"].includes(source.motion)?source.motion:"fade",
     startSeconds:number(source.startSeconds,.08,0,60),
     durationSeconds:number(source.durationSeconds,3.5,.5,30),
     subtitle:source.subtitle===undefined?"WORKFLOW SHOWCASE · EDIT WORKFLOW":String(source.subtitle).replace(/\s+/g," ").trim().slice(0,60),
@@ -1105,16 +1198,30 @@ function setCalloutConfig(value){
   callout.dataset.style=CALLOUT_CONFIG.style;
   callout.dataset.motion=CALLOUT_CONFIG.motion;
   $("videoCalloutSubtitle").textContent=CALLOUT_CONFIG.subtitle;
+  calloutTitleStructure="";
   updateVideoCallout(mainVideo.currentTime||0);
   return {...CALLOUT_CONFIG};
+}
+function setEditDisplayConfig(value){
+  const source=value&&typeof value==="object"?value:{};
+  EDIT_DISPLAY_CONFIG={numberTicker:Boolean(source.numberTicker)};
+  lastTimelinePositionFrame=-1;
+  editTickerSuppressedEditIndex=-1;
+  if(DATA)positionTimeline();
+  return {...EDIT_DISPLAY_CONFIG};
 }
 function updateVideoCallout(seconds){
   const time=Math.max(0,Number(seconds)||0);
   const clamp=value=>Math.max(0,Math.min(1,value));
   const motion=CALLOUT_CONFIG.motion;
-  const enterSeconds=motion==="snap"?.34:motion==="mask"?.48:motion==="type"?1.05:motion==="glitch"?.62:.58;
+  const characters=splitCalloutCharacters(CONFIG.projectTitle);
+  const availableEnter=Math.max(.25,CALLOUT_CONFIG.durationSeconds-.25);
+  const typeEnterSeconds=Math.min(3,.35+characters.length*.07,availableEnter);
+  const decodeEnterSeconds=Math.min(.9,Math.max(.2,CALLOUT_CONFIG.durationSeconds-.2));
+  const enterSeconds=motion==="mask"?.48:motion==="type"?typeEnterSeconds:motion==="decode"?decodeEnterSeconds:motion==="glitch"?.62:.58;
   const enter=clamp((time-CALLOUT_CONFIG.startSeconds)/enterSeconds);
-  const leave=1-clamp((time-(CALLOUT_CONFIG.startSeconds+CALLOUT_CONFIG.durationSeconds))/.55);
+  const leaveStart=CALLOUT_CONFIG.startSeconds+CALLOUT_CONFIG.durationSeconds;
+  const leave=1-clamp((time-leaveStart)/.55);
   const active=CALLOUT_CONFIG.enabled&&CONFIG.projectTitle;
   const fadeEased=1-Math.pow(1-enter,3);
   const direction=CALLOUT_CONFIG.position==="right"?1:-1;
@@ -1128,11 +1235,15 @@ function updateVideoCallout(seconds){
   let translateX=direction*22*(1-fadeEased);
   let scale=1;
   let ruleScale=.25+.75*fadeEased;
+  const blink=active&&time>=CALLOUT_CONFIG.startSeconds&&time<leaveStart&&Math.floor((time-CALLOUT_CONFIG.startSeconds)*2.5)%2===0?1:0;
+  callout.style.setProperty("--callout-enter",fadeEased.toFixed(4));
+  callout.style.setProperty("--callout-blink",String(blink));
   copy.style.clipPath="inset(0 0 0 0)";
   copy.style.transform="translate3d(0,0,0)";
   eyebrow.style.opacity="1";
   eyebrow.style.transform="translate3d(0,0,0)";
-  title.textContent=CONFIG.projectTitle;
+  if(motion==="decode")ensureDecodeCalloutTitle(title,characters);
+  else ensurePlainCalloutTitle(title);
   title.dataset.glitchText=CONFIG.projectTitle;
   title.style.opacity="1";
   title.style.transform="translate3d(0,0,0) scale(1)";
@@ -1140,14 +1251,10 @@ function updateVideoCallout(seconds){
   title.style.setProperty("--glitch-before-x","0px");
   title.style.setProperty("--glitch-after-x","0px");
   title.style.setProperty("--glitch-split-opacity","0");
+  title.style.setProperty("--type-caret-opacity",motion==="type"?String(blink):"0");
   meta.style.opacity="1";
   meta.style.transform="translate3d(0,0,0)";
-  if(motion==="snap"){
-    const c1=1.70158,c3=c1+1,back=1+c3*Math.pow(enter-1,3)+c1*Math.pow(enter-1,2);
-    translateX=direction*28*(1-back);
-    scale=.92+.08*back;
-    ruleScale=.08+.92*clamp(back);
-  }else if(motion==="mask"){
+  if(motion==="mask"){
     const ruleProgress=clamp(enter/.42);
     const textProgress=1-Math.pow(1-clamp((enter-.18)/.82),3);
     visibility=active?clamp(enter*4)*leave:0;
@@ -1158,18 +1265,42 @@ function updateVideoCallout(seconds){
       :`inset(0 0 0 ${((1-textProgress)*100).toFixed(2)}%)`;
     copy.style.transform=`translate3d(${(direction*10*(1-textProgress)).toFixed(2)}px,0,0)`;
   }else if(motion==="type"){
-    const ruleProgress=clamp(enter/.2);
-    const eyebrowProgress=1-Math.pow(1-clamp((enter-.12)/.2),3);
-    const titleProgress=clamp((enter-.25)/.53);
-    const metaProgress=1-Math.pow(1-clamp((enter-.78)/.22),3);
-    const characters=Array.from(CONFIG.projectTitle);
-    const visibleCharacters=Math.min(characters.length,Math.ceil(characters.length*titleProgress));
+    const ruleProgress=clamp(enter/.16);
+    const eyebrowProgress=1-Math.pow(1-clamp((enter-.06)/.16),3);
+    const titleProgress=clamp((enter-.12)/.78);
+    const metaProgress=1-Math.pow(1-clamp((enter-.88)/.12),3);
+    const schedule=typeRevealSchedule(characters);
+    let visibleCharacters=0;
+    while(visibleCharacters<schedule.length&&schedule[visibleCharacters]<=titleProgress)visibleCharacters++;
     visibility=active?clamp(enter*7)*leave:0;
     translateX=0;
     ruleScale=.03+.97*ruleProgress;
     eyebrow.style.opacity=eyebrowProgress.toFixed(4);
     eyebrow.style.transform=`translate3d(0,${((1-eyebrowProgress)*-5).toFixed(2)}px,0)`;
     title.textContent=characters.slice(0,visibleCharacters).join("");
+    meta.style.opacity=metaProgress.toFixed(4);
+    meta.style.transform=`translate3d(0,${((1-metaProgress)*5).toFixed(2)}px,0)`;
+  }else if(motion==="decode"){
+    const ruleProgress=clamp(enter/.22);
+    const eyebrowProgress=1-Math.pow(1-clamp((enter-.05)/.2),3);
+    const titleProgress=clamp((enter-.1)/.78);
+    const metaProgress=1-Math.pow(1-clamp((enter-.82)/.18),3);
+    const glyphPool="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%*+<>/{}[]";
+    const scrambleStep=Math.floor(time*20);
+    calloutGlyphNodes.forEach((glyph,index)=>{
+      const finalCharacter=characters[index]||"";
+      if(/^\s$/u.test(finalCharacter)||(index+1)/Math.max(1,characters.length)<=titleProgress){
+        glyph.textContent=finalCharacter;
+      }else{
+        glyph.textContent=glyphPool[Math.floor(deterministicUnit(index,scrambleStep)*glyphPool.length)%glyphPool.length];
+      }
+    });
+    visibility=active?clamp(enter*7)*leave:0;
+    translateX=0;
+    ruleScale=.04+.96*ruleProgress;
+    eyebrow.style.opacity=eyebrowProgress.toFixed(4);
+    eyebrow.style.transform=`translate3d(0,${((1-eyebrowProgress)*-4).toFixed(2)}px,0)`;
+    title.style.opacity=clamp(enter*5).toFixed(4);
     meta.style.opacity=metaProgress.toFixed(4);
     meta.style.transform=`translate3d(0,${((1-metaProgress)*5).toFixed(2)}px,0)`;
   }else if(motion==="glitch"){
@@ -1291,6 +1422,7 @@ function resetShow(){
   cancelAnimationFrame(rafId);
   stopVideoFrameClock();
   phase="idle"; tPause=0; syncClock="virtual"; lastUiOutputFrame=-1;
+  editTickerSuppressedEditIndex=-1;
   document.body.classList.remove("running");
   $("slate").classList.remove("on"); $("flash").classList.remove("on");
   SEGS.forEach(s=>{ if(s.el) s.el.classList.remove("active"); });
@@ -1638,6 +1770,9 @@ window.portablePreview={
   seekFrame(frame){
     if(!DATA) return;
     const safeFrame=Math.max(0,Math.min(DATA.duration-1,Number(frame)||0));
+    let targetEditIndex=SEGS.findIndex(segment=>segment.start<=safeFrame&&safeFrame<segment.end);
+    if(targetEditIndex<0)targetEditIndex=SEGS.reduce((latest,segment,index)=>segment.start<=safeFrame?index:latest,0);
+    editTickerSuppressedEditIndex=targetEditIndex;
     const seconds=safeFrame/DATA.fps;
     const wasPlaying=phase==="show"&&!mainVideo.paused;
     stopVideoFrameClock();
@@ -1690,6 +1825,7 @@ window.portablePreview={
   },
   setProjectTitle,
   setCalloutConfig,
+  setEditDisplayConfig,
   setLanguage(next){ applyPreviewLanguage(next); return LANG; },
   getState(){
     return {

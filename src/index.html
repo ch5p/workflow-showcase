@@ -432,11 +432,17 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
                 <div class="calloutSettingsBody">
                   <div class="calloutField"><span class="calloutFieldSpacer" aria-hidden="true">ENABLED</span><label class="calloutEnabled"><span>ENABLED</span><input id="calloutEnabled" type="checkbox" checked></label></div>
                   <label class="calloutField"><span>POSITION</span><select id="calloutPosition"><option value="left">LEFT</option><option value="right">RIGHT</option></select></label>
-                  <label class="calloutField"><span>STYLE</span><select id="calloutStyle"><option value="line">LINE</option><option value="label">LABEL</option><option value="minimal">MINIMAL</option></select></label>
-                  <label class="calloutField"><span>MOTION</span><select id="calloutMotion"><option value="fade">FADE</option><option value="snap">SNAP</option><option value="mask">MASK</option><option value="type">TYPE</option><option value="glitch">GLITCH</option></select></label>
+                  <label class="calloutField"><span>STYLE</span><select id="calloutStyle"><option value="line">LINE</option><option value="label">LABEL</option><option value="minimal">MINIMAL</option><option value="viewfinder">VIEWFINDER</option></select></label>
+                  <label class="calloutField"><span>MOTION</span><select id="calloutMotion"><option value="fade">FADE</option><option value="mask">MASK</option><option value="type">TYPE</option><option value="decode">DECODE</option><option value="glitch">GLITCH</option></select></label>
                   <label class="calloutField"><span>START · SEC</span><input id="calloutStart" type="number" min="0" max="60" step="0.1" value="0.1"></label>
                   <label class="calloutField"><span>DURATION · SEC</span><input id="calloutDuration" type="number" min="0.5" max="30" step="0.1" value="3.5"></label>
                   <label class="calloutField wide"><span>SUBTITLE</span><input id="calloutSubtitle" type="text" maxlength="60" value="WORKFLOW SHOWCASE · EDIT WORKFLOW"></label>
+                </div>
+              </details>
+              <details class="calloutSettings" id="editDisplaySettings">
+                <summary><span>EDIT DISPLAY</span><span class="calloutSettingsState" id="editDisplayState">STATIC</span></summary>
+                <div class="calloutSettingsBody">
+                  <div class="calloutField wide"><span class="calloutFieldSpacer" aria-hidden="true">NUMBER TICKER</span><label class="calloutEnabled"><span>NUMBER TICKER</span><input id="editNumberTicker" type="checkbox"></label></div>
                 </div>
               </details>
               <section class="scopeBlock globalScope">
