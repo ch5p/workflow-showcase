@@ -9,7 +9,7 @@ This is the public diagnostic entrypoint for agents. Diagnose from evidence befo
 3. Identify the operation and failing phase: prepare, preflight, commit, rollback, recovery, finalization, or cancel.
 4. Correlate related events by `transactionId` when present, then by operation, `jobId`, and `revision`.
 5. Compare stored relative paths with the real files under `current-job`.
-6. Run `npm.cmd run check`. Use `npm.cmd run smoke` only through the isolated runner already defined by the package scripts.
+6. Run `npm.cmd run check`. Use `npm.cmd run smoke` only through the isolated runner already defined by the package scripts; use `npm.cmd run smoke:intro` for the independent INTRO media pipeline.
 7. Report the evidence and proposed recovery before editing Stable-core code.
 
 On Windows, a short tail can be read with:
@@ -33,7 +33,7 @@ Read the operation in this order:
 
 For UPDATE XML, compare `timelineShots`, `shotMappings`, and `orphanedShotMappings` with the reported `preserved`, `newShots`, `orphaned`, `ambiguous`, and `reattached` counts. The existing video and reference file hashes should remain unchanged.
 
-For NEW JOB, the source XML/video, references, mappings, title, and callout are reset. Current Job logs, UI language, and Job output settings remain. Completed files are outside the replaceable Job in the app-root `output/` folder and must remain unchanged.
+For NEW JOB, the source XML/video, references, mappings, title, callout, `referenceMotion`, `editNumberTicker`, and `introPreroll` are reset to their defaults. Current Job logs, UI language, and Job output settings remain. Completed normal Export and INTRO demo files are outside the replaceable Job in the app-root `output/` folder and must remain unchanged.
 
 If a rollback-failure event appears, stop all app processes. Do not reload the same XML, delete `.job-import-*`, discard a valid primary manifest, or overwrite `job.json` with a `.tmp` file. Restart and confirm the matching `job_xml_recovery_*` sequence first.
 
@@ -72,6 +72,34 @@ If `export_finalize_failed` appears and a `.part.mp4` remains under app-root `ou
 If the popup does not open, inspect `export_dialog_opened`, its `sandbox: true` window preference, and whether `export-preload.cjs` loaded. If progress stalls, inspect the latest Export progress state and FFmpeg log instead of repeatedly opening new Export windows.
 
 Source audio is copied without transcoding. AAC is the validated fixture codec; other audio codecs are not preflighted or transcoded. If video import succeeds but Export fails while attaching audio, create an H.264 MP4 with AAC audio and load that version.
+
+## INTRO PRE-ROLL
+
+Read the independent INTRO operation in this order:
+
+1. `intro_builder_opened`
+2. `intro_source_selected`, then `intro_source_prepared` or `intro_source_prepare_failed`
+3. `intro_settings_saved`, or `intro_settings_save_rejected_stale` when another save advanced the Job first
+4. `intro_build_started`
+5. `intro_build_progress`
+6. `intro_build_completed`, `intro_build_cancelled`, or `intro_build_failed`; a blocked final rename first emits `intro_finalize_failed` and then `intro_build_failed`
+7. `intro_builder_closed` when the window exits
+
+`intro_settings_save_rejected_stale` and `intro_start_rejected_stale` mean another same-Job save advanced the revision while the non-modal builder was open. The builder adopts the current revision and retries once when the Job identity is unchanged; a changed Job loads its current INTRO defaults/settings instead of overwriting them, and a rejected BUILD requires a fresh click.
+
+No source after restart is expected: press `SELECT EXPORT`. Only an exact normal Export completed during the current app session may be supplied transiently. Do not repair this by persisting an absolute path or scanning `output/` for the newest modified file.
+
+On `intro_source_prepare_failed`, preserve the selected source and inspect its basename, code, and redacted message through the Main-owned controller. The sandboxed builder must not resolve files or run FFmpeg itself. A selected source path never enters `job.json` or public log detail.
+
+On `intro_build_failed`, confirm the selected normal Export is unchanged, then inspect the latest progress phase and controller FFmpeg detail. The expected pipeline re-renders only `src/intro-preroll.html`, stream-copies the main H.264 video, normalizes audio to AAC, concatenates through MPEG-TS, and verifies the `.part.mp4` before finalization. The app-owned `src/assets/intro-click.wav` and `intro-keyboard.wav` are sanitized inputs resolved by the controller, not stored Job paths.
+
+On `intro_finalize_failed`, preserve the verified `output/workflow_showcase_demo_*.part.mp4`. Quit the app and rename it collision-safely to `.mp4` only after confirming the event; never overwrite or remove the source Export. After `intro_build_cancelled`, incomplete render/TS/audio/temp files and an incomplete part should be gone. If they remain, preserve the log and report the cleanup failure before deleting anything manually.
+
+For source handoff and cleanup diagnostics, also inspect `intro_session_export_rejected`, `intro_summary_failed`, `intro_space_checked`, `intro_part_cleanup_failed`, `intro_temp_cleanup_failed`, and `intro_temp_cleanup_refused`. `intro_source_selection_cancelled` and `intro_source_selection_cleared` are ordinary user/session events, not build failures.
+
+The native title-bar close and the builder `CLOSE` control both request a pending-settings flush. If that save fails the window intentionally stays open; do not bypass this by killing the window unless the whole app is being quit for recovery.
+
+If builder preview and output differ, load the same scene time in shared `src/intro-preroll.html`. Different repeated frames indicate random or wall-clock-dependent state, which violates the scene contract. Do not work around it by forking a second offscreen HTML implementation or changing `exporter.cjs`.
 
 ## Save and path failures
 

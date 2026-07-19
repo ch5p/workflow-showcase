@@ -13,6 +13,7 @@
     "check": "node scripts/check.cjs",
     "smoke": "node scripts/run-smoke.cjs",
     "smoke:export": "node scripts/run-smoke.cjs --export",
+    "smoke:intro": "node scripts/run-intro-smoke.cjs",
     "prepare:public": "node scripts/create-public-tree.cjs"
   },
   "devDependencies": {

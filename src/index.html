@@ -369,6 +369,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       <button class="command" id="resetPreviewTop" title="Return preview to 00:00">TO START</button>
       <button class="command editPanelToggle" id="editPanelButton">EDIT PANEL</button>
       <button class="command" id="previewButton">OUTPUT</button>
+      <button class="command" id="introButton">INTRO</button>
       <button class="command primary" id="exportButton">EXPORT H.264</button>
       <button class="command" id="languageToggle" title="Switch UI language (EN/KR)">EN</button>
     </div>
@@ -1005,6 +1006,7 @@ $("previewButton").addEventListener("click",async()=>{
     showToast(error?"OUTPUT FOLDER ERROR":"OUTPUT FOLDER OPENED");
   }catch(error){showToast("OUTPUT FOLDER ERROR")}
 });
+$("introButton").addEventListener("click",()=>window.portableMvp?.openIntroBuilder());
 $("exportButton").addEventListener("click",()=>window.portableMvp?.exportVideo());
 $("reloadCurrentJob").addEventListener("click",()=>window.portableMvp?.reloadCurrentJob());
 $("resetPreviewTop").addEventListener("click",()=>{

@@ -14,6 +14,7 @@
 - Moved completed Export files to the app-root `output/` so replacing `current-job` cannot delete them
 - Added the Current Job reload icon and renamed the reset control to `TO START`
 - Fixed callout descender clipping and the subtitle shadow
+- Added LINE/LABEL/MINIMAL/VIEWFINDER title-callout styles and FADE/MASK/TYPE/DECODE/GLITCH motions, with TYPE and DECODE resolved deterministically from video time
 - Routed embedded-preview drops through the official XML/video import transaction
 - Made English the default public documentation, added Korean `.ko.md` editions, and published the AI customization guardrails
 - Kept the primary Electron process responsive while the smoke test verifies second-instance rejection
@@ -25,13 +26,14 @@
 - Added duration-based Export space estimation before FFmpeg starts
 - Split persisted timeline validation, DURATION boundary math, UI capture, and smoke orchestration into focused modules with regression checks
 - Sandboxed the Export confirmation window and verified its preload API in the isolated desktop smoke
+- Added a separate sandboxed INTRO BUILDER with persisted prompt/reply/typing/sound settings, prompt-length-aware deterministic key sounds, a compact aspect-fitted live preview, explicit or same-session Export selection, a shared deterministic pre-roll scene, sanitized app-owned sounds, and an isolated real-FFmpeg smoke for stream-copy/AAC/TS demo finalization without changing normal Export
 - Replaced the README's model-review attribution with a direct description of the current exporter behavior
 - Removed the hidden Premiere project path from the public MP4 fixture and added binary privacy regression checks
 - Rechecked Current Job state at reference-import completion and rejected stale completion instead of overwriting newer Job edits
 - Preserved orphaned source/reference files when `job.json` is missing instead of replacing them with the starter demo
 - Split reference import/delete ownership from `main.cjs` into a focused lifecycle module with an isolated regression check
 - Refreshed the public Premiere fixture to 13 seconds with a real blended upper-track clip, excluded Adjustment Layer, final Color Matte, and matching README/landing demo animation
-- Added a persistent project-wide `REFERENCE 3D POP` option while keeping the original flat stagger as the default, with both motions sharing the same LEAD-IN and SHOT-transition timing
+- Added an optional rolling EDIT number ticker and grouped it with the persistent project-wide `REFERENCE 3D POP` option under `EDIT DISPLAY`; the static number and original flat stagger remain defaults, and both reference motions share the same LEAD-IN and SHOT-transition timing
 
 ## 0.1.0-beta.1
 

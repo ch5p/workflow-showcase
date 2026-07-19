@@ -19,7 +19,7 @@
 - `job-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for XML UPDATE/NEW JOB
 - `video-lifecycle.cjs`: prepare/commit/rollback/crash recovery and Windows-safe staged replace for source video replacement
 - `storage-policy.cjs`: destination free-space checks, bounded safety reserves, asynchronous exclusive copy, streaming SHA-256, progress, and partial-file cleanup
-- `job-backup.cjs`: manual dated snapshot of `job.json`, the recorded timeline XML, registered references, and a hash manifest; source video, Export output, and logs are excluded
+- `job-backup.cjs`: manual dated snapshot of the complete `job.json` (including optional `introPreroll`), the recorded timeline XML, registered references, and a hash manifest; source video, Export/demo output, and logs are excluded
 - `timeline-reconcile.cjs`: 1:1 rematching of anonymous SHOT descriptors and orphan preservation
 - `persisted-timeline-state.cjs`: pure validation boundary for legacy/current persisted timeline descriptors, mappings, and orphans
 - `reference-lifecycle.cjs`: reference inspection, streamed copy/progress, final revision commit, mapping cleanup, and owned-file deletion
@@ -30,6 +30,8 @@
 - `smoke-harness.cjs`: isolated Electron smoke orchestration, including the responsive secondary-instance probe and sandboxed Export-dialog probe
 - `export-preload.cjs`: the start/cancel/progress/open-folder API exposed only to the sandboxed Export popup
 - `exporter.cjs`: offscreen BGRA frame capture, FFmpeg H.264 output with optional source-audio stream copy, progress, cancel, and fallback
+- `intro-demo-controller.cjs`: Main-owned INTRO source authority, app-asset resolution, FFmpeg intro render/AAC normalization/TS concat, output verification, cancel, atomic finalization, and `intro_*` logging; it is separate from `exporter.cjs`
+- `intro-preload.cjs`: the restricted settings/source/build/cancel/progress API exposed only to the sandboxed INTRO BUILDER
 - `src/index.html`: the editing screen and the SHOT rail
 - `src/mvp-app.js`: the editing screen, Job store, and output-preview wiring
 - `src/core/*`: the pure core for the legacy xmeml parser, PRIMARY timeline, SHOT descriptor, reference mapping, and one-frame DURATION-delta threshold
@@ -37,6 +39,9 @@
 - `src/layouts/classic/tokens.css`, `classic.css`: the official classic presentation tokens and placement
 - `src/output-preview.html`: named presentation regions, the playback clock, and the `window.portablePreview` bridge
 - `src/export-dialog.html`, `src/export-dialog.js`: the standalone Export window that confirms the saved title and render spec and shows progress and the completed path
+- `src/intro-builder.html`, `src/intro-builder.js`: the large independent sandboxed INTRO BUILDER window and its restricted bridge UI
+- `src/intro-preroll.html`: the single deterministic INTRO scene shared by builder preview and offscreen rendering
+- `src/assets/intro-click.wav`, `src/assets/intro-keyboard.wav`: sanitized app-owned INTRO sounds; their filesystem paths are resolved by the controller and never stored in Job data
 
 ## Current Job Contract
 
@@ -46,8 +51,10 @@
 - Ordinary `job.json` changes are staged with a fsync'd UUID staging file rather than a fixed `.tmp`, then swapped in. Under a persistent file lock, the existing Job and the completed staging are preserved and an error is returned.
 - `current-job` and its `source`, `references`, and `logs` directories must be real directories; symlinks/junctions are not allowed. The app-root `output` directory follows the same no-link rule. Stored files are re-checked all the way to the real path, inside the owned root, immediately before use.
 - `projectTitle`: an optional field of up to 40 characters that is reflected in the preview as soon as it is typed in the edit panel and auto-saved. If the field is absent, `UNTITLED PROJECT` is used; an explicit empty string is used as an empty title.
-- `callout`: an optional field with `enabled`, `position`, `style`, `startSeconds`, `durationSeconds`, `subtitle`, used identically by the output preview and the offscreen render.
-- `referenceMotion`: optional `"classic"` or `"pop3d"`, selected by the project-wide `REFERENCE 3D POP` control below GLOBAL BASE. Absent means `"classic"`. Preview and offscreen Export use the same value; NEW JOB restores the default while UPDATE XML preserves it.
+- `callout`: an optional field with `enabled`, `position`, `style`, `motion`, `startSeconds`, `durationSeconds`, and `subtitle`, used identically by the output preview and the offscreen render. `style` accepts `"line"`, `"label"`, `"minimal"`, or `"viewfinder"`; `motion` accepts `"fade"`, `"mask"`, `"type"`, `"decode"`, or `"glitch"`. Absent or unknown values normalize to `"line"` and `"fade"`. TYPE and DECODE derive their visible state deterministically from the current video time, so the same frame matches between repeated seeks and offscreen Export.
+- `referenceMotion`: optional `"classic"` or `"pop3d"`, selected by `REFERENCE 3D POP` inside `EDIT DISPLAY`. Absent means `"classic"`. Preview and offscreen Export use the same value; NEW JOB restores the default while UPDATE XML preserves it.
+- `editNumberTicker`: optional boolean selected by `NUMBER TICKER` inside `EDIT DISPLAY`, alongside `REFERENCE 3D POP`. Absent means `false`; `true` animates the EDIT number at cut boundaries during continuous playback. Preview and offscreen Export use the same value; NEW JOB restores `false` while UPDATE XML preserves it.
+- `introPreroll`: optional top-level object containing only `prompt`, `reply`, `typingSeconds`, and `soundEnabled`. Missing settings normalize to the shipped prompt/reply defaults, `typingSeconds: 1`, and `soundEnabled: true`; the only accepted typing choices are `1` and `2`. UPDATE XML preserves it, NEW JOB restores the defaults, and BACKUP JOB includes it through the complete `job.json` snapshot.
 - `ui.language`: optional `"en"` or `"ko"`. Absent means use the first OS preferred UI language, with system/application locale only as fallbacks. Toggled by the editor's EN/KR button and saved through the normal `job:save` ui merge; the Export popup reads it from the summary `language` field. Startup records `storedLanguage`, the detected locale candidates, and `resolved` in `ui_language_resolved`.
 - `shotMappings.<shotId>`: may add the optional field `leadInSeconds: 1` to the existing `mode`, `refs`; when absent it is treated as `0`.
 - `timelineShots`: rematching descriptors that store only `identityKey`, `nameKey`, and timeline/source in-out occurrence, without original names or paths
@@ -56,10 +63,23 @@
 - `current-job/source/video.*`: the finished video imported into the app
 - `current-job/references/`: copies of image/video references
 - `current-job/logs/app.log`: diagnostic events as JSONL
-- `output/`: app-root durable render destination for `workflow_showcase_export_*.mp4` and a completed `.part.mp4` whose final rename was blocked. Replacing or deleting `current-job` does not touch this folder. Older files under legacy `current-job/output/` are left in place but are not read, moved, or deleted automatically.
-- `backup/<YYYY-MM-DD_HH-mm-ss>/`: manual settings snapshots containing `job.json`, recorded timeline XML, recorded references, and a hash manifest; only source video, exports, and logs are excluded
+- `output/`: app-root durable render destination for normal `workflow_showcase_export_*.mp4`, INTRO `workflow_showcase_demo_*.mp4`, and a verified completed `.part.mp4` whose final rename was blocked. Replacing or deleting `current-job` does not touch this folder. Older files under legacy `current-job/output/` are left in place but are not read, moved, or deleted automatically.
+- `backup/<YYYY-MM-DD_HH-mm-ss>/`: manual settings snapshots containing the complete `job.json`, recorded timeline XML, recorded references, and a hash manifest; source video, normal Export/INTRO output, and logs are excluded
 
 All stored Job paths are relative to the `current-job` root. Store `source/timeline.xml`, not an absolute path and not `current-job/source/timeline.xml`. Internal identifiers and JSON keys are not changed.
+
+## Intro Pre-roll Contract
+
+- The single top-level `INTRO` launcher opens an independent `INTRO BUILDER` BrowserWindow with `sandbox: true` and the restricted `intro-preload.cjs` bridge. Its default content size is `1060 × 750`, its minimum is `1060 × 720`, and the live preview mount preserves the fixed `1280 × 1080` scene aspect ratio without side mattes. It does not open or alter the normal Export popup.
+- Both the builder `CLOSE` control and the native title-bar close request flush pending INTRO settings before Main confirms the close. A failed save keeps the window open; closing is blocked while a build is active, while application quit still cancels controller work through Main.
+- The question `What should we get done?`, project `Project None`, model `5.6 Sol`, and effort `High` are fixed builder fields. The user may edit prompt, reply, `typingSeconds` (`1` or `2`), and `soundEnabled`, which save through the normal `jobId + revision` Job boundary. Prompt/reply editors are compact three-row controls but store one logical line: Enter is blocked and pasted line breaks become spaces, while long text may wrap visually.
+- A normal Export completed in the current app session may supply that exact path as a transient source candidate. After app restart, or when no exact session Export exists, the user must press `SELECT EXPORT`. The app never chooses the newest file by modification time.
+- The selected Export absolute path is transient and is never written to `job.json`. Background or audio asset paths are also never persisted. App-owned sanitized WAV paths are resolved only by `intro-demo-controller.cjs`.
+- Normal `EXPORT H.264` behavior is unchanged. INTRO always preserves the selected source Export and creates a separate app-root `output/workflow_showcase_demo_*.mp4`.
+- Builder preview and offscreen capture load the same `src/intro-preroll.html`. Its visible state and bounded key-event schedule are derived only from the prompt and explicit scene time; random values and wall-clock-dependent frame state are forbidden. Preview sound and final AAC rendering consume the same key-event times, while `soundEnabled: false` produces a silent intro bed without changing the selected main Export audio.
+- The scene currently requests Google-hosted Inter and falls back to Segoe UI/Arial. This is an intentional presentation dependency, not persisted Job data; until a licensed local Inter asset is bundled, offline/cached font availability can change text metrics even though scene timing remains deterministic.
+- Only the intro segment is rendered. The main H.264 video stream is copied, audio is normalized to the controller's AAC contract, and the segments are concatenated through the MPEG-TS path. `intro-demo-controller.cjs` owns all source/output/temp paths, FFmpeg processes, verification, progress, logging, cancel, and finalization.
+- The complete result is verified at `.part.mp4` before an atomic collision-safe final rename. A final rename failure preserves the verified part and records `intro_finalize_failed`; the source Export is never modified. Cancel removes incomplete render/TS/audio/temp files and any incomplete part, then records `intro_build_cancelled`.
 
 ## Maintainer UI Capture
 
@@ -76,8 +96,8 @@ All stored Job paths are relative to the `current-job` root. Store `source/timel
 - When `current-job/job.json` does not exist and `source/` and `references/` contain no payload beyond `.gitkeep`, Main copies the existing public fixture XML/MP4 into `current-job/source`, creates a `demo: true` sample Job, and logs `starter_demo_seeded`. If either owned folder already contains payload, Main preserves it, creates the empty Job contract instead, and logs `starter_demo_seed_skipped_existing_payload`; it never deletes orphaned user files to install the sample. If fixture seeding fails, it logs `starter_demo_seed_failed` and falls back to the empty Job contract.
 - A valid XML selected while `demo: true` bypasses the UPDATE choice and enters the existing NEW JOB transaction, so the disposable sample XML/video are removed while Current Job logs remain and app-root Export files are unaffected. The candidate is parsed before this decision. Ordinary Jobs keep the normal UPDATE/NEW JOB dialog.
 - On selection cancel, file-pick cancel, or validation failure, the existing `job.json`, source, and references are unchanged.
-- UPDATE replaces only `source/timeline.xml` and preserves video/reference/GLOBAL/title/callout/`ui`/`output`. It prefers exact source identity, falls back only when there is unique name + source range/occurrence evidence, and keeps ambiguous/unmatched mappings as orphans.
-- NEW JOB cleans up the source XML/video and reference files when explicitly chosen for an ordinary Job, or automatically after a valid XML is selected for `demo: true`. It resets `references`, `globalReferenceIds`, previous `shotMappings`/orphans, `projectTitle`, and `callout`. It stores the new XML's anonymous descriptors in `timelineShots`, preserves `current-job/logs/`, existing `ui`, and Job `output` settings, and cannot delete the separate app-root `output/` files.
+- UPDATE replaces only `source/timeline.xml` and preserves video/reference/GLOBAL/title/callout/`referenceMotion`/`editNumberTicker`/`introPreroll`/`ui`/`output`. It prefers exact source identity, falls back only when there is unique name + source range/occurrence evidence, and keeps ambiguous/unmatched mappings as orphans.
+- NEW JOB cleans up the source XML/video and reference files when explicitly chosen for an ordinary Job, or automatically after a valid XML is selected for `demo: true`. It resets `references`, `globalReferenceIds`, previous `shotMappings`/orphans, `projectTitle`, `callout`, `referenceMotion`, `editNumberTicker`, and `introPreroll`. It stores the new XML's anonymous descriptors in `timelineShots`, preserves `current-job/logs/`, existing `ui`, and Job `output` settings, and cannot delete the separate app-root `output/` files.
 - The `VIDEO` click/drop zone uses one two-step transaction. A candidate releases the renderer media handle and commits only after a detached Electron video probe reads metadata and the first frame. A preflight failure discards only the candidate and does not change the existing video, Job, or revision. Main owns the existing video/Job backup, replacement, and rollback.
 - Video and reference limits remain generous sanity caps (512 GiB per video, 64 GiB per reference), not the primary disk-protection mechanism. Before copying, the destination must have the selected bytes plus a reserve of `max(512 MiB, 10%)`, capped at 8 GiB. Video/reference payloads are copied asynchronously to exclusive destinations, SHA-256 is calculated while streaming, progress is sent to the editor, and any partial destination is removed after a failed copy. A reference import rechecks `jobId + revision` immediately before attaching copied files; a stale import removes its copied files instead of overwriting newer edits. Video commit still re-hashes the prepared candidate before installation.
 - Every mutation compares `jobId + revision`, so an earlier debounced save arriving after an XML UPDATE or NEW JOB cannot overwrite the current state.
@@ -94,7 +114,7 @@ All stored Job paths are relative to the `current-job` root. Store `source/timel
 
 The raw XML that Premiere first produced and the original attachments are not added to Git. When adding `tests/fixtures/`, do not duplicate the real Premiere integration fixture; keep only hand-written `xmeml` edge cases and Job-scoped fixtures.
 
-`scripts/run-smoke.cjs` creates a test-only Job root and Electron userData in an OS temp folder, verifies that first launch seeds the public XML/MP4 as a `SAMPLE JOB`, and reads the public XML via `PORTABLE_SMOKE_XML`. Main rejects a smoke that has no test root or points inside the app folder. `smoke:export` prepares its own explicit Job, produces 1 second of output, then deletes the entire temp folder.
+`scripts/run-smoke.cjs` creates a test-only Job root and Electron userData in an OS temp folder, verifies that first launch seeds the public XML/MP4 as a `SAMPLE JOB`, and reads the public XML via `PORTABLE_SMOKE_XML`. Main rejects a smoke that has no test root or points inside the app folder. `smoke:export` prepares its own explicit Job, produces 1 second of output, then deletes the entire temp folder. `scripts/run-intro-smoke.cjs` uses a separate OS-temp root and deterministic fake capture frames to exercise the real INTRO FFmpeg preview extraction, AAC normalization, MPEG-TS stream-copy concat, verification, source-hash preservation, cancellation, and cleanup without accessing `current-job`.
 
 Lifecycle regression checks run only in an OS temp Job root and forcibly verify: persistent `EPERM` on manifest/Job backup/install/restore, valid primary + stale `.tmp`, corrupted primary + valid UUID fallback, locked fixed-staging bypass, cleanup interruption after rollback, candidate-install interruption when there was no prior timeline/video, re-recovery after a marker write failure, a valid `.partial` + a truncated Job backup final, and the identical-Job hash replace skip. Real `current-job` access is failed by a guard.
 
@@ -113,7 +133,7 @@ After the XML duration is known and before FFmpeg starts, Export estimates the v
 
 ## Contract Verification
 
-- Document reference: the `current-job` and app-root `output/` structures above, `job.json` version 1, `jobId + revision`, and the UPDATE/NEW JOB Import Contract
+- Document reference: the `current-job` and app-root `output/` structures above, `job.json` version 1, `jobId + revision`, the UPDATE/NEW JOB Import Contract, and the independent Intro Pre-roll Contract
 - Real sample: 24 fps, 312 frames, repeated source identity, a blended upper-track clip, an excluded Adjustment Layer, and a final one-second Color Matte generator in the Premiere Pro 2026 fixture; the app's isolated smoke result remains 5 EDITS / 4 SHOTS. In a real recovery of a failed transaction, per-file SHA-256 matches for 2 sources / 11 references / the existing Job were confirmed.
-- Code assumption: `main.cjs`'s `JOB_ROOT`, `durable-file.cjs`, `owned-path.cjs`, the XML/video lifecycles, timeline reconcile, `src/core/*`, `render-spec.cjs`, the CAS guard, and `hydrateJob()` all read the same structure.
+- Code assumption: `main.cjs`'s `JOB_ROOT`, `durable-file.cjs`, `owned-path.cjs`, the XML/video lifecycles, timeline reconcile, `src/core/*`, `render-spec.cjs`, the CAS guard, `hydrateJob()`, and the isolated `intro-demo-controller.cjs`/`src/intro-preroll.html` path all read the same structure and ownership boundary.
 - Handling: never assume there is no mismatch. When the structure changes, compare this document, the real fixture/runtime sample, and the code together before implementation.

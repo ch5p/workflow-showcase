@@ -31,9 +31,19 @@ Two visual requests also have narrow JavaScript-owned presentation values in `sr
 
 - Fixed aspect ratio: `CONFIG.panelHeight`, `applyLayout()`, and `fitScale()` write the panel height and resolved canvas size. Account for them together with `render-spec.cjs` and `classic.css`.
 - Reference-card size/density: `positionReferenceDock()` calculates the `72`–`176` px card width, `8` px gap assumption, `--reference-item-width`, and the `visibleCount > 6` crop state.
-- Reference entrance: `referenceMotion` selects the `classic` or `pop3d` presentation in `classic.css`. Both motions deliberately share the same hidden-to-visible trigger, stagger, LEAD-IN, replacement, and cleanup path in `output-preview.html`; customize the scoped keyframes without splitting that timing path.
+- Edit display: `EDIT DISPLAY` groups `NUMBER TICKER` (`editNumberTicker`, `false` by default) and `REFERENCE 3D POP` (`referenceMotion`, `classic` by default). The ticker changes only the EDIT-number transition. `referenceMotion` selects the `classic` or `pop3d` presentation in `classic.css`; both reference motions deliberately share the same hidden-to-visible trigger, stagger, LEAD-IN, replacement, and cleanup path in `output-preview.html`. Customize the scoped keyframes without splitting that timing path.
 
 Treat only those values as presentation plumbing. Do not rewrite `positionReferenceDock()` or alter visible-reference selection, LEAD-IN, crossfade, ghost-card cleanup, the playback clock, or parser/core behavior.
+
+## INTRO pre-roll customization surface
+
+The top `INTRO` launcher opens a separate sandboxed `INTRO BUILDER`; it does not replace or modify the normal `EXPORT H.264` workflow. The safe visual surface is the shared `src/intro-preroll.html`, which is used by both the builder preview and the offscreen intro render. Change scene layout, typography, color, and deterministic animation there so preview and output stay identical. Keep the fixed question `What should we get done?`, project `Project None`, model `5.6 Sol`, and effort `High` unless the request explicitly changes that contract.
+
+The only persisted scene settings are the optional top-level `introPreroll.prompt`, `introPreroll.reply`, `introPreroll.typingSeconds` (`1` or `2`), and `introPreroll.soundEnabled` boolean. Missing `soundEnabled` defaults to `true` for older Jobs. The source Export selection is session-only: an exact Export completed in the current session may be offered automatically, but after restart the user must press `SELECT EXPORT`. Do not add newest-by-modified-time selection or persist a selected Export absolute path, background path, or audio asset path.
+
+After changing the INTRO controller or concat boundary, run `npm.cmd run smoke:intro`. It uses isolated temporary media and a fake capture surface to exercise the real FFmpeg normalization, stream-copy concat, verification, cancel, and cleanup path without reading `current-job`.
+
+`src/assets/intro-click.wav` and `src/assets/intro-keyboard.wav` are sanitized, app-owned sounds. The shared scene derives a bounded deterministic key-event schedule from the visible prompt; preview playback and the controller-rendered audio must consume that same schedule. Keep asset lookup, source selection, FFmpeg execution, H.264 stream-copy, AAC normalization, TS concat, verification, cancel, and atomic finalization in `intro-demo-controller.cjs`. The intro is re-rendered; the selected main Export is not re-rendered or modified.
 
 ## Stable core
 
@@ -50,8 +60,9 @@ Do not modify these files for presentation changes:
 - `video-lifecycle.cjs`
 - `reference-lifecycle.cjs`
 - `storage-policy.cjs`
+- `intro-demo-controller.cjs`
 
-In particular, the XML parser, SHOT identity, reference mapping semantics, one-frame DURATION threshold, Job relative paths, import storage policy, IPC, and Export cancel / encoder fallback are the stable core.
+In particular, the XML parser, SHOT identity, reference mapping semantics, one-frame DURATION threshold, Job relative paths, import storage policy, IPC, normal Export cancel / encoder fallback, and INTRO source/concat/finalization controller are the stable core.
 
 ## Making a fixed aspect-ratio fork
 
@@ -71,10 +82,13 @@ The callout fields of an existing Job keep these meanings:
 
 - `enabled`
 - `position`
-- `style`
+- `style`: `line`, `label`, `minimal`, or `viewfinder`; absent or unknown values use `line`
+- `motion`: `fade`, `mask`, `type`, `decode`, or `glitch`; absent or unknown values use `fade`
 - `startSeconds`
 - `durationSeconds`
 - `subtitle`
+
+`TYPE` and `DECODE` are driven by the current video time, not elapsed wall-clock time. `TYPE` uses a stable reveal schedule, while `DECODE` uses a stable character-index/time-step scramble and a supported symbol pool. Seeking the same frame again must reproduce the same title state in the editor preview and offscreen Export.
 
 When adding an optional field, provide defaults so existing Jobs open with the same result. Insert external text via `textContent`, not `innerHTML`.
 

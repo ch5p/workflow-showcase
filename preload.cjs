@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("portableApi", {
   readXml: () => ipcRenderer.invoke("job:read-xml"),
   openOutput: () => ipcRenderer.invoke("export:open-output"),
   openExportDialog: context => ipcRenderer.invoke("export:open-dialog", context),
+  openIntroBuilder: () => ipcRenderer.invoke("intro:open-builder"),
   onProjectTitleUpdated: callback => {
     const listener = (_event, projectTitle) => callback(projectTitle);
     ipcRenderer.on("project:title-updated", listener);

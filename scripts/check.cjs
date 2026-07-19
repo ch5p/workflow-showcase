@@ -6,16 +6,18 @@ const crypto=require("node:crypto");
 const path=require("node:path");
 const vm=require("node:vm");
 const {spawnSync}=require("node:child_process");
+const {assertNoPrivateBinaryContent}=require("./public-privacy.cjs");
 
 const root=path.resolve(__dirname,"..");
 const required=[
-  "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs","LICENSE","AGENTS.md","README.md","README.ko.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
+  "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","intro-demo-controller.cjs","intro-preload.cjs","render-spec.cjs","LICENSE","AGENTS.md","README.md","README.ko.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
   "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","reference-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
-  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
+  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-intro-demo-controller.cjs","scripts/run-intro-smoke.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
+  "src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html","src/assets/intro-click.wav","src/assets/intro-keyboard.wav",
   "current-job/source","current-job/references","current-job/logs",
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml",
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4",
@@ -26,20 +28,32 @@ for(const relative of required){
   if(!fs.existsSync(path.join(root,relative)))throw new Error("Missing: "+relative);
 }
 for(const relative of [
-  "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","render-spec.cjs",
+  "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","intro-demo-controller.cjs","intro-preload.cjs","render-spec.cjs",
   "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","reference-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
   "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
-  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
-  "src/mvp-app.js","src/export-dialog.js",
+  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-intro-demo-controller.cjs","scripts/run-intro-smoke.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "src/mvp-app.js","src/export-dialog.js","src/intro-builder.js",
 ]){
   const result=spawnSync(process.execPath,["--check",path.join(root,relative)],{encoding:"utf8"});
   if(result.status!==0)throw new Error(relative+" syntax failed\n"+result.stderr);
 }
-for(const relative of ["src/index.html","src/output-preview.html","src/export-dialog.html"]){
+for(const relative of ["src/index.html","src/output-preview.html","src/export-dialog.html","src/intro-builder.html","src/intro-preroll.html"]){
   const html=fs.readFileSync(path.join(root,relative),"utf8");
   const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
     .map(match=>match[1]).filter(source=>source.trim());
   scripts.forEach((source,index)=>new vm.Script(source,{filename:relative+"#inline-"+(index+1)}));
+}
+for(const relative of ["src/assets/intro-click.wav","src/assets/intro-keyboard.wav"]){
+  const bytes=fs.readFileSync(path.join(root,relative));
+  assertNoPrivateBinaryContent(bytes,relative);
+  const chunks=[];
+  for(let offset=12;offset+8<=bytes.length;){
+    const id=bytes.toString("ascii",offset,offset+4);
+    const size=bytes.readUInt32LE(offset+4);
+    chunks.push(id.trim());
+    offset+=8+size+(size%2);
+  }
+  assert.deepEqual(chunks,["fmt","data"],relative+" must contain only metadata-free PCM chunks");
 }
 const preview=fs.readFileSync(path.join(root,"src/output-preview.html"),"utf8");
 const classicCss=fs.readFileSync(path.join(root,"src/layouts/classic/classic.css"),"utf8");
@@ -95,6 +109,16 @@ for(const marker of ["Emulation.setDeviceMetricsOverride","Page.captureScreensho
 }
 if(!main.includes("readyMessage")||!main.includes("mustExist: true"))throw new Error("Export readiness file check missing");
 if(!/preload:\s*path\.join\(APP_ROOT, "export-preload\.cjs"\)[\s\S]{0,180}sandbox:\s*true/.test(main))throw new Error("Export dialog sandbox hardening is missing");
+if(!/preload:\s*path\.join\(APP_ROOT, "intro-preload\.cjs"\)[\s\S]{0,220}sandbox:\s*true/.test(main))throw new Error("INTRO Builder sandbox hardening is missing");
+if(!main.includes('requireRuntimeReady("intro_settings_save")')||!main.includes('startRejected: "JOB_STALE"')||!main.includes('intro:close-requested'))throw new Error("INTRO save/start/close lifecycle guards are incomplete");
+const introOpenBlock=mvpSource=>mvpSource.match(/async function openIntroBuilder\(\)\{[\s\S]*?\n  \}/)?.[0]||"";
+if(introOpenBlock(fs.readFileSync(path.join(root,"src","mvp-app.js"),"utf8")).includes("flushPendingState"))throw new Error("Opening INTRO must not create an unconditional Current Job save");
+const introBuilderSource=fs.readFileSync(path.join(root,"src","intro-builder.js"),"utf8");
+const introPreloadSource=fs.readFileSync(path.join(root,"intro-preload.cjs"),"utf8");
+for(const marker of ['result?.startRejected !== "JOB_STALE"','requestBuild(jobId, latestRevision, false)','api.onCloseRequested(closeWindow)']){
+  if(!introBuilderSource.includes(marker))throw new Error("INTRO Builder stale/close guard missing: "+marker);
+}
+if(!introPreloadSource.includes('ipcRenderer.on("intro:close-requested"'))throw new Error("INTRO native-close bridge is missing");
 if(!main.includes('const OUTPUT_ROOT = TEST_JOB_ROOT ? path.join(path.dirname(JOB_ROOT), "output") : path.join(APP_ROOT, "output");'))throw new Error("Export output must remain outside the replaceable Current Job");
 if(main.includes('const OUTPUT_ROOT = path.join(JOB_ROOT, "output")'))throw new Error("Export output returned inside Current Job");
 for(const marker of ['id="durationDelta"',"./core/duration-math.js","function updateDurationDelta()","PortableDurationMath?.resolveDurationDelta",'badge.textContent="DURATION Δ "']){
@@ -165,6 +189,7 @@ for(const [script,successMarker] of [
   ["check-core-modules.cjs","CORE_MODULES_CHECK_OK"],
   ["check-duration-math.cjs","DURATION_MATH_CHECK_OK"],
   ["check-input-adapters.cjs","INPUT_ADAPTERS_CHECK_OK"],
+  ["check-intro-demo-controller.cjs","INTRO_DEMO_CONTROLLER_CHECK_OK"],
   ["check-job-backup.cjs","JOB_BACKUP_CHECK_OK"],
   ["check-job-lifecycle.cjs","JOB_LIFECYCLE_CHECK_OK"],
   ["check-video-lifecycle.cjs","VIDEO_LIFECYCLE_CHECK_OK"],
@@ -204,6 +229,7 @@ if(!mvpSource.includes('"SAMPLE JOB / "'))throw new Error("Starter demo label is
 if(!preview.includes("상단 XML과 VIDEO에서 파일을 불러오세요"))throw new Error("Preview input guidance is inaccurate");
 if(packageJson.devDependencies?.electron!=="43.1.1")throw new Error("Electron must stay pinned to the tested version");
 if(!String(packageJson.scripts?.smoke||"").includes("run-smoke.cjs"))throw new Error("Smoke is not routed through the isolated runner");
+if(!String(packageJson.scripts?.["smoke:intro"]||"").includes("run-intro-smoke.cjs"))throw new Error("INTRO smoke is not routed through its isolated runner");
 const workflow=fs.readFileSync(path.join(root,".github","workflows","check.yml"),"utf8");
 if(!/permissions:\s*[\r\n]+\s+contents:\s*read/.test(workflow)||!/timeout-minutes:\s*\d+/.test(workflow)){
   throw new Error("GitHub check workflow must be read-only and time-bounded");
@@ -245,7 +271,7 @@ for(const relative of collectPublicMarkdown()){
   if(!needsBom&&hasBom)throw new Error("English/default Markdown must not use a UTF-8 BOM: "+relative);
 }
 const publicTreeBuilder=fs.readFileSync(path.join(root,"scripts","create-public-tree.cjs"),"utf8");
-for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","job-backup.cjs"]){
+for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","job-backup.cjs","intro-demo-controller.cjs","intro-preload.cjs","scripts/run-intro-smoke.cjs","src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html","src/assets/intro-click.wav","src/assets/intro-keyboard.wav"]){
   if(!publicTreeBuilder.includes('"'+marker+'"'))throw new Error("Public tree contract file missing from manifest: "+marker);
 }
 if(!/const directoryRoots=\[[^\]]*"docs"/.test(publicTreeBuilder))throw new Error("Tracked docs tree is missing from the public manifest");
@@ -273,7 +299,7 @@ const adapterContractSource=fs.readFileSync(path.join(root,"docs","INPUT_ADAPTER
 for(const marker of ["Normalized parsed timeline","sourceId","Modern FCPXML","candidate.xml","parseSupportedFCPXML()"]){
   if(!adapterContractSource.includes(marker))throw new Error("Input adapter contract marker missing: "+marker);
 }
-for(const relative of ["src/index.html","src/output-preview.html","src/mvp-app.js"]){
+for(const relative of ["src/index.html","src/output-preview.html","src/mvp-app.js","src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html","intro-preload.cjs"]){
   const content=fs.readFileSync(path.join(root,relative),"utf8");
   if(/[A-Za-z]:[\\/]+Users[\\/]+/i.test(content)||/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(content)){
     throw new Error("Private path or email found in public UI source: "+relative);
@@ -283,7 +309,7 @@ const sourceNotes=fs.readFileSync(path.join(root,"fixtures","premiere-export-kit
 for(const marker of ["Premiere Pro 2026","26.2.2","Build 3","Passed","MIT License"]){
   if(!sourceNotes.includes(marker))throw new Error("Fixture provenance marker missing: "+marker);
 }
-for(const relative of ["main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","src/index.html","src/mvp-app.js","src/export-dialog.html","src/export-dialog.js"]){
+for(const relative of ["main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","intro-demo-controller.cjs","intro-preload.cjs","durable-file.cjs","owned-path.cjs","job-lifecycle.cjs","video-lifecycle.cjs","timeline-reconcile.cjs","scripts/check-runtime-safety.cjs","scripts/run-intro-smoke.cjs","src/index.html","src/mvp-app.js","src/export-dialog.html","src/export-dialog.js","src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html"]){
   const content=fs.readFileSync(path.join(root,relative),"utf8");
   if(/[A-Za-z]:[\\/]+Users[\\/]+/i.test(content))throw new Error("Non-portable absolute path: "+relative);
 }

@@ -711,6 +711,18 @@
       });
     }catch(error){await reportError(error)}
   }
+  async function openIntroBuilder(){
+    if(transitioning||runtimeBlocked)return false;
+    ui.setOverlayOpen(false);
+    try{
+      // INTRO owns independent settings; opening it must not create an otherwise empty Job save.
+      await pendingSavePromise.catch(()=>{});
+      return await bridge.openIntroBuilder();
+    }catch(error){
+      await reportError(error,"INTRO BUILDER FAILED · CHECK APP LOG");
+      return false;
+    }
+  }
   async function reloadCurrentJob(){
     if(transitioning||activeInputOperation){
       ui.showToast("WAIT FOR CURRENT ACTION");
@@ -755,7 +767,7 @@
 
   window.portableMvp={
     loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
-    addReferences,addDroppedReferences,deleteReference,backupCurrentJob,loadXmlText,syncActiveShot,exportVideo,reloadCurrentJob,logPreviewEvent,
+    addReferences,addDroppedReferences,deleteReference,backupCurrentJob,loadXmlText,syncActiveShot,exportVideo,openIntroBuilder,reloadCurrentJob,logPreviewEvent,
     getLanguage:()=>language,setLanguage,
   };
   bridge?.onProjectTitleUpdated(projectTitle=>{if(!transitioning&&!runtimeBlocked)applyProjectTitle(projectTitle)});

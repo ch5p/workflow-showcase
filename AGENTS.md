@@ -8,6 +8,7 @@ This repository is meant to be customized by non-coders through LLM agents. Befo
 - The Safe customization surface vs. Stable core split in `CUSTOMIZING.md`.
 - For failures, `docs/TROUBLESHOOTING.md` before changing runtime code.
 - For a new input format, read `docs/INPUT_ADAPTER_CONTRACT.md` before changing extension gates, storage, parser dispatch, or timeline data.
+- For INTRO changes, read the `Intro Pre-roll Contract` in `docs/PROJECT_MAP.md` and the INTRO presentation-vs-controller boundary in `CUSTOMIZING.md`.
 - If a maintainer workspace also contains `HANDOFF.md`, read its `Red Zone` and `Hot Debug` before touching runtime state.
 
 ## Document authority
@@ -35,6 +36,8 @@ This repository is meant to be customized by non-coders through LLM agents. Befo
 - Never put absolute user paths or email addresses in code or Job data. Stored Job paths are relative to the `current-job` root: use `source/timeline.xml`, not an absolute path and not `current-job/source/timeline.xml`.
 - Current Job reads/writes and persistent renderer file access go only through `preload.cjs` IPC. The standalone preview may inspect a user-provided browser `File`, but do not enable Node APIs in any renderer.
 - Reference inspection, streamed import, final revision commit, mapping cleanup, and owned-file deletion belong to `reference-lifecycle.cjs`. Keep `main.cjs` limited to the picker and IPC wiring; do not duplicate this lifecycle in a renderer.
+- INTRO scene styling belongs to the shared `src/intro-preroll.html`. Source paths, app-owned assets, FFmpeg, concat, verification, cancel, and finalization belong to `intro-demo-controller.cjs`; do not move them into a renderer or merge them into the normal `exporter.cjs` path.
+- INTRO preview and offscreen output must resolve the same frame from scene time. Do not add random or wall-clock-dependent frame state.
 - Before editing, leave the latest file intact enough to roll back, and describe which files you will change and why.
 
 ## Docs and encoding

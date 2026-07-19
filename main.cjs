@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createExportController } = require("./exporter.cjs");
+const { createIntroDemoController } = require("./intro-demo-controller.cjs");
 const { CLASSIC_RENDER_SPEC, resolveRenderSpec, publicRenderSpec } = require("./render-spec.cjs");
 const { cleanupSiblingStagingFiles, fsyncExistingFile, replaceByRenameWithRetry, writeTextAtomically } = require("./durable-file.cjs");
 const { ensureDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
@@ -80,6 +81,12 @@ const DEFAULT_CALLOUT = {
 };
 const DEFAULT_PROJECT_TITLE = "UNTITLED PROJECT";
 const DEFAULT_REFERENCE_MOTION = "classic";
+const DEFAULT_INTRO_PREROLL = {
+  prompt: "Three rescuers, one moment. Firefighter, swiftwater, paramedic — intercut at their limits. 15s, 24fps.",
+  reply: "Understood. Rise from boots to eyes, fragment burst, then the reverse descent to gripping hands. Rolling now.",
+  typingSeconds: 1,
+  soundEnabled: true,
+};
 const LOG_PATH = path.join(LOG_ROOT, "app.log");
 const VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
 const VIDEO_MAX_BYTES = 512 * 1024 * 1024 * 1024;
@@ -129,6 +136,7 @@ function emptyJob(){
     callout: { ...DEFAULT_CALLOUT },
     referenceMotion: DEFAULT_REFERENCE_MOTION,
     editNumberTicker: false,
+    introPreroll: { ...DEFAULT_INTRO_PREROLL },
     ui: { scale: 1.25 },
     output: { codec: CLASSIC_RENDER_SPEC.codec, bitrateMbps: CLASSIC_RENDER_SPEC.bitrateMbps, fps: CLASSIC_RENDER_SPEC.fps },
   };
@@ -212,6 +220,15 @@ function validateJobShape(job){
   }
   if(job.editNumberTicker !== undefined && typeof job.editNumberTicker !== "boolean"){
     throw new Error("editNumberTicker must be a boolean");
+  }
+  if(job.introPreroll !== undefined){
+    if(!isPlainObject(job.introPreroll) || typeof job.introPreroll.prompt !== "string" ||
+        typeof job.introPreroll.reply !== "string" || ![1, 2].includes(job.introPreroll.typingSeconds)){
+      throw new Error("introPreroll must contain prompt, reply, and typingSeconds");
+    }
+    if(job.introPreroll.soundEnabled !== undefined && typeof job.introPreroll.soundEnabled !== "boolean"){
+      throw new Error("introPreroll.soundEnabled must be a boolean");
+    }
   }
   if(job.demo !== undefined && typeof job.demo !== "boolean") throw new Error("demo must be a boolean");
   if(!isPlainObject(job.ui) || !isPlainObject(job.output)) throw new Error("ui and output must be objects");
@@ -320,6 +337,20 @@ function normalizeProjectTitle(value){
 
 function normalizeReferenceMotion(value){
   return value === "pop3d" ? "pop3d" : DEFAULT_REFERENCE_MOTION;
+}
+
+function normalizeIntroPreroll(value){
+  const source = isPlainObject(value) ? value : {};
+  const normalizeCopy = (input, fallback) => {
+    if(input === undefined || input === null) return fallback;
+    return String(input).replace(/\s+/g, " ").trim().slice(0, 500);
+  };
+  return {
+    prompt: normalizeCopy(source.prompt, DEFAULT_INTRO_PREROLL.prompt),
+    reply: normalizeCopy(source.reply, DEFAULT_INTRO_PREROLL.reply),
+    typingSeconds: source.typingSeconds === 2 ? 2 : 1,
+    soundEnabled: source.soundEnabled !== false,
+  };
 }
 
 function normalizeCallout(value){
@@ -627,6 +658,7 @@ function hydrateJob(job){
     callout: normalizeCallout(job.callout),
     referenceMotion: normalizeReferenceMotion(job.referenceMotion),
     editNumberTicker: Boolean(job.editNumberTicker),
+    introPreroll: normalizeIntroPreroll(job.introPreroll),
     xml: job.xml ? { ...job.xml, ...publicFile(job.xml.relativePath, SOURCE_ROOT, "xml") } : null,
     video: job.video ? { ...job.video, ...publicFile(job.video.relativePath, SOURCE_ROOT, "video") } : null,
     references: normalizeReferenceLabels(job.references).map(reference => ({
@@ -648,6 +680,13 @@ const exportController = createExportController({
   outputRoot: OUTPUT_ROOT,
   logEvent,
 });
+const introDemoController = createIntroDemoController({
+  BrowserWindow,
+  dialog,
+  appRoot: APP_ROOT,
+  outputRoot: OUTPUT_ROOT,
+  logEvent,
+});
 const uiCaptureController = createUiCaptureController({
   app,
   dialog,
@@ -659,6 +698,83 @@ const uiCaptureController = createUiCaptureController({
 
 let exportWindow = null;
 let exportDialogContext = {};
+let introWindow = null;
+let introCloseConfirmed = false;
+let appQuitting = false;
+
+function introContext(){
+  const job = loadJob();
+  return {
+    jobId: job.jobId,
+    revision: job.revision,
+    settings: normalizeIntroPreroll(job.introPreroll),
+    language: currentLanguage(),
+    outputSpec: resolveRenderSpec(job.output),
+  };
+}
+
+async function introSummary(){
+  return introDemoController.getSummary(introContext());
+}
+
+async function notifyIntroSummary(){
+  if(!introWindow || introWindow.isDestroyed()) return false;
+  try{
+    introWindow.webContents.send("intro:summary-updated", await introSummary());
+    return true;
+  }catch(error){
+    logEvent("intro_summary_failed", { code: error.code || "SUMMARY_FAILED", message: error.message });
+    return false;
+  }
+}
+
+function openIntroWindow(sender){
+  if(introWindow && !introWindow.isDestroyed()){
+    introWindow.focus();
+    return true;
+  }
+  const parent = BrowserWindow.fromWebContents(sender) || undefined;
+  introCloseConfirmed = false;
+  introWindow = new BrowserWindow({
+    width: 1060,
+    height: 750,
+    minWidth: 1060,
+    minHeight: 720,
+    useContentSize: true,
+    parent,
+    modal: false,
+    show: false,
+    resizable: true,
+    autoHideMenuBar: true,
+    backgroundColor: "#111513",
+    title: "Intro Builder",
+    webPreferences: {
+      preload: path.join(APP_ROOT, "intro-preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      minimumFontSize: 0,
+    },
+  });
+  introWindow.loadFile(path.join(APP_ROOT, "src", "intro-builder.html"));
+  introWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  introWindow.webContents.on("will-navigate", event => event.preventDefault());
+  introWindow.once("ready-to-show", () => introWindow?.show());
+  introWindow.on("close", event => {
+    if(appQuitting || introCloseConfirmed) return;
+    event.preventDefault();
+    if(introDemoController.isRunning()) return;
+    if(!introWindow.webContents.isDestroyed()) introWindow.webContents.send("intro:close-requested");
+  });
+  introWindow.on("closed", () => {
+    if(introDemoController.isRunning()) introDemoController.cancel();
+    logEvent("intro_builder_closed");
+    introWindow = null;
+    introCloseConfirmed = false;
+  });
+  logEvent("intro_builder_opened");
+  return true;
+}
 
 function exportReadiness(job){
   if(recoveryRequired){
@@ -911,6 +1027,10 @@ if(SINGLE_INSTANCE_LOCK){
 app.on("window-all-closed", () => {
   if(process.platform !== "darwin") app.quit();
 });
+app.on("before-quit", () => {
+  appQuitting = true;
+  introDemoController.dispose();
+});
 
 ipcMain.handle("job:get", () => hydrateJob(loadJob()));
 ipcMain.handle("app:get-render-spec", () => publicRenderSpec(loadJob().output));
@@ -965,6 +1085,9 @@ ipcMain.handle("job:save", (_event, payload) => {
     editNumberTicker: payload?.editNumberTicker === undefined
       ? Boolean(current.editNumberTicker)
       : Boolean(payload.editNumberTicker),
+    introPreroll: payload?.introPreroll === undefined
+      ? normalizeIntroPreroll(current.introPreroll)
+      : normalizeIntroPreroll(payload.introPreroll),
     ui: payload?.ui && typeof payload.ui === "object" ? { ...current.ui, ...payload.ui } : current.ui,
   });
   logEvent("job_saved", {
@@ -1247,6 +1370,86 @@ ipcMain.handle("app:log", (_event, event, detail) => {
   return true;
 });
 
+ipcMain.handle("intro:open-builder", event => openIntroWindow(event.sender));
+ipcMain.handle("intro:get-summary", () => introSummary());
+ipcMain.handle("intro:select-export", async event => {
+  const owner = BrowserWindow.fromWebContents(event.sender) || undefined;
+  return introDemoController.selectExport(owner, introContext());
+});
+ipcMain.handle("intro:save-settings", async (_event, payload) => {
+  requireRuntimeReady("intro_settings_save");
+  const current = loadJob();
+  if(typeof payload?.expectedJobId !== "string" || payload.expectedJobId !== current.jobId ||
+      !Number.isSafeInteger(payload?.expectedRevision) || payload.expectedRevision !== current.revision){
+    logEvent("intro_settings_save_rejected_stale", {
+      expectedJobId: typeof payload?.expectedJobId === "string" ? payload.expectedJobId : null,
+      currentJobId: current.jobId,
+      expectedRevision: Number.isSafeInteger(payload?.expectedRevision) ? payload.expectedRevision : null,
+      currentRevision: current.revision,
+    });
+    return { ...(await introSummary()), saveRejected: "JOB_STALE" };
+  }
+  const settings = normalizeIntroPreroll(payload?.settings);
+  const next = writeJob({ ...current, introPreroll: settings });
+  logEvent("intro_settings_saved", {
+    jobId: next.jobId,
+    revision: next.revision,
+    typingSeconds: settings.typingSeconds,
+    soundEnabled: settings.soundEnabled,
+  });
+  if(exportWindow && !exportWindow.isDestroyed()) exportWindow.webContents.send("export:summary-updated", exportSummary());
+  return introSummary();
+});
+ipcMain.handle("intro:start", async (event, payload) => {
+  if(exportController.isRunning()){
+    const error = new Error("Finish or cancel Export before building an intro demo.");
+    error.code = "INTRO_BLOCKED_BY_EXPORT";
+    throw error;
+  }
+  requireRuntimeReady("intro_start");
+  let job = loadJob();
+  if(typeof payload?.expectedJobId !== "string" || payload.expectedJobId !== job.jobId ||
+      !Number.isSafeInteger(payload?.expectedRevision) || payload.expectedRevision !== job.revision){
+    logEvent("intro_start_rejected_stale", {
+      expectedJobId: typeof payload?.expectedJobId === "string" ? payload.expectedJobId : null,
+      currentJobId: job.jobId,
+      expectedRevision: Number.isSafeInteger(payload?.expectedRevision) ? payload.expectedRevision : null,
+      currentRevision: job.revision,
+    });
+    return { ...(await introSummary()), startRejected: "JOB_STALE" };
+  }
+  const settings = normalizeIntroPreroll(payload?.settings);
+  if(JSON.stringify(settings) !== JSON.stringify(normalizeIntroPreroll(job.introPreroll))){
+    job = writeJob({ ...job, introPreroll: settings });
+    if(exportWindow && !exportWindow.isDestroyed()) exportWindow.webContents.send("export:summary-updated", exportSummary());
+  }
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if(window && !window.isDestroyed()) window.setClosable(false);
+  try{
+    const result = await introDemoController.start(event.sender, {
+      settings,
+      outputSpec: resolveRenderSpec(job.output),
+      language: currentLanguage(),
+    });
+    return result;
+  }finally{
+    if(window && !window.isDestroyed()) window.setClosable(true);
+  }
+});
+ipcMain.handle("intro:cancel", () => introDemoController.cancel());
+ipcMain.handle("intro:open-output", () => {
+  ensureJobFolders();
+  return shell.openPath(OUTPUT_ROOT);
+});
+ipcMain.handle("intro:close-window", () => {
+  if(introDemoController.isRunning()) return false;
+  if(introWindow && !introWindow.isDestroyed()){
+    introCloseConfirmed = true;
+    introWindow.close();
+  }
+  return true;
+});
+
 ipcMain.handle("export:open-dialog", (event, context) => openExportWindow(event.sender, context));
 ipcMain.handle("export:get-summary", () => exportSummary());
 ipcMain.handle("export:set-bitrate", (_event, payload) => {
@@ -1261,11 +1464,26 @@ ipcMain.handle("export:set-bitrate", (_event, payload) => {
   return exportSummary();
 });
 ipcMain.handle("export:start", async (event, payload) => {
+  if(introDemoController.isRunning()){
+    const error = new Error("Finish or cancel the intro demo before starting Export.");
+    error.code = "EXPORT_BLOCKED_BY_INTRO";
+    throw error;
+  }
   const job = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "export_start");
   const window = BrowserWindow.fromWebContents(event.sender);
   if(window && !window.isDestroyed()) window.setClosable(false);
   try{
-    return await exportController.start(event.sender, job, currentLanguage());
+    const result = await exportController.start(event.sender, job, currentLanguage());
+    if(result?.ok && result.outputPath){
+      try{
+        introDemoController.setSessionExport(result.outputPath);
+        void notifyIntroSummary();
+      }catch(error){
+        // INTRO handoff is optional; a completed normal Export must remain successful on its own.
+        logEvent("intro_session_export_rejected", { code: error.code || "SOURCE_REJECTED", message: error.message });
+      }
+    }
+    return result;
   }finally{
     if(window && !window.isDestroyed()) window.setClosable(true);
   }
