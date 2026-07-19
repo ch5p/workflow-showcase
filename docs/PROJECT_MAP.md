@@ -29,7 +29,7 @@
 - `ui-capture.cjs`: maintainer DPR-2 capture controller and exact PNG-dimension verification
 - `smoke-harness.cjs`: isolated Electron smoke orchestration, including the responsive secondary-instance probe and sandboxed Export-dialog probe
 - `export-preload.cjs`: the start/cancel/progress/open-folder API exposed only to the sandboxed Export popup
-- `exporter.cjs`: offscreen BGRA frame capture, FFmpeg H.264 output with optional source-audio stream copy, progress, cancel, and fallback
+- `exporter.cjs`: transparent offscreen BGRA UI capture, direct FFmpeg source-video composition, H.264 output with optional source-audio stream copy, progress, cancel, and fallback
 - `intro-demo-controller.cjs`: Main-owned INTRO source authority, app-asset resolution, FFmpeg intro render/AAC normalization/TS concat, output verification, cancel, atomic finalization, and `intro_*` logging; it is separate from `exporter.cjs`
 - `intro-preload.cjs`: the restricted settings/source/build/cancel/progress API exposed only to the sandboxed INTRO BUILDER
 - `src/index.html`: the editing screen and the SHOT rail
@@ -125,6 +125,8 @@ Lifecycle regression checks run only in an OS temp Job root and forcibly verify:
 Before the Export popup shows `READY`, `main.cjs` resolves the stored XML, video, and every registered reference with `mustExist: true` inside its owned Current Job directory. The actual Export start repeats its own source/reference checks; the readiness display does not replace that final guard.
 
 After the XML duration is known and before FFmpeg starts, Export estimates the video payload from duration and selected bitrate, adds a 512 kbps audio allowance, 5% container overhead, and the same bounded safety reserve. Insufficient free space fails before encoding with `INSUFFICIENT_DISK_SPACE`; a successful check records `export_space_checked`.
+
+Normal Export does not screen-record Chromium's source-video playback. The offscreen renderer hides `mainVideo` only in `exportComposite` mode and paints the remaining callout/panel/timeline/reference UI as a transparent 1280x1080 BGRA layer at the resolved output fps. FFmpeg decodes the stored source video directly, applies the classic `object-fit: contain` equivalent inside the 1280x720 video area, composites the premultiplied-alpha UI layer, and performs the one final H.264 encode. This keeps 60fps UI motion while source frames follow their own timestamps instead of depending on Electron paint cadence. `export_completed` records `composition`, `repeatedUiFrames`, and `observedPaintFrames` for diagnosis.
 
 ## Review Scope and Evidence
 

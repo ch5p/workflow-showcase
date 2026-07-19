@@ -156,6 +156,13 @@ const preloadSource=fs.readFileSync(path.join(root,"preload.cjs"),"utf8");
 if(!preloadSource.includes('getLanguage: () => ipcRenderer.invoke("app:get-language")'))throw new Error("Language IPC bridge missing");
 const exporterSource=fs.readFileSync(path.join(root,"exporter.cjs"),"utf8");
 if(!exporterSource.includes("window.portablePreview.setLanguage"))throw new Error("Offscreen Export language propagation missing");
+for(const marker of ["buildCompositeFilter","prepareCompositeExport()","startCompositeExport()",'"-map", "[vout]"',"alpha=premultiplied","ffmpeg_source_plus_ui"]){
+  if(!exporterSource.includes(marker))throw new Error("FFmpeg source + transparent UI Export contract missing: "+marker);
+}
+for(const marker of ["prepareCompositeExport(){","startCompositeExport(){","stopCompositeExport(){"]){
+  if(!preview.includes(marker))throw new Error("Composite Export preview bridge missing: "+marker);
+}
+if(!classicCss.includes("html.exportComposite #mainVideo{visibility:hidden;background:transparent}"))throw new Error("Composite Export must hide Electron video while preserving the UI layer");
 for(const marker of ['xmlReadFailed:', 'videoReadyTimeout:', 'thumbnailReadyTimeout:', 'thumbnailFailed:']){
   if((preview.match(new RegExp(marker,"g"))||[]).length!==2)throw new Error("Preview EN/KO string pair missing: "+marker);
 }

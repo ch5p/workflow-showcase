@@ -139,14 +139,14 @@ The app does not first create an intermediate lossy-compressed file and then enc
 
 The current exporter:
 
-1. Renders an Electron offscreen window at `1280 × 1080`.
-2. Receives a BGRA raw bitmap from the `paint` event.
-3. Sends each raw frame directly to FFmpeg through stdin.
-4. Creates a 12 Mbps H.264 file with `h264_nvenc` by default.
+1. Renders the transparent UI layer in an Electron offscreen window at `1280 × 1080 / 60 fps`.
+2. Sends the BGRA UI frames directly to FFmpeg through stdin.
+3. Lets FFmpeg decode the source video directly and fit it into the `1280 × 720` video area, rather than screen-recording Electron video playback.
+4. Composites the transparent UI over that source video and creates a 12 Mbps H.264 file with `h264_nvenc` by default.
 5. Retries the entire output with `libx264` if NVENC is unavailable or fails.
 6. Applies `bt709`, `yuv420p`, and `+faststart`.
 
-Therefore, the UI canvas receives **only one final lossy encode**. The source video itself is decoded and re-encoded into the final composite, but it does not pass through a separate lossy screen-recording file.
+Therefore, the UI canvas receives **only one final lossy encode**. The source video is decoded directly into the final composite and does not pass through a separate lossy screen-recording file.
 
 ---
 

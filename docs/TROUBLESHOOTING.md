@@ -65,6 +65,10 @@ Read the operation in this order:
 4. `export_encoder_fallback` when NVENC failed and the CPU retry began
 5. `export_finalize_failed`, `export_completed`, `export_failed`, or `export_cancelled`
 
+For a completed Export with source-video judder, confirm that `export_completed.composition` is `ffmpeg_source_plus_ui`. The source video is decoded directly by FFmpeg, so `repeatedUiFrames` concerns only the transparent UI layer and does not mean source frames were duplicated. Compare the source and result with `ffprobe` before blaming Electron playback. A missing composition marker means the result came from an older real-time full-window capture build.
+
+If the composited source appears uniformly darker, inspect `buildCompositeFilter()` before changing layout colors or the source. The overlay result must not be passed through another `out_range=tv` conversion; stream color metadata remains `bt709`, while the source/UI composite is converted to `yuv420p` only once.
+
 `INSUFFICIENT_DISK_SPACE` before `export_space_checked` means FFmpeg did not start. Free space in the app-root `output/` drive and retry; there is no completed part to recover from that attempt.
 
 If `export_finalize_failed` appears and a `.part.mp4` remains under app-root `output/`, treat it as a completed file whose final rename failed. Do not delete it. Quit the app, preserve the file, and rename it to `.mp4` manually after confirming the event.

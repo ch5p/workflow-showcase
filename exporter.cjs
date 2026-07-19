@@ -81,6 +81,20 @@ function encoderArguments(encoder, bitrateMbps){
   ];
 }
 
+function buildCompositeFilter(spec,durationSeconds){
+  const videoHeight = 720;
+  if(spec.width !== 1280 || spec.height !== 1080){
+    throw new Error("Classic composite Export requires the 1280x1080 render surface.");
+  }
+  const duration = Math.max(0.001, Number(durationSeconds) || 0.001).toFixed(6);
+  const background = "0x0d0e10";
+  return [
+    `[1:v]setpts=PTS-STARTPTS,scale=${spec.width}:${videoHeight}:force_original_aspect_ratio=decrease,pad=${spec.width}:${spec.height}:(ow-iw)/2:(${videoHeight}-ih)/2:color=${background},fps=${spec.fps},tpad=stop_mode=clone:stop_duration=${duration},trim=duration=${duration},setsar=1[base]`,
+    `[0:v]format=${spec.inputPixelFormat}[ui]`,
+    `[base][ui]overlay=0:0:shortest=1:format=auto:alpha=premultiplied,format=${spec.outputPixelFormat}[vout]`,
+  ].join(";");
+}
+
 function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, logEvent }){
   let active = null;
   const sourceRoot = path.join(jobRoot, "source");
@@ -141,8 +155,9 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       height: spec.height,
       useContentSize: true,
       show: false,
+      transparent: true,
       paintWhenInitiallyHidden: true,
-      backgroundColor: "#ffffff",
+      backgroundColor: "#00000000",
       webPreferences: {
         offscreen: { useSharedTexture: false, deviceScaleFactor: 1 },
         backgroundThrottling: false,
@@ -156,6 +171,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     renderWindow.webContents.setFrameRate(fps);
 
     let latestFrame = null;
+    let latestPaintVersion = 0;
     let firstFrameResolve = null;
     const firstFrame = new Promise(resolve => { firstFrameResolve = resolve; });
     renderWindow.webContents.on("paint", (_event, _dirtyRect, image) => {
@@ -164,6 +180,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       const bitmap = image.toBitmap();
       if(bitmap.length !== spec.width * spec.height * 4) return;
       latestFrame = bitmap;
+      latestPaintVersion += 1;
       if(firstFrameResolve){
         firstFrameResolve();
         firstFrameResolve = null;
@@ -184,7 +201,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       const references = referenceState(job, parsed);
       const projectTitle = job.projectTitle === undefined || job.projectTitle === null ? "UNTITLED PROJECT" : job.projectTitle;
       await renderWindow.webContents.executeJavaScript(
-        `window.portablePreview.setProjectTitle(${JSON.stringify(projectTitle)}); window.portablePreview.setCalloutConfig(${JSON.stringify(job.callout || {})}); window.portablePreview.setEditDisplayConfig(${JSON.stringify({ numberTicker: Boolean(job.editNumberTicker) })}); window.portablePreview.setReferences(${JSON.stringify(references)}); window.portablePreview.prepareRealtimeExport()`
+        `window.portablePreview.setProjectTitle(${JSON.stringify(projectTitle)}); window.portablePreview.setCalloutConfig(${JSON.stringify(job.callout || {})}); window.portablePreview.setEditDisplayConfig(${JSON.stringify({ numberTicker: Boolean(job.editNumberTicker) })}); window.portablePreview.setReferences(${JSON.stringify(references)}); window.portablePreview.prepareCompositeExport()`
       );
       renderWindow.webContents.invalidate();
       await Promise.race([
@@ -218,13 +235,14 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
         availableBytes: space.availableBytes.toString(),
       });
       const totalFrames = Math.ceil(durationSeconds * fps);
+      const compositeFilter = buildCompositeFilter(spec,durationSeconds);
       const ffmpegArgs = [
         "-y", "-hide_banner", "-loglevel", "warning",
         "-f", "rawvideo", "-pixel_format", spec.inputPixelFormat,
         "-video_size", spec.width + "x" + spec.height, "-framerate", String(fps), "-i", "pipe:0",
         "-i", videoPath,
-        "-map", "0:v:0", "-map", "1:a?", "-t", durationSeconds.toFixed(6),
-        "-vf", "scale=out_color_matrix="+spec.colorSpace+":out_range=tv,format="+spec.outputPixelFormat,
+        "-filter_complex", compositeFilter,
+        "-map", "[vout]", "-map", "1:a?", "-t", durationSeconds.toFixed(6),
         ...encoderArguments(encoder, bitrateMbps),
         "-color_primaries", spec.colorSpace, "-color_trc", spec.colorSpace, "-colorspace", spec.colorSpace,
         "-c:a", "copy", "-movflags", "+faststart", temporaryPath,
@@ -236,13 +254,17 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       });
       ffmpeg.stdin.on("error", () => {});
 
-      await renderWindow.webContents.executeJavaScript("window.portablePreview.startRealtimeExport()");
+      await renderWindow.webContents.executeJavaScript("window.portablePreview.startCompositeExport()");
       const startedAt = performance.now();
+      let lastWrittenPaintVersion = -1;
+      let repeatedUiFrames = 0;
       for(let frameIndex = 0; frameIndex < totalFrames; frameIndex++){
         if(active.cancelled) throw new Error("EXPORT_CANCELLED");
         const targetTime = startedAt + frameIndex / fps * 1000;
         await sleep(targetTime - performance.now());
         if(!latestFrame) throw new Error(t("frame_empty"));
+        if(latestPaintVersion === lastWrittenPaintVersion) repeatedUiFrames += 1;
+        lastWrittenPaintVersion = latestPaintVersion;
         if(!ffmpeg.stdin.write(latestFrame)) await once(ffmpeg.stdin, "drain");
         if(frameIndex % Math.max(1, Math.round(fps / 5)) === 0 || frameIndex === totalFrames - 1){
           emit(sender, {
@@ -254,13 +276,13 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
           });
         }
       }
-      await renderWindow.webContents.executeJavaScript("window.portablePreview.stopRealtimeExport()");
+      await renderWindow.webContents.executeJavaScript("window.portablePreview.stopCompositeExport()");
       emit(sender, { state: "finalizing", progress: 1, encoder });
       ffmpeg.stdin.end();
       const [exitCode] = await once(ffmpeg, "close");
       active.ffmpeg = null;
       if(exitCode !== 0) throw new Error(t("ffmpeg_failed") + " (" + exitCode + ")\n" + ffmpegError);
-      return { durationSeconds, totalFrames };
+      return { durationSeconds, totalFrames, repeatedUiFrames, observedPaintFrames: latestPaintVersion };
     }finally{
       if(ffmpeg && ffmpeg.exitCode == null && !ffmpeg.killed) ffmpeg.kill();
       if(!renderWindow.isDestroyed()) renderWindow.destroy();
@@ -290,6 +312,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       height: spec.height,
       fps: spec.fps,
       bitrateMbps: spec.bitrateMbps,
+      composition: "ffmpeg_source_plus_ui",
       output: path.basename(outputPath),
     });
     let encodingCompleted = false;
@@ -330,6 +353,9 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
         output: path.basename(outputPath),
         durationSeconds: result.durationSeconds,
         totalFrames: result.totalFrames,
+        composition: "ffmpeg_source_plus_ui",
+        repeatedUiFrames: result.repeatedUiFrames,
+        observedPaintFrames: result.observedPaintFrames,
       });
       return { ok: true, encoder, outputPath, ...result };
     }catch(error){
@@ -364,4 +390,4 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
   return { start, cancel, isRunning: () => Boolean(active) };
 }
 
-module.exports = { availableExportPaths, createExportController, finalizeCompletedExport };
+module.exports = { availableExportPaths, buildCompositeFilter, createExportController, finalizeCompletedExport };

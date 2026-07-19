@@ -139,14 +139,14 @@ npm.cmd start
 
 현재 exporter는:
 
-1. Electron offscreen window를 `1280 × 1080`으로 렌더링한다.
-2. `paint` 이벤트에서 BGRA raw bitmap을 얻는다.
-3. raw frame을 FFmpeg stdin으로 직접 전달한다.
-4. 기본 `h264_nvenc`로 12 Mbps H.264를 생성한다.
+1. Electron offscreen window에서 투명 UI 레이어를 `1280 × 1080 / 60fps`로 렌더링한다.
+2. BGRA UI 프레임을 FFmpeg stdin으로 직접 전달한다.
+3. 원본 영상은 Electron 재생 화면을 녹화하지 않고 FFmpeg가 직접 디코드해 `1280 × 720` 영상 영역에 맞춘다.
+4. 원본 영상 위에 투명 UI를 합성하고 기본 `h264_nvenc`로 12 Mbps H.264를 생성한다.
 5. NVENC가 없거나 실패하면 `libx264`로 전체 출력을 다시 시도한다.
 6. `bt709`, `yuv420p`, `+faststart`를 적용한다.
 
-따라서 UI 캔버스에는 **한 번의 최종 손실 인코딩**만 적용된다. 원본 영상 자체는 디코드 후 최종 합성본에 다시 인코딩되지만, 별도의 화면 녹화용 손실 파일을 거치지 않는다.
+따라서 UI 캔버스에는 **한 번의 최종 손실 인코딩**만 적용된다. 원본 영상은 최종 합성본으로 바로 디코드되며 별도의 화면 녹화용 손실 파일을 거치지 않는다.
 
 ---
 

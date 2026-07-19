@@ -14,6 +14,7 @@ const {
 } = require("../owned-path.cjs");
 const {
   availableExportPaths,
+  buildCompositeFilter,
   finalizeCompletedExport,
 } = require("../exporter.cjs");
 
@@ -132,6 +133,22 @@ try{
   assert.notEqual(secondPaths.outputPath, firstPaths.outputPath);
   assert.equal(fs.existsSync(secondPaths.outputPath), false);
   assert.equal(fs.existsSync(secondPaths.temporaryPath), false);
+
+  const compositeFilter = buildCompositeFilter({
+    width: 1280,
+    height: 1080,
+    fps: 60,
+    inputPixelFormat: "bgra",
+    outputPixelFormat: "yuv420p",
+    colorSpace: "bt709",
+  }, 3);
+  assert.match(compositeFilter, /\[1:v\]setpts=PTS-STARTPTS,scale=1280:720/);
+  assert.match(compositeFilter, /pad=1280:1080:\(ow-iw\)\/2:\(720-ih\)\/2:color=0x0d0e10/);
+  assert.match(compositeFilter, /fps=60,tpad=stop_mode=clone:stop_duration=3\.000000,trim=duration=3\.000000/);
+  assert.match(compositeFilter, /\[base\]\[ui\]overlay=0:0:shortest=1:format=auto:alpha=premultiplied/);
+  assert.match(compositeFilter, /format=yuv420p\[vout\]/);
+  assert.doesNotMatch(compositeFilter, /out_range=tv/);
+  assert.throws(() => buildCompositeFilter({ width: 1920, height: 1080 }, 3), /1280x1080/);
 
   console.log("RUNTIME_SAFETY_CHECK_OK");
 }finally{

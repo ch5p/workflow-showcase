@@ -1856,6 +1856,18 @@ window.portablePreview={
     $("tcMain").textContent=tc(0,DATA?.fps||24);
     return {durationFrames:DATA.duration,fps:DATA.fps};
   },
+  prepareCompositeExport(){
+    cancelAnimationFrame(rafId);
+    stopVideoFrameClock();
+    mainVideo.pause();thumbnailVideo.pause();
+    resetShow();
+    phase="idle";syncClock="virtual";tPause=0;lastUiOutputFrame=-1;
+    document.documentElement.classList.add("exportComposite");
+    document.body.classList.add("running");
+    setPlayhead(0);
+    $("tcMain").textContent=tc(0,DATA?.fps||24);
+    return {durationFrames:DATA.duration,fps:DATA.fps};
+  },
   startRealtimeExport(){
     if(phase==="show")pause();
     tPause=0;
@@ -1865,6 +1877,23 @@ window.portablePreview={
   stopRealtimeExport(){
     if(phase==="show")pause();
     else mainVideo.pause();
+    return {stopped:true,currentTime:mainVideo.currentTime};
+  },
+  startCompositeExport(){
+    cancelAnimationFrame(rafId);
+    stopVideoFrameClock();
+    mainVideo.pause();
+    document.body.classList.add("running");
+    phase="show";syncClock="virtual";tPause=0;lastUiOutputFrame=-1;
+    t0=now();
+    syncReferencePlayback();
+    loop();
+    return {started:true};
+  },
+  stopCompositeExport(){
+    if(phase==="show")pause();
+    else mainVideo.pause();
+    document.documentElement.classList.remove("exportComposite");
     return {stopped:true,currentTime:mainVideo.currentTime};
   },
   setReferences(state){
