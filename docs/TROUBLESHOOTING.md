@@ -78,7 +78,7 @@ Source audio is copied without transcoding. AAC is the validated fixture codec; 
 Read the independent INTRO operation in this order:
 
 1. `intro_builder_opened`
-2. `intro_source_selected`, then `intro_source_prepared` or `intro_source_prepare_failed`
+2. `intro_source_recorded` or `intro_source_restored` (automatic handoff), or `intro_source_selected` (manual fallback), then `intro_source_prepared` or `intro_source_prepare_failed`
 3. `intro_settings_saved`, or `intro_settings_save_rejected_stale` when another save advanced the Job first
 4. `intro_build_started`
 5. `intro_build_progress`
@@ -87,7 +87,7 @@ Read the independent INTRO operation in this order:
 
 `intro_settings_save_rejected_stale` and `intro_start_rejected_stale` mean another same-Job save advanced the revision while the non-modal builder was open. The builder adopts the current revision and retries once when the Job identity is unchanged; a changed Job loads its current INTRO defaults/settings instead of overwriting them, and a rejected BUILD requires a fresh click.
 
-No source after restart is expected: press `SELECT EXPORT`. Only an exact normal Export completed during the current app session may be supplied transiently. Do not repair this by persisting an absolute path or scanning `output/` for the newest modified file.
+After a successful normal Export, `current-job/logs/last-showcase-export.json` records only the Job ID, direct app-owned output filename, size, and modification time. The same Job may restore that exact file after restart. If it is missing, changed, belongs to another Job, or fails the direct-output filename check, the builder shows the inline `EXPORT H.264` requirement; do not repair this by persisting an absolute path or scanning `output/` for the newest modified file. A manually selected external MP4 is intentionally session-only.
 
 On `intro_source_prepare_failed`, preserve the selected source and inspect its basename, code, and redacted message through the Main-owned controller. The sandboxed builder must not resolve files or run FFmpeg itself. A selected source path never enters `job.json` or public log detail.
 
@@ -95,7 +95,7 @@ On `intro_build_failed`, confirm the selected normal Export is unchanged, then i
 
 On `intro_finalize_failed`, preserve the verified `output/workflow_showcase_demo_*.part.mp4`. Quit the app and rename it collision-safely to `.mp4` only after confirming the event; never overwrite or remove the source Export. After `intro_build_cancelled`, incomplete render/TS/audio/temp files and an incomplete part should be gone. If they remain, preserve the log and report the cleanup failure before deleting anything manually.
 
-For source handoff and cleanup diagnostics, also inspect `intro_session_export_rejected`, `intro_summary_failed`, `intro_space_checked`, `intro_part_cleanup_failed`, `intro_temp_cleanup_failed`, and `intro_temp_cleanup_refused`. `intro_source_selection_cancelled` and `intro_source_selection_cleared` are ordinary user/session events, not build failures.
+For source handoff and cleanup diagnostics, also inspect `intro_source_recorded`, `intro_source_restored`, `intro_recorded_source_rejected`, `intro_manual_source_session_only`, `intro_session_export_rejected`, `intro_summary_failed`, `intro_space_checked`, `intro_part_cleanup_failed`, `intro_temp_cleanup_failed`, and `intro_temp_cleanup_refused`. `intro_source_selection_cancelled` and `intro_source_selection_cleared` are ordinary user/session events, not build failures.
 
 The native title-bar close and the builder `CLOSE` control both request a pending-settings flush. If that save fails the window intentionally stays open; do not bypass this by killing the window unless the whole app is being quit for recovery.
 

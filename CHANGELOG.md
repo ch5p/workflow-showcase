@@ -26,7 +26,8 @@
 - Added duration-based Export space estimation before FFmpeg starts
 - Split persisted timeline validation, DURATION boundary math, UI capture, and smoke orchestration into focused modules with regression checks
 - Sandboxed the Export confirmation window and verified its preload API in the isolated desktop smoke
-- Added a separate sandboxed INTRO BUILDER with persisted prompt/reply/typing/sound settings, prompt-length-aware deterministic key sounds, a compact aspect-fitted live preview, explicit or same-session Export selection, a shared deterministic pre-roll scene, sanitized app-owned sounds, and an isolated real-FFmpeg smoke for stream-copy/AAC/TS demo finalization without changing normal Export
+- Added a separate sandboxed Intro Builder with persisted prompt/reply/typing/sound settings, prompt-length-aware deterministic key sounds, source-independent replay and preview-surface play/pause, a compact aspect-fitted live preview, exact same-Job Showcase Export restoration without newest-file guessing, a shared deterministic pre-roll scene, sanitized app-owned sounds, and an isolated real-FFmpeg smoke for stream-copy/AAC/TS finalization without changing normal Export
+- Narrowed new finished-video imports to the validated H.264 MP4 workflow; MOV/ProRes and M4V remain recognizable only for legacy cleanup and as independently handled reference media
 - Replaced the README's model-review attribution with a direct description of the current exporter behavior
 - Removed the hidden Premiere project path from the public MP4 fixture and added binary privacy regression checks
 - Rechecked Current Job state at reference-import completion and rejected stale completion instead of overwriting newer Job edits

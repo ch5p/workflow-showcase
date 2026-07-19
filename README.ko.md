@@ -104,6 +104,7 @@ npm.cmd start
 ## 2. 앱을 실행한 뒤에 드래그&드롭 또는 클릭으로 XML과 VIDEO 파일을 집어넣습니다.
 
 - XML과 VIDEO를 한 번에 넣는 기능은 현재 미지원입니다. 각각 따로 넣어주세요.
+- 완성본 VIDEO 입력은 재생 가능한 H.264 MP4만 지원합니다. MOV/ProRes와 M4V는 최종 영상으로 불러올 수 없습니다. 프리미어에서 오디오를 AAC로 설정한 H.264 MP4를 출력해 넣어주세요.
 
 ![XML·VIDEO 불러오기](./docs/readme-assets/animations/import-xml-video.webp)
 

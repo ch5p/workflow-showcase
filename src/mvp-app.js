@@ -19,7 +19,7 @@
   let pendingSavePromise=Promise.resolve();
   const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",motion:"fade",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
   const DEFAULT_REFERENCE_MOTION="classic";
-  const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4",".mov",".m4v"])};
+  const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4"])};
 
   function preview(){ return iframe.contentWindow?.portablePreview||null; }
   function applyLanguage(next){
@@ -323,7 +323,7 @@
     const dot=name.lastIndexOf(".");
     const extension=dot>=0?name.slice(dot).toLowerCase():"";
     if(!INPUT_EXTENSIONS[kind].has(extension)){
-      throw inputError(kind==="xml"?"XML ONLY · .XML":"VIDEO FILES · MP4/MOV/M4V");
+      throw inputError(kind==="xml"?"XML ONLY · .XML":"VIDEO · H.264 MP4 ONLY");
     }
     const sourcePath=bridge.getPathForFile(file);
     if(!sourcePath)throw inputError("DROP PATH UNAVAILABLE");

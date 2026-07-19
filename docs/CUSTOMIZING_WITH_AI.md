@@ -75,7 +75,7 @@ These sound natural enough that an LLM may just do them, but they break the app.
 - **"Make the subtitle fade in smoothly"** → The subtitle must appear **in sync with video time** so the preview and final output match. Switching to a CSS wall-clock animation desyncs the output. → "Keep the timing logic, change only the look."
 - **"Rewrite the XML reader cleanly"** → The parser and PRIMARY calculation in `src/core` are the stable core. Do not rewrite them.
 - **"Make the export lighter/smaller"** (vaguely) → Vague requests are dangerous. If you want a different resolution, name the width/height and layout work from the aspect-ratio row above. Do not touch the encoder/codec itself.
-- **"Make INTRO remember the newest Export"** → INTRO must not persist an absolute Export path or guess by modification time. An exact Export completed in the current app session may be selected transiently; after restart, press `SELECT EXPORT` explicitly.
+- **"Make INTRO remember the newest Export"** → INTRO must not persist an absolute Export path or guess by modification time. Main already records the exact successful app-owned Export by filename, Job ID, size, and modification time; the controller restores only that verified match. External manual selections remain session-only.
 - **"Put the INTRO concat into the exporter"** → Normal Export must remain unchanged. The independent controller re-renders only the intro, stream-copies the main H.264 video, normalizes audio to AAC, and owns concat/finalization.
 - **"Make saving faster/simpler"** → Saving is deliberately crash-safe mid-write. Do not simplify it.
 
@@ -97,7 +97,7 @@ Automated checks cannot judge whether a color looks wrong or a position feels of
 
 **4) INTRO changes**
 
-Create or select a normal Export, open `INTRO`, confirm the large independent builder shows the same scene as its output, edit prompt/reply and both typing choices, then build a demo. Confirm the source Export remains unchanged and the new file appears as `output/workflow_showcase_demo_*.mp4`. Restart once and confirm the builder requires `SELECT EXPORT` instead of choosing the newest file automatically.
+Create a normal Export, open `INTRO`, confirm the independent builder automatically shows that exact Showcase Export, edit prompt/reply and both typing choices, then build the intro version. Confirm the source Export remains unchanged and the new file appears as `output/workflow_showcase_demo_*.mp4`. Restart once and confirm the same Job restores the exact recorded Export, while a different Job or changed/missing file shows the inline `EXPORT H.264` requirement instead of choosing another output automatically.
 
 ---
 

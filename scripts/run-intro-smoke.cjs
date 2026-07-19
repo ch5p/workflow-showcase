@@ -178,7 +178,10 @@ async function main(){
   try{
     const outputRoot = path.join(smokeRoot, "output");
     fs.mkdirSync(outputRoot);
-    const mainPath = path.join(smokeRoot, "main-export.mp4");
+    const logsRoot = path.join(smokeRoot, "logs");
+    fs.mkdirSync(logsRoot);
+    const sourceRecordPath = path.join(logsRoot, "last-showcase-export.json");
+    const mainPath = path.join(outputRoot, "workflow_showcase_export_20260719_120000.mp4");
     run(ffmpegPath, [
       "-y", "-hide_banner", "-loglevel", "warning",
       "-f", "lavfi", "-i", "color=c=0x24415c:s=1280x1080:r=24:d=" + MAIN_DURATION,
@@ -202,11 +205,14 @@ async function main(){
       dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
       appRoot: APP_ROOT,
       outputRoot,
+      sourceRecordPath,
       logEvent: (event, detail) => events.push({ event, detail }),
     });
-    const selected = controller.setSessionExport(mainPath);
+    const selected = controller.recordCompletedExport(mainPath, "job-smoke");
     assert.equal(selected.ready, true);
     assert.equal(selected.fps, FPS);
+    assert.ok(fs.existsSync(sourceRecordPath));
+    assert.ok(events.some(item => item.event === "intro_source_recorded"));
     const result = await controller.start(sender, {
       settings: { prompt: "Build the smoke.", reply: "Running now.", typingSeconds: 1 },
       outputSpec: {
@@ -244,6 +250,44 @@ async function main(){
     );
     assert.deepEqual(fs.readdirSync(outputRoot).filter(name => name.endsWith(".part.mp4")), []);
     assert.ok(events.some(item => item.event === "intro_build_cancelled"));
+    controller.dispose();
+    controller = null;
+
+    controller = createIntroDemoController({
+      BrowserWindow: FakeBrowserWindow,
+      dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
+      appRoot: APP_ROOT,
+      outputRoot,
+      sourceRecordPath,
+      logEvent: (event, detail) => events.push({ event, detail }),
+    });
+    const restored = await controller.getSummary({
+      jobId: "job-smoke",
+      revision: 1,
+      settings: { prompt: "Build the smoke.", reply: "Running now.", typingSeconds: 1 },
+      outputSpec: { width: WIDTH, height: HEIGHT, fps: FPS, bitrateMbps: 1 },
+    });
+    assert.equal(restored.source?.ready, true);
+    assert.equal(restored.source?.name, path.basename(mainPath));
+    assert.ok(events.some(item => item.event === "intro_source_restored"));
+    controller.dispose();
+    controller = null;
+
+    controller = createIntroDemoController({
+      BrowserWindow: FakeBrowserWindow,
+      dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
+      appRoot: APP_ROOT,
+      outputRoot,
+      sourceRecordPath,
+      logEvent: (event, detail) => events.push({ event, detail }),
+    });
+    const mismatchedJob = await controller.getSummary({
+      jobId: "job-other",
+      revision: 1,
+      settings: { prompt: "Different Job.", reply: "No inherited source.", typingSeconds: 1 },
+      outputSpec: { width: WIDTH, height: HEIGHT, fps: FPS, bitrateMbps: 1 },
+    });
+    assert.equal(mismatchedJob.source, null, "another Job must not inherit the recorded Showcase Export");
     controller.dispose();
     controller = null;
 

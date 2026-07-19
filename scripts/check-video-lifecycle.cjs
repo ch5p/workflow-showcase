@@ -168,7 +168,7 @@ async function prepareInput(root, layout, label, content = NEW_VIDEO){
     sourcePath: inputPath,
     logRoot: layout.logRoot,
     inputMethod: "test-drop",
-    allowedExtensions: ["mp4", "mov", "m4v"],
+    allowedExtensions: ["mp4"],
     maxBytes: VIDEO_LIMIT,
   });
   assert.equal(path.dirname(preparation.transactionRoot), path.resolve(layout.logRoot));
@@ -179,13 +179,19 @@ async function prepareInput(root, layout, label, content = NEW_VIDEO){
 
 async function runInvalidInputChecks(root){
   const invalidPath = path.join(root, "inputs", "invalid.txt");
+  const unsupportedMovPath = path.join(root, "inputs", "unsupported.mov");
   const emptyPath = path.join(root, "inputs", "empty.mp4");
   const logRoot = path.join(root, "invalid-logs");
   writeFile(invalidPath, NEW_VIDEO);
+  writeFile(unsupportedMovPath, NEW_VIDEO);
   writeFile(emptyPath, Buffer.alloc(0));
   fs.mkdirSync(logRoot, { recursive: true });
   assert.throws(
     () => inspectVideoCandidate({ sourcePath: invalidPath, allowedExtensions: [".mp4"], maxBytes: VIDEO_LIMIT }),
+    /extension is not allowed/i,
+  );
+  assert.throws(
+    () => inspectVideoCandidate({ sourcePath: unsupportedMovPath, maxBytes: VIDEO_LIMIT }),
     /extension is not allowed/i,
   );
   assert.throws(

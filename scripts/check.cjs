@@ -100,6 +100,9 @@ const main=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
 for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:get-language","app:reload-current-job","getPreferredSystemLanguages","ui_language_resolved","recoverXmlTransactions","recoverVideoTransactions","createReferenceLifecycle","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed","createUiCaptureController","uiCaptureController.registerShortcut"]){
   if(!main.includes(marker))throw new Error("Current Job lifecycle marker missing: "+marker);
 }
+if(!main.includes('const VIDEO_EXTENSIONS = [".mp4"];'))throw new Error("New final-video imports must stay MP4-only");
+if(!editor.includes("H.264 · MP4")||/MP4 · MOV · M4V/.test(editor))throw new Error("VIDEO drop-zone label must match the MP4-only contract");
+if(!preview.includes('if(name.endsWith(".mp4"))')||preview.includes('[".mp4",".mov",".m4v"]'))throw new Error("Preview final-video routing must stay MP4-only");
 if(!main.includes("attachSmokeHarness({"))throw new Error("Main window must attach the isolated smoke harness");
 const smokeHarness=fs.readFileSync(path.join(root,"smoke-harness.cjs"),"utf8");
 if(!smokeHarness.includes("await runSecondarySmoke(appRoot)")||smokeHarness.includes("const secondary = spawnSync"))throw new Error("Single-instance smoke must keep the primary event loop available");
@@ -137,6 +140,7 @@ for(const marker of ["SEGS.map(segment=>segment.start)","overviewSegment","overv
 }
 if(preview.includes("const count=14")||classicCss.includes("repeat(14"))throw new Error("Sample-cell overview returned");
 const renderer=fs.readFileSync(path.join(root,"src/mvp-app.js"),"utf8");
+if(!renderer.includes('video:new Set([".mp4"])')||renderer.includes("MP4/MOV/M4V"))throw new Error("Renderer final-video gate must stay MP4-only");
 if(!renderer.includes("logPreviewEvent")||!renderer.includes("safeRendererLog(event,detail)"))throw new Error("Thumbnail diagnostics must reach current-job/logs/app.log");
 for(const marker of ["expectedJobId","expectedRevision","backupCurrentJob","prepareDroppedXml","chooseXmlImportMode","commitXmlImport","prepareDroppedVideo","commitVideo","preflightVideo","loadDroppedVideo","reloadCurrentJob"]){
   if(!renderer.includes(marker))throw new Error("Renderer lifecycle marker missing: "+marker);

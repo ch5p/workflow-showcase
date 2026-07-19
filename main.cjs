@@ -88,7 +88,7 @@ const DEFAULT_INTRO_PREROLL = {
   soundEnabled: true,
 };
 const LOG_PATH = path.join(LOG_ROOT, "app.log");
-const VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
+const VIDEO_EXTENSIONS = [".mp4"];
 const VIDEO_MAX_BYTES = 512 * 1024 * 1024 * 1024;
 const PREPARED_XML_TTL_MS = 10 * 60 * 1000;
 const PREPARED_VIDEO_TTL_MS = 10 * 60 * 1000;
@@ -685,6 +685,7 @@ const introDemoController = createIntroDemoController({
   dialog,
   appRoot: APP_ROOT,
   outputRoot: OUTPUT_ROOT,
+  sourceRecordPath: path.join(LOG_ROOT, "last-showcase-export.json"),
   logEvent,
 });
 const uiCaptureController = createUiCaptureController({
@@ -1237,7 +1238,7 @@ ipcMain.handle("job:select-video", async event => {
   const options = {
     title: "Load H.264 source video",
     properties: ["openFile"],
-    filters: [{ name: "Video", extensions: ["mp4", "mov", "m4v"] }],
+    filters: [{ name: "H.264 MP4 Video", extensions: ["mp4"] }],
   };
   const result = owner
     ? await dialog.showOpenDialog(owner, options)
@@ -1476,7 +1477,7 @@ ipcMain.handle("export:start", async (event, payload) => {
     const result = await exportController.start(event.sender, job, currentLanguage());
     if(result?.ok && result.outputPath){
       try{
-        introDemoController.setSessionExport(result.outputPath);
+        introDemoController.recordCompletedExport(result.outputPath, job.jobId);
         void notifyIntroSummary();
       }catch(error){
         // INTRO handoff is optional; a completed normal Export must remain successful on its own.

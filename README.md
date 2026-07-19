@@ -104,6 +104,7 @@ Here is the basic workflow.
 ## 2. Launch the app, then add the XML and VIDEO files by drag-and-drop or by clicking their zones.
 
 - Loading XML and VIDEO together is not currently supported. Add them separately.
+- The finished VIDEO input supports a playable H.264 MP4. MOV/ProRes and M4V are not accepted as final-video inputs. Export an H.264 MP4 with AAC audio from Premiere before loading it.
 
 ![Importing XML and VIDEO](./docs/readme-assets/animations/import-xml-video.webp)
 

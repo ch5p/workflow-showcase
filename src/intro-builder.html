@@ -25,12 +25,14 @@ h1{margin:4px 0 0;font-size:18px;line-height:1.2;letter-spacing:-.02em}
 .previewPane{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:20px 22px 17px;background:radial-gradient(circle at 50% 34%,#34423b 0,#232a27 54%,#181d1b 100%);color:#fff}
 .previewHead,.previewFoot{display:flex;align-items:center;justify-content:space-between;gap:14px;font:10px/1.2 var(--mono);letter-spacing:.08em;color:#bdc8c2}
 .previewHead{padding-bottom:14px}.previewFoot{padding-top:14px}
+.previewActions{display:flex;align-items:center;gap:8px;min-width:0}.previewReplay{height:29px;padding:0 11px;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.07);color:#e7eeea;font:600 9px/1 var(--mono);letter-spacing:.06em}.previewReplay:hover:not(:disabled){border-color:rgba(255,255,255,.34);background:rgba(255,255,255,.12)}.previewReplay:disabled{opacity:.35}
 .sourceChip{max-width:66%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:7px 10px;border:1px solid rgba(255,255,255,.15);border-radius:999px;background:rgba(255,255,255,.07);color:#e7eeea;letter-spacing:.03em}
 .sourceChip.ready::before{content:"";display:inline-block;width:6px;height:6px;margin-right:7px;border-radius:50%;background:#3dd6a8;box-shadow:0 0 0 3px rgba(61,214,168,.12)}
 .previewStage{min-height:0;display:grid;place-items:center;overflow:hidden}
 .previewMount{position:relative;width:min(100%,calc((100vh - 161px) * 1.185185));max-height:100%;aspect-ratio:1280/1080;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:#111;box-shadow:0 28px 70px rgba(0,0,0,.34)}
 .previewScale{position:absolute;left:0;top:0;width:1280px;height:1080px;transform-origin:0 0;will-change:transform}
 #sceneFrame{display:block;width:1280px;height:1080px;border:0;background:#111;pointer-events:none}
+.previewToggle{position:absolute;inset:0;z-index:3;display:grid;place-items:center;padding:0;border:0;background:transparent;color:#fff;cursor:pointer}.previewToggle:disabled{cursor:default}.previewToggle:focus-visible{outline:2px solid rgba(255,255,255,.85);outline-offset:-4px}.previewToggleIcon{position:relative;width:58px;height:58px;border:1px solid rgba(255,255,255,.52);border-radius:50%;background:rgba(12,16,14,.62);box-shadow:0 8px 28px rgba(0,0,0,.28);backdrop-filter:blur(8px);opacity:0;transform:scale(.9);transition:opacity .14s ease,transform .14s ease}.previewToggleIcon::before,.previewToggleIcon::after{content:"";position:absolute;top:19px;width:5px;height:20px;border-radius:2px;background:#fff}.previewToggleIcon::before{left:21px}.previewToggleIcon::after{right:21px}.previewToggle.paused .previewToggleIcon::before{top:18px;left:22px;width:0;height:0;border-top:11px solid transparent;border-bottom:11px solid transparent;border-left:17px solid #fff;border-radius:0;background:transparent}.previewToggle.paused .previewToggleIcon::after{display:none}.previewToggle:hover:not(:disabled) .previewToggleIcon,.previewToggle.paused:not(:disabled) .previewToggleIcon,.previewToggle.feedback:not(:disabled) .previewToggleIcon{opacity:.92;transform:scale(1)}
 .previewLegend{display:flex;gap:18px}.previewLegend span{color:#f2f6f4}.previewHint{color:#99a69f}
 .inspector{min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;border-left:1px solid var(--line);background:var(--panel)}
 .inspectorScroll{min-height:0;overflow:auto;padding:22px 22px 16px}
@@ -44,7 +46,7 @@ textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(22,168,125,.
 textarea:disabled{background:#f2f4f3;color:#89918d}
 .segmented{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .segment{position:relative}.segment input{position:absolute;opacity:0;pointer-events:none}.segment span{height:38px;display:grid;place-items:center;border:1px solid #cbd3cf;border-radius:6px;background:#fff;font:600 10px/1 var(--mono);color:#59645f}.segment input:checked+span{border-color:var(--accent);background:#eaf8f3;color:var(--accent-dark);box-shadow:inset 0 0 0 1px var(--accent)}.segment input:focus-visible+span{outline:2px solid rgba(22,168,125,.26);outline-offset:2px}
-.sourceCard{padding:13px;border:1px solid var(--line);border-radius:8px;background:#f7f9f8}.sourceName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1.3 var(--mono);color:#2f3934}.sourceMeta{margin-top:6px;color:var(--muted);font-size:11px;line-height:1.4}.sourceActions{display:grid;grid-template-columns:1fr 108px;gap:7px;margin-top:11px}
+.sourceCard{padding:13px;border:1px solid var(--line);border-radius:8px;background:#f7f9f8}.sourceCard.missing{border-color:#e4c27a;background:#fff9eb}.sourceCard.missing .sourceName{color:#8b651b}.sourceName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1.3 var(--mono);color:#2f3934}.sourceMeta{margin-top:6px;color:var(--muted);font-size:11px;line-height:1.4}.sourceActions{display:grid;grid-template-columns:1fr;gap:7px;margin-top:11px}
 .sourceCard+.field{margin-top:15px}
 .button{height:38px;border:1px solid #c8d0cc;border-radius:6px;background:#fff;color:#34413b;font:600 10px/1 var(--mono);letter-spacing:.03em}.button:hover:not(:disabled){border-color:#8f9d96;background:#f2f6f4}.button:active:not(:disabled){transform:translateY(1px)}.button:disabled{cursor:default;opacity:.42}.button.primary{border-color:var(--accent);background:var(--accent);color:#fff}.button.primary:hover:not(:disabled){border-color:var(--accent-dark);background:var(--accent-dark)}.button.danger{color:var(--danger)}
 .progressHead{display:flex;align-items:flex-end;justify-content:space-between}.progressState{font:600 10px/1 var(--mono);letter-spacing:.06em;color:var(--violet)}.progressPercent{font:600 25px/1 var(--mono);letter-spacing:-.05em}.track{height:7px;margin-top:10px;overflow:hidden;border-radius:999px;background:#e7ebe9}.fill{width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#45c9a3);transition:width .16s linear}.buildMessage{min-height:48px;margin:11px 0 0;padding:10px 11px;border-left:3px solid var(--accent);background:#f0f8f5;color:#4d5b54;font-size:11px;line-height:1.45}.buildMessage.error{border-color:var(--danger);background:#fff1f3;color:#8d3946}.resultName{display:none;margin-top:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:10px/1.4 var(--mono);color:var(--muted)}.resultName.visible{display:block}
@@ -57,20 +59,27 @@ textarea:disabled{background:#f2f4f3;color:#89918d}
   <header class="topbar">
     <div class="brand">
       <div class="mark">IN</div>
-      <div><div class="eyebrow">INTRO BUILDER</div><h1>Pre-roll demo composer</h1></div>
+      <div><div class="eyebrow">OPTIONAL FINISHING STEP</div><h1>Intro Builder</h1></div>
     </div>
     <div class="topMeta">
-      <p class="lead" id="leadText">Select a finished export, tune the opening exchange, then build one demo MP4.</p>
+      <p class="lead" id="leadText">Add an optional conversation before the finished showcase.</p>
       <div class="saveState" id="saveState">LOADING</div>
     </div>
   </header>
 
   <section class="workspace">
     <section class="previewPane" aria-label="Intro preview">
-      <div class="previewHead"><span>1280 × 1080 · LIVE PREVIEW</span><span class="sourceChip" id="sourceChip">NO EXPORT SELECTED</span></div>
+      <div class="previewHead">
+        <span>1280 × 1080 · LIVE PREVIEW</span>
+        <div class="previewActions">
+          <button class="previewReplay" id="replayButton" disabled>REPLAY INTRO</button>
+          <span class="sourceChip" id="sourceChip">EXPORT REQUIRED</span>
+        </div>
+      </div>
       <div class="previewStage">
         <div class="previewMount" id="previewMount">
           <div class="previewScale" id="previewScale"><iframe id="sceneFrame" src="intro-preroll.html" title="Intro pre-roll preview" allow="autoplay"></iframe></div>
+          <button class="previewToggle paused" id="previewToggle" type="button" aria-label="Play intro preview"><span class="previewToggleIcon" aria-hidden="true"></span></button>
         </div>
       </div>
       <div class="previewFoot">
@@ -94,13 +103,12 @@ textarea:disabled{background:#f2f4f3;color:#89918d}
         </section>
 
         <section class="section">
-          <div class="sectionHead"><span class="sectionTitle">SOURCE EXPORT</span><span class="sectionNote" id="sourceState">REQUIRED</span></div>
-          <div class="sourceCard">
-            <div class="sourceName" id="sourceName">No export selected</div>
-            <div class="sourceMeta" id="sourceMeta">Choose the finished workflow MP4 that should follow the intro.</div>
+          <div class="sectionHead"><span class="sectionTitle">SHOWCASE EXPORT</span><span class="sectionNote" id="sourceState">REQUIRED</span></div>
+          <div class="sourceCard missing" id="sourceCard">
+            <div class="sourceName" id="sourceName">Waiting for EXPORT H.264</div>
+            <div class="sourceMeta" id="sourceMeta">No showcase export yet. Finish EXPORT H.264 first.</div>
             <div class="sourceActions">
               <button class="button" id="selectButton">SELECT EXPORT</button>
-              <button class="button" id="replayButton">REPLAY</button>
             </div>
           </div>
           <div class="field">
@@ -122,7 +130,7 @@ textarea:disabled{background:#f2f4f3;color:#89918d}
         <section class="section" aria-live="polite">
           <div class="progressHead"><span class="progressState" id="progressState">READY</span><strong class="progressPercent" id="progressPercent">0%</strong></div>
           <div class="track"><div class="fill" id="progressFill"></div></div>
-          <p class="buildMessage" id="buildMessage">Select an export before building the demo.</p>
+          <p class="buildMessage" id="buildMessage">Finish EXPORT H.264 before building the intro version.</p>
           <div class="resultName" id="resultName"></div>
         </section>
       </div>
@@ -130,7 +138,7 @@ textarea:disabled{background:#f2f4f3;color:#89918d}
       <footer class="inspectorFooter">
         <div class="buildRow">
           <button class="button danger" id="cancelButton" disabled>CANCEL</button>
-          <button class="button primary" id="buildButton" disabled>BUILD DEMO</button>
+          <button class="button primary" id="buildButton" disabled>BUILD</button>
         </div>
         <div class="utilityRow">
           <button class="button" id="openOutputButton" disabled>OPEN OUTPUT</button>

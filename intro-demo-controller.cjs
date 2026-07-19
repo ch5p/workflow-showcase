@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
-const { fsyncExistingFile, replaceByRenameWithRetry } = require("./durable-file.cjs");
+const { fsyncExistingFile, replaceByRenameWithRetry, writeTextAtomically } = require("./durable-file.cjs");
 const { assertDirectoryNoLink, ensureDirectoryNoLink } = require("./owned-path.cjs");
 const { assertExportSpace } = require("./storage-policy.cjs");
 
@@ -422,7 +422,7 @@ function finalizeVerifiedPart(temporaryPath, outputPath, {
   }
 }
 
-function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot, logEvent = () => {} } = {}){
+function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot, sourceRecordPath = null, logEvent = () => {} } = {}){
   if(typeof BrowserWindow !== "function") throw new TypeError("BrowserWindow is required");
   if(!dialog || typeof dialog.showOpenDialog !== "function") throw new TypeError("dialog is required");
   if(typeof appRoot !== "string" || !appRoot) throw new TypeError("appRoot is required");
@@ -432,7 +432,12 @@ function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot,
   const introHtml = path.join(resolvedAppRoot, "src", "intro-preroll.html");
   const clickWav = path.join(resolvedAppRoot, "src", "assets", "intro-click.wav");
   const keyboardWav = path.join(resolvedAppRoot, "src", "assets", "intro-keyboard.wav");
+  const resolvedSourceRecordPath = typeof sourceRecordPath === "string" && sourceRecordPath
+    ? path.resolve(sourceRecordPath)
+    : null;
   let sessionExport = null;
+  let sessionExportJobId = null;
+  let sourceRecordRestoreAttempt = null;
   let previewEntry = null;
   let active = null;
   let disposed = false;
@@ -459,6 +464,70 @@ function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot,
       throw introError(label + " must be a regular non-symlink file", "INTRO_FILE_UNSAFE");
     }
     return { path: resolved, stat };
+  }
+
+  function directOutputExport(filePath){
+    const outputDirectory = assertDirectoryNoLink(resolvedOutputRoot, "INTRO output");
+    const resolved = path.resolve(String(filePath || ""));
+    const outputName = path.basename(resolved);
+    if(path.dirname(resolved) !== outputDirectory ||
+       !/^workflow_showcase_export_\d{8}_\d{6}(?:_\d{2})?\.mp4$/i.test(outputName)){
+      throw introError("Recorded INTRO source must be an app-created Showcase Export", "INTRO_RECORDED_SOURCE_INVALID");
+    }
+    return { resolved, outputName };
+  }
+
+  function writeSourceRecord(selected, jobId){
+    if(!resolvedSourceRecordPath || typeof jobId !== "string" || !jobId) return false;
+    const direct = directOutputExport(selected.path);
+    assertDirectoryNoLink(path.dirname(resolvedSourceRecordPath), "INTRO source record folder");
+    const record = {
+      version: 1,
+      jobId,
+      outputName: direct.outputName,
+      sizeBytes: selected.size,
+      modifiedMs: selected.modifiedMs,
+    };
+    writeTextAtomically(
+      resolvedSourceRecordPath,
+      JSON.stringify(record, null, 2) + "\n",
+      { label: "INTRO source record" }
+    );
+    safeLog("intro_source_recorded", { output: direct.outputName, jobId });
+    return true;
+  }
+
+  function restoreSourceRecord(jobId){
+    if(!resolvedSourceRecordPath || typeof jobId !== "string" || !jobId || !fs.existsSync(resolvedSourceRecordPath)) return null;
+    sourceRecordRestoreAttempt = jobId;
+    try{
+      assertDirectoryNoLink(path.dirname(resolvedSourceRecordPath), "INTRO source record folder");
+      regularFile(resolvedSourceRecordPath, "INTRO source record", "INTRO_RECORDED_SOURCE_MISSING");
+      const record = JSON.parse(fs.readFileSync(resolvedSourceRecordPath, "utf8"));
+      if(record?.version !== 1 || typeof record.jobId !== "string" || typeof record.outputName !== "string" ||
+         !Number.isSafeInteger(record.sizeBytes) || !Number.isFinite(record.modifiedMs)){
+        throw introError("Recorded INTRO source metadata is invalid", "INTRO_RECORDED_SOURCE_INVALID");
+      }
+      if(record.jobId !== jobId) return null;
+      const direct = directOutputExport(path.join(resolvedOutputRoot, record.outputName));
+      if(direct.outputName !== record.outputName){
+        throw introError("Recorded INTRO source name is invalid", "INTRO_RECORDED_SOURCE_INVALID");
+      }
+      const selected = inspectSelected(direct.resolved);
+      if(selected.size !== record.sizeBytes || Math.abs(selected.modifiedMs - record.modifiedMs) > 1){
+        throw introError("Recorded INTRO source changed after Export", "INTRO_RECORDED_SOURCE_CHANGED");
+      }
+      sessionExport = selected;
+      sessionExportJobId = jobId;
+      safeLog("intro_source_restored", { output: record.outputName, jobId });
+      return selected;
+    }catch(error){
+      safeLog("intro_recorded_source_rejected", {
+        code: error.code || "INTRO_RECORDED_SOURCE_INVALID",
+        message: error.message,
+      });
+      return null;
+    }
   }
 
   function resolveTool(name){
@@ -941,12 +1010,13 @@ function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot,
     return result;
   }
 
-  function setSessionExport(filePath){
+  function setSessionExport(filePath, jobId = null){
     assertUsable();
     if(active) throw introError("An INTRO build is already running", "INTRO_ALREADY_RUNNING");
     if(filePath === undefined || filePath === null || filePath === ""){
       clearPreview();
       sessionExport = null;
+      sessionExportJobId = null;
       safeLog("intro_source_selection_cleared");
       return null;
     }
@@ -965,12 +1035,20 @@ function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot,
     }
     clearPreview();
     sessionExport = next;
+    sessionExportJobId = typeof jobId === "string" && jobId ? jobId : null;
     safeLog("intro_source_selected", {
       name: next.name,
       durationSeconds: next.metadata.durationSeconds,
       fps: next.metadata.fps,
     });
     return publicSource(next);
+  }
+
+  function recordCompletedExport(filePath, jobId){
+    const selected = setSessionExport(filePath, jobId);
+    writeSourceRecord(sessionExport, jobId);
+    sourceRecordRestoreAttempt = jobId;
+    return selected;
   }
 
   async function getSummary(context = {}){
@@ -980,6 +1058,12 @@ function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot,
     const language = request.language === "ko" ? "ko" : "en";
     const jobId = request.jobId ?? null;
     const revision = request.revision ?? null;
+    if(sessionExport && sessionExportJobId && jobId && sessionExportJobId !== jobId){
+      clearPreview();
+      sessionExport = null;
+      sessionExportJobId = null;
+    }
+    if(!sessionExport && sourceRecordRestoreAttempt !== jobId) restoreSourceRecord(jobId);
     if(!sessionExport){
       return {
         jobId,
@@ -1034,7 +1118,12 @@ function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot,
       safeLog("intro_source_selection_cancelled");
       return null;
     }
-    setSessionExport(result.filePaths[0]);
+    setSessionExport(result.filePaths[0], context?.jobId);
+    try{ writeSourceRecord(sessionExport, context?.jobId); }
+    catch(error){
+      if(error?.code !== "INTRO_RECORDED_SOURCE_INVALID") throw error;
+      safeLog("intro_manual_source_session_only", { source: sessionExport?.name || null });
+    }
     return getSummary(context);
   }
 
@@ -1192,11 +1281,14 @@ function createIntroDemoController({ BrowserWindow, dialog, appRoot, outputRoot,
     if(active) killOperation(active);
     clearPreview();
     sessionExport = null;
+    sessionExportJobId = null;
+    sourceRecordRestoreAttempt = null;
     return true;
   }
 
   return {
     setSessionExport,
+    recordCompletedExport,
     getSummary,
     selectExport,
     start,

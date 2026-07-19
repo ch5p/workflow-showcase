@@ -11,10 +11,10 @@
   };
   const STRINGS = {
     en: {
-      lead: "Select a finished export, tune the opening exchange, then build one demo MP4.",
-      choose_source: "Choose the finished workflow MP4 that should follow the intro.",
-      source_required: "Select an export before building the demo.",
-      ready: "The intro is ready. Replay it or build the demo.",
+      lead: "Add an optional conversation before the finished showcase.",
+      choose_source: "No showcase export yet. Finish EXPORT H.264 first.",
+      source_required: "Finish EXPORT H.264 before building the intro version.",
+      ready: "The intro is ready. Replay it or build the finished version.",
       saving: "Saving the intro settings.",
       saved: "Intro settings saved.",
       save_failed: "The intro settings could not be saved. Try editing once more.",
@@ -23,18 +23,18 @@
       source_failed: "The export could not be selected. Check the app log and try again.",
       preview_failed: "The preview image could not be loaded.",
       preparing: "Preparing the intro and source export.",
-      building: "Building the demo MP4.",
+      building: "Building the intro version.",
       cancelling: "Stopping the build and cleaning up temporary files.",
-      cancelled: "The demo build was cancelled.",
-      build_failed: "The demo could not be built. Check the app log for details.",
-      complete: "The demo MP4 is ready.",
+      cancelled: "The intro build was cancelled.",
+      build_failed: "The intro version could not be built. Check the app log for details.",
+      complete: "The intro version is ready.",
       api_missing: "The Intro Builder bridge is unavailable.",
     },
     ko: {
-      lead: "완성된 내보내기 영상을 고르고 인트로 대화를 조정한 다음 데모 MP4를 만드세요.",
-      choose_source: "인트로 뒤에 이어질 완성된 워크플로 MP4를 선택하세요.",
-      source_required: "데모를 만들기 전에 내보내기 영상을 선택하세요.",
-      ready: "인트로가 준비되었습니다. 다시 재생하거나 데모를 만들 수 있습니다.",
+      lead: "완성된 쇼케이스 앞에 선택형 대화 인트로를 추가하세요.",
+      choose_source: "아직 완성된 쇼케이스가 없습니다. 먼저 EXPORT H.264를 완료하세요.",
+      source_required: "인트로 버전을 만들기 전에 EXPORT H.264를 완료하세요.",
+      ready: "인트로가 준비되었습니다. 다시 재생하거나 완성본을 만들 수 있습니다.",
       saving: "인트로 설정을 저장하고 있습니다.",
       saved: "인트로 설정을 저장했습니다.",
       save_failed: "인트로 설정을 저장하지 못했습니다. 내용을 한 번 더 수정해 보세요.",
@@ -43,11 +43,11 @@
       source_failed: "내보내기 영상을 선택하지 못했습니다. 앱 로그를 확인한 뒤 다시 시도하세요.",
       preview_failed: "미리보기 이미지를 불러오지 못했습니다.",
       preparing: "인트로와 원본 내보내기 영상을 준비하고 있습니다.",
-      building: "데모 MP4를 만들고 있습니다.",
+      building: "인트로 버전을 만들고 있습니다.",
       cancelling: "빌드를 중단하고 임시 파일을 정리하고 있습니다.",
-      cancelled: "데모 빌드를 취소했습니다.",
-      build_failed: "데모를 만들지 못했습니다. 자세한 내용은 앱 로그에서 확인하세요.",
-      complete: "데모 MP4가 준비되었습니다.",
+      cancelled: "인트로 만들기를 취소했습니다.",
+      build_failed: "인트로 버전을 만들지 못했습니다. 자세한 내용은 앱 로그에서 확인하세요.",
+      complete: "인트로 버전이 준비되었습니다.",
       api_missing: "Intro Builder 연결을 사용할 수 없습니다.",
     },
   };
@@ -76,6 +76,8 @@
   let saveQueue = Promise.resolve();
   let savingDepth = 0;
   let previewReady = false;
+  let previewPlaying = false;
+  let previewFeedbackTimer = 0;
   let previewGeneration = 0;
   let outputAvailable = false;
   let closing = false;
@@ -179,11 +181,13 @@
   function updateSource() {
     const source = summary?.source?.ready ? summary.source : null;
     const name = basename(source?.name);
-    $("sourceName").textContent = name || "No export selected";
+    $("sourceName").textContent = name || "Waiting for EXPORT H.264";
     $("sourceMeta").textContent = sourceDescription(source);
-    $("sourceChip").textContent = name || "NO EXPORT SELECTED";
+    $("sourceChip").textContent = name || "EXPORT REQUIRED";
     $("sourceChip").classList.toggle("ready", Boolean(source));
+    $("sourceCard").classList.toggle("missing", !source);
     $("sourceState").textContent = source ? "READY" : "REQUIRED";
+    $("selectButton").textContent = source ? "CHOOSE ANOTHER" : "SELECT EXPORT";
   }
 
   function refreshControls() {
@@ -194,6 +198,7 @@
     document.querySelectorAll('input[name="soundEnabled"]').forEach(input => { input.disabled = running; });
     $("selectButton").disabled = running;
     $("replayButton").disabled = running || !previewReady;
+    $("previewToggle").disabled = running || !previewReady;
     $("buildButton").disabled = running || !ready || !summary?.jobId;
     $("cancelButton").disabled = !running;
     $("openOutputButton").disabled = running || !outputAvailable;
@@ -230,6 +235,17 @@
 
   function sceneApi() {
     return previewReady ? $("sceneFrame").contentWindow?.introPreroll : null;
+  }
+
+  function setPreviewPlaying(playing, showFeedback = false) {
+    previewPlaying = Boolean(playing);
+    const toggle = $("previewToggle");
+    toggle.classList.toggle("paused", !previewPlaying);
+    toggle.setAttribute("aria-label", previewPlaying ? "Pause intro preview" : "Play intro preview");
+    if (!showFeedback) return;
+    clearTimeout(previewFeedbackTimer);
+    toggle.classList.add("feedback");
+    previewFeedbackTimer = window.setTimeout(() => toggle.classList.remove("feedback"), 420);
   }
 
   async function configurePreview() {
@@ -390,8 +406,23 @@
   async function replayPreview() {
     try {
       await sceneApi()?.replay();
+      setPreviewPlaying(Boolean(sceneApi()?.isPlaying?.()), true);
     } catch (error) {
       console.error("[intro-builder] Preview replay failed", error);
+      setMessage(msg("preview_failed"), true);
+    }
+  }
+
+  async function togglePreviewPlayback() {
+    if (running || !previewReady) return;
+    const scene = sceneApi();
+    if (!scene) return;
+    try {
+      if (scene.isPlaying?.()) scene.pause?.();
+      else await scene.resume?.();
+      setPreviewPlaying(Boolean(scene.isPlaying?.()), true);
+    } catch (error) {
+      console.error("[intro-builder] Preview toggle failed", error);
       setMessage(msg("preview_failed"), true);
     }
   }
@@ -515,12 +546,18 @@
   document.querySelectorAll('input[name="soundEnabled"]').forEach(input => input.addEventListener("change", editorChanged));
   $("selectButton").addEventListener("click", selectExport);
   $("replayButton").addEventListener("click", replayPreview);
+  $("previewToggle").addEventListener("click", togglePreviewPlayback);
   $("buildButton").addEventListener("click", startBuild);
   $("cancelButton").addEventListener("click", cancelBuild);
   $("openOutputButton").addEventListener("click", () => api.openOutput().catch(error => console.error("[intro-builder] Open output failed", error)));
   $("closeButton").addEventListener("click", closeWindow);
   $("sceneFrame").addEventListener("load", () => {
     previewReady = true;
+    const frameWindow = $("sceneFrame").contentWindow;
+    frameWindow?.addEventListener("intro:playback-state", event => {
+      setPreviewPlaying(Boolean(event.detail?.playing));
+    });
+    setPreviewPlaying(false);
     fitPreview();
     configurePreview();
     refreshControls();

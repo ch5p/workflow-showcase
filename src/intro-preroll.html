@@ -338,7 +338,10 @@ function getCursorTargets(){
     input,submit,submitTop:cursorLocalPoint(sendEl,.5,0).y+CURSOR_HOTSPOT.y};
 }
 
-let rafId=0,t0=0,startToken=0,imageLoadGeneration=0;
+let rafId=0,t0=0,startToken=0,imageLoadGeneration=0,playbackSeconds=0;
+function emitPlaybackState(){
+  window.dispatchEvent(new CustomEvent("intro:playback-state",{detail:{playing:Boolean(rafId),currentTime:playbackSeconds}}));
+}
 function render(s,withAudio=false){
   const T=TIMELINE;
   if(!CONFIG.backgroundImage)scene(s);
@@ -388,17 +391,48 @@ function render(s,withAudio=false){
 }
 function loop(now){
   const s=Math.min((now-t0)/1000,TIMELINE.end);
+  playbackSeconds=s;
   render(s,true);
-  if(s>=TIMELINE.end){rafId=0;resetSampleAudio();audioPlaybackActive=false;return}
+  if(s>=TIMELINE.end){rafId=0;resetSampleAudio();audioPlaybackActive=false;emitPlaybackState();return}
   rafId=requestAnimationFrame(loop);
 }
 function stop(){
   startToken+=1;
   cancelAnimationFrame(rafId);
   rafId=0;
+  playbackSeconds=0;
   audioPlaybackActive=false;
   audioFrame={previousTime:0,nextKeyEvent:0};
   resetSampleAudio();
+  emitPlaybackState();
+}
+function pause(){
+  if(!rafId)return playbackSeconds;
+  playbackSeconds=Math.min((performance.now()-t0)/1000,TIMELINE.end);
+  startToken+=1;
+  cancelAnimationFrame(rafId);
+  rafId=0;
+  audioPlaybackActive=false;
+  resetSampleAudio();
+  render(playbackSeconds,false);
+  emitPlaybackState();
+  return playbackSeconds;
+}
+async function resume(){
+  if(rafId)return true;
+  if(playbackSeconds>=TIMELINE.end){playbackSeconds=0;render(0,false)}
+  const token=++startToken;
+  audioPlaybackActive=await ensureAudio();
+  if(token!==startToken)return false;
+  audioFrame={
+    previousTime:playbackSeconds,
+    nextKeyEvent:TIMELINE.keyEvents.findIndex(event=>event.time>playbackSeconds),
+  };
+  if(audioFrame.nextKeyEvent<0)audioFrame.nextKeyEvent=TIMELINE.keyEvents.length;
+  t0=performance.now()-playbackSeconds*1000;
+  rafId=requestAnimationFrame(loop);
+  emitPlaybackState();
+  return true;
 }
 async function replay(){
   stop();
@@ -408,8 +442,10 @@ async function replay(){
   audioPlaybackActive=await ensureAudio();
   if(token!==startToken)return false;
   audioFrame={previousTime:0,nextKeyEvent:0};
+  playbackSeconds=0;
   t0=performance.now();
   rafId=requestAnimationFrame(loop);
+  emitPlaybackState();
   return true;
 }
 function validCssValue(property,value,fallback){
@@ -475,12 +511,13 @@ function renderAt(seconds){
   stop();
   $("hint").style.display="none";
   const resolved=clamp(Number(seconds)||0,0,TIMELINE.end);
+  playbackSeconds=resolved;
   render(resolved,false);
   return resolved;
 }
 function getTimeline(){return {...TIMELINE,keyEvents:TIMELINE.keyEvents.map(event=>({...event}))}}
 
-window.introPreroll=Object.freeze({configure,replay,stop,renderAt,getTimeline});
+window.introPreroll=Object.freeze({configure,replay,pause,resume,isPlaying:()=>Boolean(rafId),stop,renderAt,getTimeline});
 window.addEventListener("keydown",event=>{if(event.code==="Space"){event.preventDefault();replay()}});
 render(0,false);
 </script>

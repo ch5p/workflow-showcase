@@ -5,8 +5,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { assertCopySpace, copyFileWithHash } = require("./storage-policy.cjs");
 
-const DEFAULT_VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v"];
+const DEFAULT_VIDEO_EXTENSIONS = [".mp4"];
 const DEFAULT_VIDEO_MAX_BYTES = 512 * 1024 * 1024 * 1024;
+// Legacy names remain recognizable so rollback and NEW JOB can safely clean old beta Jobs.
 const SOURCE_VIDEO_PATTERN = /^video\.(mp4|mov|m4v)$/i;
 const TRANSACTION_PREFIX = ".video-import-";
 const TRANSACTION_NAME_PATTERN = /^\.video-import-([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;

@@ -318,6 +318,7 @@ async function main(){
     "dispose",
     "getSummary",
     "isRunning",
+    "recordCompletedExport",
     "selectExport",
     "setSessionExport",
     "start",
@@ -362,9 +363,17 @@ async function main(){
   assert.match(source, /window\.introPreroll\.getTimeline/);
   const builderHtml = fs.readFileSync(path.resolve(__dirname, "..", "src", "intro-builder.html"), "utf8");
   const builderSource = fs.readFileSync(path.resolve(__dirname, "..", "src", "intro-builder.js"), "utf8");
+  const sceneSource = fs.readFileSync(path.resolve(__dirname, "..", "src", "intro-preroll.html"), "utf8");
   assert.match(builderHtml, /id="promptInput" rows="3"/);
   assert.match(builderHtml, /id="replyInput" rows="3"/);
-  assert.ok(builderHtml.indexOf("SOURCE EXPORT") < builderHtml.indexOf("TYPE TIME"));
+  assert.ok(builderHtml.indexOf("SHOWCASE EXPORT") < builderHtml.indexOf("TYPE TIME"));
+  assert.match(builderHtml, /id="replayButton"[^>]*>REPLAY INTRO</);
+  assert.match(builderHtml, /id="buildButton"[^>]*>BUILD</);
+  assert.equal((builderHtml.match(/id="replayButton"/g) || []).length, 1);
+  assert.match(builderHtml, /id="previewToggle"/);
+  assert.match(builderSource, /togglePreviewPlayback/);
+  assert.match(builderSource, /replayButton"\)\.disabled = running \|\| !previewReady/);
+  assert.match(sceneSource, /Object\.freeze\(\{configure,replay,pause,resume,isPlaying:/);
   assert.match(builderSource, /insertLineBreak/);
   assert.match(builderSource, /singleLineText/);
   assert.match(source, /src["'],\s*["']assets["'],\s*["']intro-click\.wav/);

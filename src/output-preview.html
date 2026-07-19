@@ -181,7 +181,7 @@ const PREVIEW_STRINGS={
     loadingRetry:"Frames could not be verified. Invalid images are not shown.",
     dropFailed:"Could not load the file: ",
     shellNotReady:"The app is not ready yet.",
-    dropTypes:"Only XML, MP4, MOV, or M4V files can be used.",
+    dropTypes:"Only XML or H.264 MP4 files can be used.",
     probeNoUrl:"The video candidate URL is missing.",
     probeMetadata:"Could not read the video metadata or the first frame.",
     probePlayback:"This video cannot be played in Electron right now.",
@@ -198,7 +198,7 @@ const PREVIEW_STRINGS={
     loadingRetry:"프레임을 확인하지 못했습니다. 잘못된 이미지는 표시하지 않습니다.",
     dropFailed:"파일 불러오기 실패: ",
     shellNotReady:"앱이 아직 준비되지 않았습니다.",
-    dropTypes:"XML, MP4, MOV 또는 M4V 파일만 사용할 수 있습니다.",
+    dropTypes:"XML 또는 H.264 MP4 파일만 사용할 수 있습니다.",
     probeNoUrl:"영상 후보 URL이 없습니다.",
     probeMetadata:"영상 메타데이터 또는 첫 프레임을 읽지 못했습니다.",
     probePlayback:"이 영상은 현재 Electron에서 재생할 수 없습니다.",
@@ -1615,7 +1615,7 @@ function routeDroppedFiles(files){
     const shell=window.parent.portableMvp;
     if(!shell)throw new Error(ps("shellNotReady"));
     if(name.endsWith(".xml"))return shell.loadDroppedXml(files);
-    if([".mp4",".mov",".m4v"].some(extension=>name.endsWith(extension))){
+    if(name.endsWith(".mp4")){
       return shell.loadDroppedVideo(files);
     }
     throw new Error(ps("dropTypes"));
@@ -1743,11 +1743,11 @@ function loadFile(f){
   }
 };
     rd.readAsText(f);
-  }else if(f.type.startsWith("video/")){
+  }else if(f.name.toLowerCase().endsWith(".mp4")){
     if(videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
     videoObjectUrl=URL.createObjectURL(f);
     setVideoSource(videoObjectUrl,true);
-  }
+  }else alert(ps("dropTypes"));
 }
 
 mainVideo.addEventListener("loadedmetadata",()=>{
