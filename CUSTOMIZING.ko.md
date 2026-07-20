@@ -43,6 +43,8 @@ HTML 영역은 `src/output-preview.html`에서 다음 ID로 찾을 수 있습니
 - `src/core/shot-model.js`
 - `src/core/reference-mapping.js`
 - `src/core/duration-math.js`
+- `src/adapters/capcut-draft-parser.js`
+- `timeline-input.cjs`
 - `timeline-reconcile.cjs`
 - `persisted-timeline-state.cjs`
 - `job-lifecycle.cjs`
@@ -50,7 +52,7 @@ HTML 영역은 `src/output-preview.html`에서 다음 ID로 찾을 수 있습니
 - `reference-lifecycle.cjs`
 - `storage-policy.cjs`
 
-특히 XML parser, SHOT identity, reference mapping 의미, 한 프레임 DURATION 기준, Job 상대경로, 입력 저장 정책, IPC, Export 취소와 encoder fallback은 안정 코어입니다.
+특히 두 타임라인 adapter와 형식 분기, SHOT identity, reference mapping 의미, 한 프레임 DURATION 기준, Job 상대경로, 입력 저장 정책, IPC, Export 취소와 encoder fallback은 안정 코어입니다. 화면 배치를 바꾼다고 xmeml/CapCut 입력 해석을 건드리면 안 됩니다.
 
 ## Making a fixed aspect-ratio fork
 

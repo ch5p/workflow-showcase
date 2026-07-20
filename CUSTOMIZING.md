@@ -54,6 +54,8 @@ Do not modify these files for presentation changes:
 - `src/core/shot-model.js`
 - `src/core/reference-mapping.js`
 - `src/core/duration-math.js`
+- `src/adapters/capcut-draft-parser.js`
+- `timeline-input.cjs`
 - `timeline-reconcile.cjs`
 - `persisted-timeline-state.cjs`
 - `job-lifecycle.cjs`
@@ -62,7 +64,7 @@ Do not modify these files for presentation changes:
 - `storage-policy.cjs`
 - `intro-demo-controller.cjs`
 
-In particular, the XML parser, SHOT identity, reference mapping semantics, one-frame DURATION threshold, Job relative paths, import storage policy, IPC, normal Export cancel / encoder fallback, and INTRO source/concat/finalization controller are the stable core.
+In particular, both timeline adapters, format dispatch, SHOT identity, reference mapping semantics, one-frame DURATION threshold, Job relative paths, import storage policy, IPC, normal Export cancel / encoder fallback, and INTRO source/concat/finalization controller are the stable core. Presentation forks may change how normalized timeline data looks, but should not edit CapCut draft parsing or xmeml parsing as a layout shortcut.
 
 ## Making a fixed aspect-ratio fork
 

@@ -2,7 +2,7 @@
 
 This contract defines how a future input format reaches the existing timeline renderer without rewriting the legacy xmeml parser, PRIMARY calculation, SHOT identity, reference mapping, or Job safety code.
 
-The current production input is Final Cut Pro 7 XML (`xmeml`), including XML exported by Adobe Premiere Pro. Modern `.fcpxml` and CapCut projects are not implemented.
+The stable production input is Final Cut Pro 7 XML (`xmeml`). Adobe Premiere Pro and DaVinci Resolve 21.0.2 exports have been validated in the app. VEGAS Pro can export the same named interchange format and may work, but remains unverified without a real fixture. An experimental second adapter reads local Windows CapCut Desktop 9.x projects through `draft_content.json`. Modern `.fcpxml` is not implemented, and the beta application itself is Windows-only.
 
 ## Normalized parsed timeline
 
@@ -78,7 +78,7 @@ Adding one parser file is not sufficient. Before implementation, report every af
 - public fixture, malformed-input fixture, and regression checks;
 - README, compatibility, Project Map, troubleshooting, and public-tree inclusion.
 
-The current lifecycle is intentionally hard-coded to `.xml`, `candidate.xml`, and `source/timeline.xml`. A new extension must make an explicit storage/lifecycle decision. Do not disguise another format as XML or silently reuse the XML transaction without verifying rollback and recovery.
+The lifecycle is format-aware but intentionally small. xmeml uses `candidate.xml` and `source/timeline.xml`; the experimental CapCut adapter uses `candidate.capcut.json` and `source/timeline.capcut.json`. Both use the same verified transaction journal, but their candidate names, canonical names, parser dispatch, and rollback identities remain explicit. Do not disguise another format as XML.
 
 ## Format-specific rules
 
@@ -87,6 +87,17 @@ The current lifecycle is intentionally hard-coded to `.xml`, `candidate.xml`, an
 - Keep `src/core/xmeml-parser.js` unchanged.
 - Keep `src/adapters/xmeml-unsupported-layers.js` before PRIMARY inspection.
 - The current function name `parseSupportedFCPXML()` is historical and parses legacy xmeml; it does not mean modern Apple FCPXML is supported.
+- Premiere Pro and DaVinci Resolve are validated exporters. VEGAS Pro is only a plausible exporter until a real fixture passes the same checks.
+
+### CapCut Desktop 9.x local draft (experimental)
+
+- `src/adapters/capcut-draft-parser.js` accepts a Windows CapCut Desktop 9.x `draft_content.json` selected by the user. The app does not scan or watch every CapCut project in the background.
+- Main reads the selected file only long enough to validate it and create an app-owned snapshot. The raw CapCut JSON, device identifiers, account data, and absolute media paths are not copied into Current Job.
+- The snapshot stores only normalized integer-frame timeline data, anonymous source identities, the selected project name, and the verified CapCut editor version.
+- Target and source ranges are converted from microseconds with `Math.round(microseconds * fps / 1_000_000)`. Segment `render_index` determines video-layer order; a larger value is visually above a smaller value. `visible: false` excludes a segment.
+- Only ordinary video materials are retained. Audio, text, stickers, effects, transitions, and other CapCut materials are not reconstructed because the separately loaded finished MP4 remains the visual source.
+- UPDATE is allowed only between inputs of the same format. Switching between xmeml and CapCut requires NEW JOB because source-identity evidence is editor-specific.
+- CapCut mobile/cloud-only projects, compound or nested editing structures, other desktop major versions, and encrypted or structurally different drafts are unverified and must fail before Current Job mutation.
 
 ### Modern FCPXML
 
@@ -107,4 +118,6 @@ Every new adapter requires:
 7. `npm.cmd run check`, isolated smoke, and real visual QA;
 8. documentation that states supported versions, unverified cases, and known loss of information.
 
-Do not create a plugin registry before a real second adapter exists. When the second adapter is implemented, introduce only the smallest dispatch surface required by both real formats.
+The CapCut conformance fixture is `fixtures/capcut-9x/public-fixture/draft_content.json`. Its expected PRIMARY order is A, C, B, A at 24 fps and 186 frames, producing four EDITS and three SHOTS. `scripts/check-capcut-adapter.cjs` verifies parsing, anonymized snapshot creation, NEW JOB install, same-format UPDATE, and preservation of the existing video during UPDATE.
+
+The current two-format dispatch is intentionally explicit. Do not replace it with a plugin registry until another real adapter proves that a registry is needed; extend only the smallest input boundary required by verified formats.

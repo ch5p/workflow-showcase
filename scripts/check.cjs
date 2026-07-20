@@ -11,10 +11,10 @@ const {assertNoPrivateBinaryContent}=require("./public-privacy.cjs");
 const root=path.resolve(__dirname,"..");
 const required=[
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","intro-demo-controller.cjs","intro-preload.cjs","render-spec.cjs","LICENSE","AGENTS.md","README.md","README.ko.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","CONTRIBUTING.md","SECURITY.md","CHANGELOG.md","ROADMAP.md",
-  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","reference-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
-  "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","timeline-input.cjs","video-lifecycle.cjs","reference-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
+  "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/adapters/capcut-draft-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
   "src/layouts/classic/tokens.css","src/layouts/classic/classic.css",
-  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-intro-demo-controller.cjs","scripts/run-intro-smoke.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
+  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-capcut-adapter.cjs","scripts/check-intro-demo-controller.cjs","scripts/run-intro-smoke.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs","scripts/git-hooks/pre-commit",
   "src/index.html","src/mvp-app.js","src/output-preview.html",
   "src/export-dialog.html","src/export-dialog.js",
   "src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html","src/assets/intro-click.wav","src/assets/intro-keyboard.wav",
@@ -22,6 +22,7 @@ const required=[
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic.xml",
   "fixtures/premiere-export-kit/public-fixture/premiere-synthetic-final.mp4",
   "fixtures/premiere-export-kit/public-fixture/SOURCE_NOTES.md",
+  "fixtures/capcut-9x/public-fixture/draft_content.json","fixtures/capcut-9x/SOURCE_NOTES.md",
   "docs/XML_COMPATIBILITY.md","docs/CLASSIC_LAYOUT.md","docs/CUSTOMIZING_WITH_AI.md","docs/CUSTOMIZING_WITH_AI.ko.md","docs/PROJECT_MAP.md","docs/TROUBLESHOOTING.md","docs/INPUT_ADAPTER_CONTRACT.md","src/layouts/classic/README.md",".github/pull_request_template.md",".github/ISSUE_TEMPLATE/bug_report.yml",".github/ISSUE_TEMPLATE/layout_proposal.yml",
 ];
 for(const relative of required){
@@ -29,9 +30,9 @@ for(const relative of required){
 }
 for(const relative of [
   "main.cjs","preload.cjs","export-preload.cjs","exporter.cjs","intro-demo-controller.cjs","intro-preload.cjs","render-spec.cjs",
-  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","video-lifecycle.cjs","reference-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
-  "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
-  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-intro-demo-controller.cjs","scripts/run-intro-smoke.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
+  "durable-file.cjs","owned-path.cjs","job-backup.cjs","job-lifecycle.cjs","timeline-input.cjs","video-lifecycle.cjs","reference-lifecycle.cjs","timeline-reconcile.cjs","persisted-timeline-state.cjs","reference-import-state.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","ui-capture.cjs",
+  "src/core/xmeml-parser.js","src/adapters/xmeml-unsupported-layers.js","src/adapters/capcut-draft-parser.js","src/core/primary-timeline.js","src/core/shot-model.js","src/core/reference-mapping.js","src/core/duration-math.js",
+  "scripts/check-core-modules.cjs","scripts/check-duration-math.cjs","scripts/check-input-adapters.cjs","scripts/check-capcut-adapter.cjs","scripts/check-intro-demo-controller.cjs","scripts/run-intro-smoke.cjs","scripts/check-job-backup.cjs","scripts/check-job-lifecycle.cjs","scripts/check-video-lifecycle.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-timeline-reconcile.cjs","scripts/check-persisted-timeline-state.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-runtime-safety.cjs","scripts/check-smoke-harness.cjs","scripts/check-starter-demo-guard.cjs","scripts/check-storage-policy.cjs","scripts/check-thumbnail-frame-gate.cjs","scripts/check-ui-capture.cjs","scripts/public-privacy.cjs","scripts/run-smoke.cjs","scripts/create-public-tree.cjs",
   "src/mvp-app.js","src/export-dialog.js","src/intro-builder.js",
 ]){
   const result=spawnSync(process.execPath,["--check",path.join(root,relative)],{encoding:"utf8"});
@@ -57,7 +58,7 @@ for(const relative of ["src/assets/intro-click.wav","src/assets/intro-keyboard.w
 }
 const preview=fs.readFileSync(path.join(root,"src/output-preview.html"),"utf8");
 const classicCss=fs.readFileSync(path.join(root,"src/layouts/classic/classic.css"),"utf8");
-for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./adapters/xmeml-unsupported-layers.js","./core/primary-timeline.js","./core/shot-model.js","function parseSupportedFCPXML(text)","excludeUnsupportedXmemlLayers(text,parseFCPXML(text))","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","preflightVideo","routeDroppedFiles","id=\"videoCallout\"","class=\"videoCalloutEyebrow\"","function updateVideoCallout","setCalloutConfig"]){
+for(const marker of ["./layouts/classic/tokens.css","./layouts/classic/classic.css","./core/xmeml-parser.js","./adapters/xmeml-unsupported-layers.js","./adapters/capcut-draft-parser.js","./core/primary-timeline.js","./core/shot-model.js","function parseSupportedFCPXML(text)","excludeUnsupportedXmemlLayers(text,parseFCPXML(text))","function parseTimelineInput(format,text)","inspectTimeline(format,text)","loadTimeline(format,text)","function build(rawData)","window.portablePreview","setRenderSpec","inspectXml(text)","clearVideo(){ return clearVideoSource(); }","releaseMedia","preflightVideo","routeDroppedFiles","id=\"videoCallout\"","class=\"videoCalloutEyebrow\"","function updateVideoCallout","setCalloutConfig"]){
   if(!preview.includes(marker))throw new Error("Parser bridge marker missing: "+marker);
 }
 for(const marker of ["DECODE_BASE_GLYPHS","DECODE_BLOCK_GLYPHS","resolveDecodeGlyphPool",'classList.toggle("scrambled",!decoded)']){
@@ -97,7 +98,7 @@ for(const marker of ['class="command inputDropZone"','class="command inputDropZo
   if(!editor.includes(marker))throw new Error("Input drop-zone contract missing: "+marker);
 }
 const main=fs.readFileSync(path.join(root,"main.cjs"),"utf8");
-for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:get-language","app:reload-current-job","getPreferredSystemLanguages","ui_language_resolved","recoverXmlTransactions","recoverVideoTransactions","createReferenceLifecycle","commitPreparedXmlUpdate","job:choose-xml-mode","job:commit-xml","job:commit-video","candidateUrl","job_save_rejected_stale","job_xml_update_committed","job_reset_committed","createUiCaptureController","uiCaptureController.registerShortcut"]){
+for(const marker of ["PORTABLE_TEST_JOB_ROOT","requestSingleInstanceLock","writeTextAtomically","resolveOwnedRelativeFile","createJobBackup","job:backup-current","app:get-render-spec","app:get-language","app:reload-current-job","getPreferredSystemLanguages","ui_language_resolved","recoverTimelineTransactions","recoverVideoTransactions","createReferenceLifecycle","commitPreparedTimelineUpdate","job:choose-timeline-mode","job:commit-timeline","job:commit-video","candidateUrl","job_save_rejected_stale","timeline_import_committed","job_xml_update_committed","job_reset_committed","createUiCaptureController","uiCaptureController.registerShortcut"]){
   if(!main.includes(marker))throw new Error("Current Job lifecycle marker missing: "+marker);
 }
 if(!main.includes('const VIDEO_EXTENSIONS = [".mp4"];'))throw new Error("New final-video imports must stay MP4-only");
@@ -200,6 +201,7 @@ for(const [script,successMarker] of [
   ["check-core-modules.cjs","CORE_MODULES_CHECK_OK"],
   ["check-duration-math.cjs","DURATION_MATH_CHECK_OK"],
   ["check-input-adapters.cjs","INPUT_ADAPTERS_CHECK_OK"],
+  ["check-capcut-adapter.cjs","CAPCUT_ADAPTER_CHECK_OK"],
   ["check-intro-demo-controller.cjs","INTRO_DEMO_CONTROLLER_CHECK_OK"],
   ["check-job-backup.cjs","JOB_BACKUP_CHECK_OK"],
   ["check-job-lifecycle.cjs","JOB_LIFECYCLE_CHECK_OK"],
@@ -237,7 +239,7 @@ for(const marker of ["createBundledDemoJob","starter_demo_seeded","starter_demo_
 }
 const mvpSource=fs.readFileSync(path.join(root,"src","mvp-app.js"),"utf8");
 if(!mvpSource.includes('"SAMPLE JOB / "'))throw new Error("Starter demo label is missing");
-if(!preview.includes("상단 XML과 VIDEO에서 파일을 불러오세요"))throw new Error("Preview input guidance is inaccurate");
+if(!preview.includes("상단 TIMELINE과 VIDEO에서 파일을 불러오세요"))throw new Error("Preview input guidance is inaccurate");
 if(packageJson.devDependencies?.electron!=="43.1.1")throw new Error("Electron must stay pinned to the tested version");
 if(!String(packageJson.scripts?.smoke||"").includes("run-smoke.cjs"))throw new Error("Smoke is not routed through the isolated runner");
 if(!String(packageJson.scripts?.["smoke:intro"]||"").includes("run-intro-smoke.cjs"))throw new Error("INTRO smoke is not routed through its isolated runner");
@@ -282,7 +284,7 @@ for(const relative of collectPublicMarkdown()){
   if(!needsBom&&hasBom)throw new Error("English/default Markdown must not use a UTF-8 BOM: "+relative);
 }
 const publicTreeBuilder=fs.readFileSync(path.join(root,"scripts","create-public-tree.cjs"),"utf8");
-for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","job-backup.cjs","intro-demo-controller.cjs","intro-preload.cjs","scripts/run-intro-smoke.cjs","src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html","src/assets/intro-click.wav","src/assets/intro-keyboard.wav"]){
+for(const marker of ["AGENTS.md","README.ko.md","CUSTOMIZING.ko.md","job-backup.cjs","timeline-input.cjs","src/adapters/capcut-draft-parser.js","scripts/check-capcut-adapter.cjs","intro-demo-controller.cjs","intro-preload.cjs","scripts/run-intro-smoke.cjs","src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html","src/assets/intro-click.wav","src/assets/intro-keyboard.wav"]){
   if(!publicTreeBuilder.includes('"'+marker+'"'))throw new Error("Public tree contract file missing from manifest: "+marker);
 }
 if(!/const directoryRoots=\[[^\]]*"docs"/.test(publicTreeBuilder))throw new Error("Tracked docs tree is missing from the public manifest");
@@ -291,7 +293,7 @@ for(const marker of ["./AGENTS.md","./docs/CUSTOMIZING_WITH_AI.md","./docs/PROJE
   if(!readmeSource.includes(marker))throw new Error("README agent entrypoint missing: "+marker);
 }
 const agentsSource=fs.readFileSync(path.join(root,"AGENTS.md"),"utf8");
-for(const marker of ["docs/TROUBLESHOOTING.md","docs/INPUT_ADAPTER_CONTRACT.md","source/timeline.xml","current-job/source/timeline.xml"]){
+for(const marker of ["docs/TROUBLESHOOTING.md","docs/INPUT_ADAPTER_CONTRACT.md","source/timeline.xml","source/timeline.capcut.json"]){
   if(!agentsSource.includes(marker))throw new Error("Agent contract marker missing: "+marker);
 }
 const projectMapSource=fs.readFileSync(path.join(root,"docs","PROJECT_MAP.md"),"utf8");
@@ -324,4 +326,4 @@ for(const relative of ["main.cjs","preload.cjs","export-preload.cjs","exporter.c
   const content=fs.readFileSync(path.join(root,relative),"utf8");
   if(/[A-Za-z]:[\\/]+Users[\\/]+/i.test(content))throw new Error("Non-portable absolute path: "+relative);
 }
-console.log("CHECK_OK portable paths, JavaScript syntax, parser bridge, drop zones, XML/video transactions, timeline reconcile, fixtures");
+console.log("CHECK_OK portable paths, JavaScript syntax, parser bridge, drop zones, timeline/video transactions, timeline reconcile, fixtures");

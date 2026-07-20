@@ -20,7 +20,7 @@ fs.mkdirSync(target,{recursive:true});
 
 const rootFiles=[
   ".gitattributes",".gitignore","AGENTS.md","CHANGELOG.md","CONTRIBUTING.md","CUSTOMIZING.md","CUSTOMIZING.ko.md","LICENSE","README.md","README.ko.md","ROADMAP.md","SECURITY.md","START_APP.cmd",
-  "durable-file.cjs","export-preload.cjs","exporter.cjs","intro-demo-controller.cjs","intro-preload.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","persisted-timeline-state.cjs","preload.cjs","reference-import-state.cjs","reference-lifecycle.cjs","render-spec.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","timeline-reconcile.cjs","ui-capture.cjs","video-lifecycle.cjs",
+  "durable-file.cjs","export-preload.cjs","exporter.cjs","intro-demo-controller.cjs","intro-preload.cjs","job-backup.cjs","job-lifecycle.cjs","main.cjs","owned-path.cjs","package-lock.json","package.json","persisted-timeline-state.cjs","preload.cjs","reference-import-state.cjs","reference-lifecycle.cjs","render-spec.cjs","smoke-harness.cjs","starter-demo-guard.cjs","storage-policy.cjs","strings.cjs","timeline-input.cjs","timeline-reconcile.cjs","ui-capture.cjs","video-lifecycle.cjs",
 ];
 // Keep the entire tracked docs surface together so README assets, the Pages landing page,
 // and agent contracts cannot silently disappear from a later public-tree build.
@@ -28,6 +28,7 @@ const directoryRoots=[".github","docs","fixtures","scripts","src"];
 const explicitFiles=[
   "current-job/source/.gitkeep","current-job/references/.gitkeep","current-job/logs/.gitkeep",
   "scripts/public-privacy.cjs","scripts/check-intro-demo-controller.cjs","scripts/run-intro-smoke.cjs","scripts/check-public-fixture-privacy.cjs","scripts/check-reference-import-state.cjs","scripts/check-reference-lifecycle.cjs","scripts/check-starter-demo-guard.cjs",
+  "scripts/check-capcut-adapter.cjs","src/adapters/capcut-draft-parser.js","fixtures/capcut-9x/public-fixture/draft_content.json","fixtures/capcut-9x/SOURCE_NOTES.md",
   "src/intro-builder.html","src/intro-builder.js","src/intro-preroll.html","src/assets/intro-click.wav","src/assets/intro-keyboard.wav",
 ];
 

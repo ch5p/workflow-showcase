@@ -346,7 +346,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       <div class="brandText">
         <strong>WORKFLOW SHOWCASE</strong>
         <div class="brandJobLine">
-          <span class="jobName" id="jobName">CURRENT JOB / NO XML</span>
+          <span class="jobName" id="jobName">CURRENT JOB / NO TIMELINE</span>
           <button class="jobReload" id="reloadCurrentJob" type="button" aria-label="Reload Current Job" title="Reload Current Job">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 5.6A5.7 5.7 0 1 0 13.5 10"/><path d="M13.2 2.8v2.8h-2.8"/></svg>
           </button>
@@ -354,14 +354,14 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
       </div>
     </div>
     <div class="projectStatus">
-      <span class="statusReady" id="xmlStatus">XML NEEDED</span>
+      <span class="statusReady" id="xmlStatus">TIMELINE NEEDED</span>
       <span id="fpsStatus">-- FPS</span>
       <span id="editCountStatus">0 EDITS</span>
       <span id="shotCountStatus">0 SHOTS</span>
     </div>
     <div class="topActions">
-      <button class="command inputDropZone" id="loadXml" type="button" aria-label="Load timeline XML. Click to choose or drop one .xml file." aria-busy="false" title="Click to choose or drop one .xml file">
-        <strong>XML</strong><span>CLICK · DROP</span>
+      <button class="command inputDropZone" id="loadXml" type="button" aria-label="Load a Final Cut Pro 7 XML exported by Premiere Pro or DaVinci Resolve, or an experimental CapCut Desktop 9.x project." aria-busy="false" title="Click to choose, or drop an XML, draft_content.json, or CapCut project folder">
+        <strong>TIMELINE</strong><span>XML · CAPCUT</span>
       </button>
       <button class="command inputDropZone video" id="loadVideo" type="button" aria-label="Load source video. Click to choose or drop one H.264 MP4 file." aria-busy="false" title="Click to choose or drop one H.264 MP4 file">
         <strong>VIDEO</strong><span>H.264 · MP4</span>
@@ -506,7 +506,7 @@ button:focus-visible,.asset:focus-visible,.shotRow:focus-visible{outline:2px sol
           <span class="fieldLabel">SOURCE MATCH</span>
           <div class="assignedMeta">
             <strong id="sourceMatch">NO SOURCE</strong>
-            <span>XML source ID + in/out fingerprint</span>
+            <span>Timeline source ID + in/out fingerprint</span>
           </div>
         </div>
       </div>
@@ -978,7 +978,7 @@ $("languageToggle").addEventListener("click",async()=>{
     showToast(editorLanguage==="ko"?"언어 설정 변경 실패 · 앱 로그 확인":"LANGUAGE CHANGE FAILED · CHECK APP LOG");
   }
 });
-$("loadXml").addEventListener("click",()=>window.portableMvp?.loadXml()||showToast("XML INPUT READY"));
+$("loadXml").addEventListener("click",()=>window.portableMvp?.loadTimeline?.()||window.portableMvp?.loadXml?.()||showToast("TIMELINE INPUT READY"));
 $("loadVideo").addEventListener("click",()=>window.portableMvp?.loadVideo()||showToast("VIDEO INPUT READY"));
 function setOverlayOpen(open){
   $("editOverlay").classList.toggle("closed",!open);
@@ -1125,8 +1125,8 @@ function wireInputDropZone(root,dropHandler){
   root.addEventListener("dragend",()=>{dragDepth=0;clearInputDropState(root)});
 }
 wireInputDropZone($("loadXml"),files=>{
-  const handler=window.portableMvp?.loadDroppedXml;
-  if(typeof handler!=="function")throw new Error("XML drop handler unavailable");
+  const handler=window.portableMvp?.loadDroppedTimeline||window.portableMvp?.loadDroppedXml;
+  if(typeof handler!=="function")throw new Error("Timeline drop handler unavailable");
   return handler(files);
 });
 wireInputDropZone($("loadVideo"),files=>{

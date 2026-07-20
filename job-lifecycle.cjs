@@ -3,15 +3,16 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { timelineSpec } = require("./timeline-input.cjs");
 
-const XML_MAX_BYTES = 64 * 1024 * 1024;
+const XML_MAX_BYTES = timelineSpec("xmeml").maxBytes;
 const TRANSACTION_PREFIX = ".job-import-";
 const TRANSACTION_NAME_PATTERN = /^\.job-import-([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const MANIFEST_NAME = "manifest.json";
 const MANIFEST_TEMP_NAME_PATTERN = /^manifest\.json\.tmp(?:-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?$/i;
 const ROLLBACK_MARKER_NAME = "rollback-complete.json";
 const ROLLBACK_MARKER_TEMP_NAME_PATTERN = /^rollback-complete\.json\.tmp-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const CANDIDATE_NAME = "candidate.xml";
+const CANDIDATE_NAME = timelineSpec("xmeml").candidateName;
 const NEXT_JOB_NAME = "next-job.json";
 const REPLACE_RETRY_COUNT = 4;
 const TRANSIENT_RENAME_CODES = new Set(["EACCES", "EBUSY", "EPERM"]);
@@ -82,12 +83,13 @@ function inspectInputFile(sourcePath, allowedExtensions, maxBytes){
   };
 }
 
-function safeDisplayName(value){
-  return String(value || "timeline.xml")
+function safeDisplayName(value, format = "xmeml"){
+  const fallback = timelineSpec(format).canonicalName;
+  return String(value || fallback)
     .replace(/[\x00-\x1f\x7f]/g, "_")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 255) || "timeline.xml";
+    .slice(0, 255) || fallback;
 }
 
 function hashFile(filePath){
@@ -200,10 +202,11 @@ function replaceFromStagedFile(stagedPath, targetPath, label){
   return { method: "verified-copy", sha256: expectedSha256 };
 }
 
-function transactionPaths(transactionRoot){
+function transactionPaths(transactionRoot, format = "xmeml"){
+  const spec = timelineSpec(format);
   return {
     manifestPath: path.join(transactionRoot, MANIFEST_NAME),
-    candidatePath: path.join(transactionRoot, CANDIDATE_NAME),
+    candidatePath: path.join(transactionRoot, spec.candidateName),
     nextJobPath: path.join(transactionRoot, NEXT_JOB_NAME),
     rollbackMarkerPath: path.join(transactionRoot, ROLLBACK_MARKER_NAME),
     backupRoot: path.join(transactionRoot, "backup"),
@@ -300,7 +303,7 @@ function nextUniqueManifestStagingPath(manifestPath){
 }
 
 function writeManifest(transactionRoot, manifest, { preserveExistingTemps = false } = {}){
-  const paths = transactionPaths(transactionRoot);
+  const paths = transactionPaths(transactionRoot, manifest?.input?.format || "xmeml");
   const next = { ...manifest, updatedAt: new Date().toISOString() };
   const temporaryPath = preserveExistingTemps
     ? nextUniqueManifestStagingPath(paths.manifestPath)
@@ -314,6 +317,7 @@ function validateManifest(manifest){
   if(!manifest || manifest.version !== 1 || typeof manifest.transactionId !== "string"){
     throw new Error("Invalid XML transaction manifest");
   }
+  timelineSpec(manifest.input?.format || "xmeml");
   return manifest;
 }
 
@@ -388,8 +392,13 @@ function emit(onEvent, event, detail = {}){
   try{ onEvent(event, detail); }catch{}
 }
 
+function lifecycleEvent(manifest, suffix){
+  return timelineSpec(manifest?.input?.format || "xmeml").eventPrefix + "_" + suffix;
+}
+
 function preparationFrom(transactionRoot, logRoot, manifest){
-  const paths = transactionPaths(transactionRoot);
+  const format = manifest.input?.format || "xmeml";
+  const paths = transactionPaths(transactionRoot, format);
   return Object.freeze({
     transactionId: manifest.transactionId,
     transactionRoot,
@@ -400,6 +409,7 @@ function preparationFrom(transactionRoot, logRoot, manifest){
     inputSize: manifest.input.size,
     inputSha256: manifest.input.sha256,
     inputMethod: manifest.input.method,
+    format,
   });
 }
 
@@ -414,19 +424,27 @@ function validatePreparation(preparation){
       String(preparation.transactionId || "").toLowerCase() !== checked.transactionId){
     throw new Error("XML transaction identity mismatch");
   }
-  return { ...checked, manifest, paths: transactionPaths(checked.transactionRoot) };
+  return { ...checked, manifest, paths: transactionPaths(checked.transactionRoot, manifest.input?.format || "xmeml") };
 }
 
-function prepareXmlCandidate({ sourcePath, logRoot, inputMethod } = {}){
-  const inspected = inspectInputFile(sourcePath, [".xml"], XML_MAX_BYTES);
+function prepareTimelineCandidate({ sourcePath, logRoot, inputMethod, format = "xmeml", candidateText, displayName } = {}){
+  const spec = timelineSpec(format);
+  const inspected = inspectInputFile(sourcePath, spec.sourceExtensions, spec.maxBytes);
   const resolvedLogRoot = ensureDirectoryNoLink(logRoot, "logRoot");
   const transactionId = crypto.randomUUID().toLowerCase();
   const transactionRoot = path.join(resolvedLogRoot, TRANSACTION_PREFIX + transactionId);
   fs.mkdirSync(transactionRoot, { recursive: false });
-  const paths = transactionPaths(transactionRoot);
+  const paths = transactionPaths(transactionRoot, spec.format);
   try{
-    fs.copyFileSync(inspected.absolutePath, paths.candidatePath, fs.constants.COPYFILE_EXCL);
-    const candidate = inspectInputFile(paths.candidatePath, [".xml"], XML_MAX_BYTES);
+    if(candidateText === undefined){
+      fs.copyFileSync(inspected.absolutePath, paths.candidatePath, fs.constants.COPYFILE_EXCL);
+    }else{
+      if(spec.format !== "capcut-draft" || typeof candidateText !== "string" || !candidateText.trim()){
+        throw new Error("A valid sanitized CapCut snapshot is required");
+      }
+      writeTextDurably(paths.candidatePath, candidateText, true);
+    }
+    const candidate = inspectInputFile(paths.candidatePath, [spec.extension], spec.maxBytes);
     const manifest = writeManifest(transactionRoot, {
       version: 1,
       transactionId,
@@ -434,10 +452,11 @@ function prepareXmlCandidate({ sourcePath, logRoot, inputMethod } = {}){
       phase: "prepared",
       createdAt: new Date().toISOString(),
       input: {
-        name: safeDisplayName(inspected.name),
+        name: safeDisplayName(displayName || inspected.name, spec.format),
         size: candidate.size,
         sha256: hashFile(paths.candidatePath),
         method: String(inputMethod || "unknown").replace(/[\x00-\x1f\x7f]/g, "_").slice(0, 40),
+        format: spec.format,
       },
       hadJob: null,
       nextJobSha256: null,
@@ -448,6 +467,14 @@ function prepareXmlCandidate({ sourcePath, logRoot, inputMethod } = {}){
     try{ cleanupTransactionRoot(transactionRoot, resolvedLogRoot); }catch{}
     throw error;
   }
+}
+
+function prepareXmlCandidate(options = {}){
+  return prepareTimelineCandidate({ ...options, format: "xmeml" });
+}
+
+function prepareCapCutCandidate(options = {}){
+  return prepareTimelineCandidate({ ...options, format: "capcut-draft" });
 }
 
 function discardPreparedCandidate(preparation){
@@ -520,21 +547,22 @@ function moveEntriesToBackup(rootPath, backupRoot, manifest, manifestKey, transa
 }
 
 function moveTimelineToBackup(sourceRoot, backupRoot, manifest, transactionRoot){
-  const timelinePath = path.join(sourceRoot, "timeline.xml");
+  const spec = timelineSpec(manifest.input?.format || "xmeml");
+  const timelinePath = path.join(sourceRoot, spec.canonicalName);
   if(!fs.existsSync(timelinePath)) return manifest;
   const stat = fs.lstatSync(timelinePath);
   if(stat.isSymbolicLink() || !stat.isFile()){
-    throw new Error("Existing timeline.xml must be a regular file");
+    throw new Error("Existing "+spec.canonicalName+" must be a regular file");
   }
   fs.mkdirSync(backupRoot, { recursive: true });
-  const destination = path.join(backupRoot, "timeline.xml");
-  if(fs.existsSync(destination)) throw new Error("Duplicate timeline.xml transaction backup");
+  const destination = path.join(backupRoot, spec.canonicalName);
+  if(fs.existsSync(destination)) throw new Error("Duplicate timeline transaction backup");
   fs.renameSync(timelinePath, destination);
   return writeManifest(transactionRoot, {
     ...manifest,
     moved: {
       ...manifest.moved,
-      source: [...manifest.moved.source, "timeline.xml"],
+      source: [...manifest.moved.source, spec.canonicalName],
     },
   });
 }
@@ -608,21 +636,22 @@ function restoreJobBackup(context){
 
 function rollbackTransaction(context){
   const { paths, manifest, sourceRoot, referencesRoot } = context;
+  const spec = timelineSpec(manifest.input?.format || "xmeml");
   const candidateStillStaged = fs.existsSync(paths.candidatePath);
-  const installedTimeline = path.join(sourceRoot, "timeline.xml");
+  const installedTimeline = path.join(sourceRoot, spec.canonicalName);
   const previousTimelineWasMoved = Array.isArray(manifest.moved?.source) &&
-    manifest.moved.source.includes("timeline.xml");
-  const previousTimelineStillBackedUp = fs.existsSync(path.join(paths.sourceBackupRoot, "timeline.xml"));
+    manifest.moved.source.includes(spec.canonicalName);
+  const previousTimelineStillBackedUp = fs.existsSync(path.join(paths.sourceBackupRoot, spec.canonicalName));
   // A retry after rollback must not delete the restored old timeline once its backup was consumed.
   const shouldRemoveInstalledCandidate = !candidateStillStaged &&
     (!previousTimelineWasMoved || previousTimelineStillBackedUp);
   if(shouldRemoveInstalledCandidate && fs.existsSync(installedTimeline)){
     const stat = fs.lstatSync(installedTimeline);
     if(stat.isDirectory() && !stat.isSymbolicLink()){
-      throw new Error("Refusing to recursively remove an unexpected timeline.xml directory");
+      throw new Error("Refusing to recursively remove an unexpected timeline file directory");
     }
     if(stat.isFile() && hashFile(installedTimeline) !== manifest.input.sha256){
-      throw new Error("Refusing to remove an unrecognized timeline.xml during rollback");
+      throw new Error("Refusing to remove an unrecognized timeline file during rollback");
     }
     fs.unlinkSync(installedTimeline);
   }
@@ -642,7 +671,8 @@ function readRollbackMarkerCandidate(filePath, context){
   if(stat.isSymbolicLink() || !stat.isFile()) return { status: "invalid" };
   try{
     const marker = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    const valid = marker?.version === 1 && marker.kind === "xml" &&
+    const expectedKind=(context.manifest.input?.format||"xmeml")==="xmeml"?"xml":"timeline:capcut-draft";
+    const valid = marker?.version === 1 && marker.kind === expectedKind &&
       String(marker.transactionId || "").toLowerCase() === context.transactionId;
     return valid ? { status: "valid", marker } : { status: "invalid" };
   }catch{
@@ -677,7 +707,7 @@ function writeRollbackCompletionMarker(context){
   if(rollbackAlreadyComplete(context)) return;
   const text = JSON.stringify({
     version: 1,
-    kind: "xml",
+    kind: (context.manifest.input?.format||"xmeml")==="xmeml"?"xml":"timeline:capcut-draft",
     transactionId: context.transactionId,
     completedAt: new Date().toISOString(),
   }, null, 2) + "\n";
@@ -719,8 +749,9 @@ function serializeNextJob(nextJob){
 
 function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, nextJob, onEvent } = {}){
   const prepared = validatePreparation(preparation);
+  const spec = timelineSpec(prepared.manifest.input?.format || "xmeml");
   if(prepared.manifest.state !== "prepared"){
-    throw new Error("XML transaction is not prepared");
+    throw new Error("Timeline transaction is not prepared");
   }
   const layout = ensureCommitLayout({
     logRoot: prepared.logRoot,
@@ -729,10 +760,10 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
     jobPath,
   });
   const context = { ...prepared, ...layout };
-  const candidate = inspectInputFile(prepared.paths.candidatePath, [".xml"], XML_MAX_BYTES);
+  const candidate = inspectInputFile(prepared.paths.candidatePath, [spec.extension], spec.maxBytes);
   if(candidate.size !== prepared.manifest.input.size ||
       hashFile(prepared.paths.candidatePath) !== prepared.manifest.input.sha256){
-    throw new Error("Prepared XML candidate changed before commit");
+    throw new Error("Prepared timeline candidate changed before commit");
   }
   const serializedJob = serializeNextJob(nextJob);
   writeTextDurably(prepared.paths.nextJobPath, serializedJob.text, true);
@@ -744,7 +775,7 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
     nextJobSha256: serializedJob.sha256,
   });
   context.manifest = manifest;
-  emit(onEvent, "job_xml_commit_started", {
+  emit(onEvent, lifecycleEvent(manifest, "commit_started"), {
     transactionId: prepared.transactionId,
     inputName: manifest.input.name,
   });
@@ -781,8 +812,8 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
     manifest = writeManifest(prepared.transactionRoot, { ...manifest, phase: "installing_candidate" });
     context.manifest = manifest;
 
-    const installedTimeline = path.join(layout.sourceRoot, "timeline.xml");
-    if(fs.existsSync(installedTimeline)) throw new Error("timeline.xml still exists after source reset");
+    const installedTimeline = path.join(layout.sourceRoot, spec.canonicalName);
+    if(fs.existsSync(installedTimeline)) throw new Error(spec.canonicalName+" still exists after source reset");
     fs.renameSync(prepared.paths.candidatePath, installedTimeline);
     manifest = writeManifest(prepared.transactionRoot, { ...manifest, phase: "installing_job" });
     context.manifest = manifest;
@@ -795,7 +826,7 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
       committedAt: new Date().toISOString(),
     });
     context.manifest = manifest;
-    emit(onEvent, "job_xml_commit_committed", {
+    emit(onEvent, lifecycleEvent(manifest, "commit_committed"), {
       transactionId: prepared.transactionId,
       inputName: manifest.input.name,
       removedSourceCount: manifest.moved.source.length,
@@ -807,7 +838,7 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
       cleanupTransactionRoot(prepared.transactionRoot, prepared.logRoot);
     }catch(error){
       cleanupDeferred = true;
-      emit(onEvent, "job_xml_commit_cleanup_deferred", {
+      emit(onEvent, lifecycleEvent(manifest, "commit_cleanup_deferred"), {
         transactionId: prepared.transactionId,
         code: error.code || "CLEANUP_FAILED",
       });
@@ -821,7 +852,7 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
       cleanupDeferred,
     };
   }catch(error){
-    emit(onEvent, "job_xml_commit_rollback_started", {
+    emit(onEvent, lifecycleEvent(context.manifest, "commit_rollback_started"), {
       transactionId: prepared.transactionId,
       code: error.code || "COMMIT_FAILED",
     });
@@ -834,20 +865,20 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
       });
       rollbackTransaction(context);
       markRollbackComplete(context);
-      emit(onEvent, "job_xml_commit_rollback_completed", {
+      emit(onEvent, lifecycleEvent(context.manifest, "commit_rollback_completed"), {
         transactionId: prepared.transactionId,
       });
       try{
         cleanupTransactionRoot(prepared.transactionRoot, prepared.logRoot);
       }catch(cleanupError){
-        emit(onEvent, "job_xml_commit_rollback_cleanup_deferred", {
+        emit(onEvent, lifecycleEvent(context.manifest, "commit_rollback_cleanup_deferred"), {
           transactionId: prepared.transactionId,
           code: cleanupError.code || "CLEANUP_DEFERRED",
         });
       }
     }catch(candidate){
       rollbackError = candidate;
-      emit(onEvent, "job_xml_commit_rollback_failed", {
+      emit(onEvent, lifecycleEvent(context.manifest, "commit_rollback_failed"), {
         transactionId: prepared.transactionId,
         code: candidate.code || "ROLLBACK_FAILED",
       });
@@ -864,8 +895,9 @@ function commitPreparedXml({ preparation, sourceRoot, referencesRoot, jobPath, n
 
 function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobPath, nextJob, onEvent } = {}){
   const prepared = validatePreparation(preparation);
+  const spec = timelineSpec(prepared.manifest.input?.format || "xmeml");
   if(prepared.manifest.state !== "prepared"){
-    throw new Error("XML transaction is not prepared");
+    throw new Error("Timeline transaction is not prepared");
   }
   const layout = ensureCommitLayout({
     logRoot: prepared.logRoot,
@@ -874,10 +906,10 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
     jobPath,
   });
   const context = { ...prepared, ...layout };
-  const candidate = inspectInputFile(prepared.paths.candidatePath, [".xml"], XML_MAX_BYTES);
+  const candidate = inspectInputFile(prepared.paths.candidatePath, [spec.extension], spec.maxBytes);
   if(candidate.size !== prepared.manifest.input.size ||
       hashFile(prepared.paths.candidatePath) !== prepared.manifest.input.sha256){
-    throw new Error("Prepared XML candidate changed before commit");
+    throw new Error("Prepared timeline candidate changed before commit");
   }
   const serializedJob = serializeNextJob(nextJob);
   writeTextDurably(prepared.paths.nextJobPath, serializedJob.text, true);
@@ -889,7 +921,7 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
     nextJobSha256: serializedJob.sha256,
   });
   context.manifest = manifest;
-  emit(onEvent, "job_xml_update_commit_started", {
+  emit(onEvent, lifecycleEvent(manifest, "update_commit_started"), {
     transactionId: prepared.transactionId,
     inputName: manifest.input.name,
   });
@@ -907,7 +939,7 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
     });
     context.manifest = manifest;
 
-    // UPDATE keeps every source asset except timeline.xml and never touches references.
+    // UPDATE keeps every source asset except the active timeline file and never touches references.
     manifest = moveTimelineToBackup(
       layout.sourceRoot,
       prepared.paths.sourceBackupRoot,
@@ -917,8 +949,8 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
     manifest = writeManifest(prepared.transactionRoot, { ...manifest, phase: "installing_candidate" });
     context.manifest = manifest;
 
-    const installedTimeline = path.join(layout.sourceRoot, "timeline.xml");
-    if(fs.existsSync(installedTimeline)) throw new Error("timeline.xml still exists after update backup");
+    const installedTimeline = path.join(layout.sourceRoot, spec.canonicalName);
+    if(fs.existsSync(installedTimeline)) throw new Error(spec.canonicalName+" still exists after update backup");
     fs.renameSync(prepared.paths.candidatePath, installedTimeline);
     manifest = writeManifest(prepared.transactionRoot, { ...manifest, phase: "installing_job" });
     context.manifest = manifest;
@@ -931,7 +963,7 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
       committedAt: new Date().toISOString(),
     });
     context.manifest = manifest;
-    emit(onEvent, "job_xml_update_commit_committed", {
+    emit(onEvent, lifecycleEvent(manifest, "update_commit_committed"), {
       transactionId: prepared.transactionId,
       inputName: manifest.input.name,
       replacedTimelineCount: manifest.moved.source.length,
@@ -942,7 +974,7 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
       cleanupTransactionRoot(prepared.transactionRoot, prepared.logRoot);
     }catch(error){
       cleanupDeferred = true;
-      emit(onEvent, "job_xml_update_commit_cleanup_deferred", {
+      emit(onEvent, lifecycleEvent(manifest, "update_commit_cleanup_deferred"), {
         transactionId: prepared.transactionId,
         code: error.code || "CLEANUP_FAILED",
       });
@@ -956,7 +988,7 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
       cleanupDeferred,
     };
   }catch(error){
-    emit(onEvent, "job_xml_update_commit_rollback_started", {
+    emit(onEvent, lifecycleEvent(context.manifest, "update_commit_rollback_started"), {
       transactionId: prepared.transactionId,
       code: error.code || "COMMIT_FAILED",
     });
@@ -969,20 +1001,20 @@ function commitPreparedXmlUpdate({ preparation, sourceRoot, referencesRoot, jobP
       });
       rollbackTransaction(context);
       markRollbackComplete(context);
-      emit(onEvent, "job_xml_update_commit_rollback_completed", {
+      emit(onEvent, lifecycleEvent(context.manifest, "update_commit_rollback_completed"), {
         transactionId: prepared.transactionId,
       });
       try{
         cleanupTransactionRoot(prepared.transactionRoot, prepared.logRoot);
       }catch(cleanupError){
-        emit(onEvent, "job_xml_update_commit_rollback_cleanup_deferred", {
+        emit(onEvent, lifecycleEvent(context.manifest, "update_commit_rollback_cleanup_deferred"), {
           transactionId: prepared.transactionId,
           code: cleanupError.code || "CLEANUP_DEFERRED",
         });
       }
     }catch(candidateError){
       rollbackError = candidateError;
-      emit(onEvent, "job_xml_update_commit_rollback_failed", {
+      emit(onEvent, lifecycleEvent(context.manifest, "update_commit_rollback_failed"), {
         transactionId: prepared.transactionId,
         code: candidateError.code || "ROLLBACK_FAILED",
       });
@@ -1019,6 +1051,7 @@ function recoverXmlTransactions({ logRoot, sourceRoot, referencesRoot, jobPath, 
     if(!lstat.isDirectory()) continue;
     const checked = assertTransactionRoot(transactionRoot, layout.logRoot);
     emit(onEvent, "job_xml_recovery_started", { transactionId: checked.transactionId });
+    let recoveryManifest = null;
     try{
       if(!hasManifestCandidate(transactionRoot)){
         if(hasTransactionBackup(transactionRoot)){
@@ -1038,6 +1071,7 @@ function recoverXmlTransactions({ logRoot, sourceRoot, referencesRoot, jobPath, 
         continue;
       }
       const manifest = readManifest(transactionRoot);
+      recoveryManifest = manifest;
       if(manifest.transactionId.toLowerCase() !== checked.transactionId){
         throw new Error("Transaction directory and manifest do not match");
       }
@@ -1045,14 +1079,14 @@ function recoverXmlTransactions({ logRoot, sourceRoot, referencesRoot, jobPath, 
         try{
           cleanupTransactionRoot(transactionRoot, layout.logRoot);
           result.cleaned += 1;
-          emit(onEvent, "job_xml_recovery_orphan_cleaned", {
+          emit(onEvent, lifecycleEvent(manifest, "recovery_orphan_cleaned"), {
             transactionId: checked.transactionId,
             state: manifest.state,
           });
         }catch(error){
           if(!isTransientRenameError(error)) throw error;
           result.deferred += 1;
-          emit(onEvent, "job_xml_recovery_cleanup_deferred", {
+          emit(onEvent, lifecycleEvent(manifest, "recovery_cleanup_deferred"), {
             transactionId: checked.transactionId,
             state: manifest.state,
             code: error.code || "CLEANUP_DEFERRED",
@@ -1061,13 +1095,13 @@ function recoverXmlTransactions({ logRoot, sourceRoot, referencesRoot, jobPath, 
         continue;
       }
       if(manifest.state !== "committing" && manifest.state !== "rolling_back"){
-        throw new Error("Unknown XML transaction state: " + manifest.state);
+        throw new Error("Unknown timeline transaction state: " + manifest.state);
       }
       const context = {
         ...checked,
         ...layout,
         manifest,
-        paths: transactionPaths(transactionRoot),
+        paths: transactionPaths(transactionRoot, manifest.input?.format || "xmeml"),
       };
       const alreadyComplete = rollbackAlreadyComplete(context);
       if(!alreadyComplete) rollbackTransaction(context);
@@ -1078,20 +1112,20 @@ function recoverXmlTransactions({ logRoot, sourceRoot, referencesRoot, jobPath, 
       }catch(error){
         if(!isTransientRenameError(error)) throw error;
         result.deferred += 1;
-        emit(onEvent, "job_xml_recovery_cleanup_deferred", {
+        emit(onEvent, lifecycleEvent(manifest, "recovery_cleanup_deferred"), {
           transactionId: checked.transactionId,
           state: "rolled_back",
           code: error.code || "CLEANUP_DEFERRED",
         });
       }
-      emit(onEvent, "job_xml_recovery_rolled_back", {
+      emit(onEvent, lifecycleEvent(manifest, "recovery_rolled_back"), {
         transactionId: checked.transactionId,
         alreadyComplete,
       });
     }catch(error){
       result.failed += 1;
       result.failures.push({ transactionId: checked.transactionId, code: error.code || "RECOVERY_FAILED" });
-      emit(onEvent, "job_xml_recovery_failed", {
+      emit(onEvent, recoveryManifest?lifecycleEvent(recoveryManifest, "recovery_failed"):"job_xml_recovery_failed", {
         transactionId: checked.transactionId,
         code: error.code || "RECOVERY_FAILED",
       });
@@ -1102,9 +1136,14 @@ function recoverXmlTransactions({ logRoot, sourceRoot, referencesRoot, jobPath, 
 
 module.exports = {
   inspectInputFile,
+  prepareTimelineCandidate,
   prepareXmlCandidate,
+  prepareCapCutCandidate,
   discardPreparedCandidate,
   commitPreparedXml,
   commitPreparedXmlUpdate,
   recoverXmlTransactions,
+  commitPreparedTimeline: commitPreparedXml,
+  commitPreparedTimelineUpdate: commitPreparedXmlUpdate,
+  recoverTimelineTransactions: recoverXmlTransactions,
 };

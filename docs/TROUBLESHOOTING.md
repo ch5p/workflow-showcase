@@ -18,24 +18,31 @@ On Windows, a short tail can be read with:
 Get-Content .\current-job\logs\app.log -Tail 50
 ```
 
-Stored Job paths are relative to the `current-job` root. A correct timeline value is `source/timeline.xml`, not an absolute path and not `current-job/source/timeline.xml`.
+Stored Job paths are relative to the `current-job` root. Correct timeline values are `source/timeline.xml` for xmeml and `source/timeline.capcut.json` for the experimental CapCut adapter, never an absolute path or a `current-job/...`-prefixed path.
 
-## XML update and NEW JOB
+## Timeline update and NEW JOB
 
 Read the operation in this order:
 
-1. `job_xml_prepared`
-2. `job_xml_mode_selected`
-3. `job_xml_commit_started`
-4. `job_xml_commit_committed` or `job_xml_commit_rollback_*`
-5. `job_xml_recovery_*` after a restart, when recovery was required
-6. `renderer_xml_update_applied` for the resulting SHOT reconciliation
+1. `timeline_import_prepared`
+2. `timeline_import_mode_selected`
+3. `timeline_import_commit_started`
+4. `timeline_import_committed` or `timeline_import_failed`
+5. `job_xml_*` for xmeml or `job_timeline_*` for CapCut transaction detail and recovery
+6. `renderer_timeline_update_applied` for the resulting SHOT reconciliation
 
-For UPDATE XML, compare `timelineShots`, `shotMappings`, and `orphanedShotMappings` with the reported `preserved`, `newShots`, `orphaned`, `ambiguous`, and `reattached` counts. The existing video and reference file hashes should remain unchanged.
+For same-format UPDATE, compare `timelineShots`, `shotMappings`, and `orphanedShotMappings` with the reported `preserved`, `newShots`, `orphaned`, `ambiguous`, and `reattached` counts. The existing video and reference file hashes should remain unchanged. Switching between xmeml and CapCut is intentionally NEW JOB only.
 
-For NEW JOB, the source XML/video, references, mappings, title, callout, `referenceMotion`, `editNumberTicker`, and `introPreroll` are reset to their defaults. Current Job logs, UI language, and Job output settings remain. Completed normal Export and INTRO demo files are outside the replaceable Job in the app-root `output/` folder and must remain unchanged.
+For NEW JOB, the source timeline/video, references, mappings, title, callout, `referenceMotion`, `editNumberTicker`, and `introPreroll` are reset to their defaults. Current Job logs, UI language, and Job output settings remain. Completed normal Export and INTRO demo files are outside the replaceable Job in the app-root `output/` folder and must remain unchanged.
 
-If a rollback-failure event appears, stop all app processes. Do not reload the same XML, delete `.job-import-*`, discard a valid primary manifest, or overwrite `job.json` with a `.tmp` file. Restart and confirm the matching `job_xml_recovery_*` sequence first.
+If a rollback-failure event appears, stop all app processes. Do not reload the same timeline, delete `.job-import-*`, discard a valid primary manifest, or overwrite `job.json` with a `.tmp` file. Restart and confirm the matching `job_xml_recovery_*` or `job_timeline_recovery_*` sequence first.
+
+### Experimental CapCut import
+
+- The supported source is a local Windows CapCut Desktop 9.x project folder, or that folder's exact `draft_content.json`. Mobile/cloud-only projects and other desktop major versions are not verified.
+- Save the CapCut project, leave that project or close CapCut, then retry. If the file changes during the guarded read, import stops before Current Job mutation instead of taking a mixed snapshot.
+- A missing `draft_content.json`, unsupported editor version, malformed structure, or timeline without supported video clips must fail before mode selection and commit.
+- Current Job stores only `source/timeline.capcut.json`, an anonymous normalized snapshot. If that file contains an absolute media path, device/account field, or raw CapCut project data, treat it as a privacy contract violation and preserve the evidence before editing.
 
 ## Video replacement
 
@@ -53,7 +60,7 @@ If `video_import_prepare_failed` reports `INSUFFICIENT_DISK_SPACE`, the copy was
 
 If `reference_import_stale_discarded` appears, another process or external file change advanced the Current Job while files were copying. The copied files were removed and newer Job data was preserved; reload the Current Job, then add the references again. Do not attach the discarded records manually to `job.json`.
 
-If `starter_demo_seed_skipped_existing_payload` appears, `job.json` was missing but files remained under `current-job/source` or `current-job/references`. The app preserved those files and created an empty Job instead of installing the sample. Copy the preserved files elsewhere before manually loading the intended XML/video again.
+If `starter_demo_seed_skipped_existing_payload` appears, `job.json` was missing but files remained under `current-job/source` or `current-job/references`. The app preserved those files and created an empty Job instead of installing the sample. Copy the preserved files elsewhere before manually loading the intended timeline/video again.
 
 ## Export
 

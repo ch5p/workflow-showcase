@@ -2,7 +2,7 @@
 
 [한국어](./README.ko.md) · **English**
 
-> `Workflow Showcase template` is a template app for AI video creators using generation tools such as Seedance 2.0. It uses production references and XML data exported from Premiere Pro to place a compact workflow beneath the final rendered video.
+> `Workflow Showcase template` is a template app for AI video creators using generation tools such as Seedance 2.0. It uses production references and timeline data from XML exported by Premiere Pro or DaVinci Resolve, or from an experimental CapCut Desktop 9.x project, to place a compact workflow beneath the final rendered video.
 
 **Contents**: [AI customization](#make-it-yours-with-an-ai-agent) · [Preview](#preview) · [Installation](#installation) · [How to use](#how-to-use) · [Output settings](#output-settings) · [Setting up references](#setting-up-references) · [Troubleshooting](#troubleshooting) · [Closing notes](#closing-notes)
 
@@ -85,7 +85,7 @@ npm.cmd start
 
 After that, double-click `START_APP.cmd` inside the folder whenever you want to launch the app.
 
-On the first launch, you can play the sample Job. Load your own XML to replace it.
+On the first launch, you can play the sample Job. Load your own timeline to replace it.
 
 The app opens in Korean or English according to your Windows language. You can switch it with the `EN/KR` button in the header.
 
@@ -97,16 +97,19 @@ Here is the basic workflow.
 
 ![Workflow Showcase workspace](./docs/readme-assets/images/app-workspace.webp)
 
-## 1. In Premiere, choose Export > Final Cut Pro XML... to export an XML file.
+## 1. Prepare timeline data in Premiere, DaVinci Resolve, or CapCut.
 
+- In Premiere, choose Export > Final Cut Pro XML... to export an XML file.
+- In DaVinci Resolve, export the timeline as Final Cut Pro 7 XML. This workflow was validated with DaVinci Resolve 21.0.2.
 - The app does not currently support effect layers such as Adjustment Layers and automatically excludes them when importing XML. The default UI displays only actual video clips. Exposing effect layers as an `FX` lane requires a separate input adapter and UI implementation.
+- Experimental CapCut input: save the local Windows CapCut Desktop 9.x project, leave that project or close CapCut, then select its project folder from `TIMELINE > CAPCUT PROJECT · EXPERIMENTAL`. No XML export is required.
 
-## 2. Launch the app, then add the XML and VIDEO files by drag-and-drop or by clicking their zones.
+## 2. Launch the app, then add the TIMELINE and VIDEO separately by drag-and-drop or by clicking their zones.
 
-- Loading XML and VIDEO together is not currently supported. Add them separately.
-- The finished VIDEO input supports a playable H.264 MP4. MOV/ProRes and M4V are not accepted as final-video inputs. Export an H.264 MP4 with AAC audio from Premiere before loading it.
+- Click `TIMELINE` and choose XML or the experimental CapCut project input. Loading TIMELINE and VIDEO together is not currently supported.
+- The finished VIDEO input supports a playable H.264 MP4. MOV/ProRes and M4V are not accepted as final-video inputs. Export an H.264 MP4 with AAC audio from the editor before loading it.
 
-![Importing XML and VIDEO](./docs/readme-assets/animations/import-xml-video.webp)
+![Importing TIMELINE and VIDEO](./docs/readme-assets/animations/import-xml-video.webp)
 
 It is easier to begin by adding references that should appear throughout the project to GLOBAL BASE. You can add references with the `ADD FILES` button as well as drag-and-drop.
 
@@ -216,7 +219,7 @@ LEAD-IN places a reference on the neighboring SHOT one second early when the sce
 
 ## When the durations do not match (DURATION Δ)
 
-If the XML and finished video differ in length by at least one frame, a `DURATION Δ` badge appears at the top left of the paused video.
+If the imported timeline and finished video differ in length by at least one frame, a `DURATION Δ` badge appears at the top left of the paused video. Its source label is `XML` or `CAPCUT`.
 
 This is especially likely after an In/Out export because the XML may include the final Out frame.
 
@@ -224,7 +227,7 @@ This is especially likely after an In/Out export because the XML may include the
 
 ![DURATION Δ badge](./docs/readme-assets/images/duration-delta.webp)
 
-The badge above means that **the XML endpoint is 45.79 seconds while the actual video is 48.79 seconds**. The exported result will stop at **45.79 seconds**, following the XML. If your `video ends at 10 seconds but you want to leave one second of breathing room`, extend the timeline to the desired endpoint with a Color Matte before exporting the XML.
+This Premiere example means that **the XML endpoint is 45.79 seconds while the actual video is 48.79 seconds**. The exported result will stop at **45.79 seconds**, following the imported timeline. If your `video ends at 10 seconds but you want to leave one second of breathing room`, extend the Premiere timeline to the desired endpoint with a Color Matte before exporting the XML. For CapCut, change and save the project duration, then reload its timeline.
 
 ![Matching the timeline length with a Color Matte](./docs/readme-assets/images/duration-matte.png)
 
@@ -234,11 +237,11 @@ The badge above means that **the XML endpoint is 45.79 seconds while the actual 
 
 ![XML import mode dialog](./docs/readme-assets/images/xml-import-mode-en.webp)
 
-This dialog appears when an XML already exists and you load another XML.
+This dialog appears when an XML already exists and you load another XML. CapCut shows the equivalent `UPDATE TIMELINE` action.
 
 Use **UPDATE XML** when the finished video has gained a SHOT, a SHOT has become shorter or longer, or you need another final_final_really-final.mp4-style update. It preserves the video, references, GLOBAL, title, callout, and output settings, then safely reconnects existing SHOT mappings to the new timeline.
 
-Use **NEW JOB** after finishing one project and moving on to a different one. It resets the existing XML, video, references, mappings, title, and callout, but preserves rendered Export files, logs, UI language, and output settings.
+Use **NEW JOB** after finishing one project and moving on to a different one. It resets the existing timeline input, video, references, mappings, title, and callout, but preserves rendered Export files, logs, UI language, and output settings.
 
 **CANCEL** closes the dialog without changing anything.
 
@@ -246,7 +249,7 @@ The app operates a single `current-job` folder. New information replaces the cur
 
 ![BACKUP JOB](./docs/readme-assets/images/backup-job.webp)
 
-A small BACKUP JOB button appears at the bottom of the EDIT PANEL. It copies `job.json`, the registered XML, references, and hash information to the `backup` folder. Source video, Export files, and logs are not included, so keep the MP4 used by the Job separately for restoration. You can also quit the app completely and preserve a copy of the entire `current-job` folder.
+A small BACKUP JOB button appears at the bottom of the EDIT PANEL. It copies `job.json`, the registered timeline input, references, and hash information to the `backup` folder. Source video, Export files, and logs are not included, so keep the MP4 used by the Job separately for restoration. You can also quit the app completely and preserve a copy of the entire `current-job` folder.
 
 # Troubleshooting
 
@@ -260,7 +263,7 @@ A small BACKUP JOB button appears at the bottom of the EDIT PANEL. It copies `jo
 → Source audio is copied without transcoding, and only AAC has been validated. If Export fails, create an H.264 MP4 with AAC audio and load that version.
 
 **The rendered result is shorter than expected**
-→ See [DURATION Δ](#when-the-durations-do-not-match-duration-δ) above. The app renders only the XML timeline duration.
+→ See [DURATION Δ](#when-the-durations-do-not-match-duration-δ) above. The app renders only the imported timeline duration.
 
 **I launched the app, but no window appeared**
 → Check whether another instance is already running. A second launch brings the existing window forward and then exits quietly to protect the Job data.
@@ -272,7 +275,7 @@ A small BACKUP JOB button appears at the bottom of the EDIT PANEL. It copies `jo
 
 # Closing notes
 
-- The supported input is Final Cut Pro 7 XML (`xmeml`), including XML exported from Adobe Premiere Pro. Modern Final Cut Pro `.fcpxml` is not currently supported and requires a separate adapter that follows the [Input Adapter Contract](./docs/INPUT_ADAPTER_CONTRACT.md).
+- The stable input is Final Cut Pro 7 XML (`xmeml`). XML exported by Adobe Premiere Pro and DaVinci Resolve 21.0.2 has been validated in the app. VEGAS Pro can export Final Cut Pro 7/DaVinci Resolve XML and may also work, but it has not been fixture-tested. Windows CapCut Desktop 9.x local projects are available as an experimental input; the raw draft and absolute media paths are not stored. Modern Final Cut Pro `.fcpxml` is not currently supported and requires a separate adapter that follows the [Input Adapter Contract](./docs/INPUT_ADAPTER_CONTRACT.md).
 - The output resolution is `1280 x 1080`, which is reasonably viewable on a phone.
 - I hope people who, like me, cannot be bothered to build an entire workflow presentation but still want to show that some work went into the process will take this and use it in different ways. I paid attention to making it easy to customize, so put your agent to work and tailor it to your taste.
 - I do not have a programming background, so I picked the strongest model I could and asked it to make sure that **when a user types [do it] once, an agent can quickly locate and modify only that part**. During the public-release refactor, the stable core was separated from the presentation areas intended for free customization. I expect modifications to be approachable.
@@ -283,14 +286,12 @@ Tested in the following environment:
 
 - Windows 11
 - Adobe Premiere 2026 (26.2.2 Build 3)
+- DaVinci Resolve 21.0.2 Final Cut Pro 7 XML
 
-Not validated in the following environment:
+Additional compatibility notes:
 
-- The app has not been validated on macOS.
+- This beta application is Windows-only; macOS execution is not supported.
+- VEGAS Pro Final Cut Pro 7/DaVinci Resolve XML is a likely compatible input but has not been validated with a real project.
 - Modern Final Cut Pro XML (`.fcpxml`) is not supported. A separate input adapter must be created under the [Input Adapter Contract](./docs/INPUT_ADAPTER_CONTRACT.md). Ask your agent if needed.
-
-This program does not work with:
-
-- CapCut — it does not provide an official timeline XML export, so it is not supported.
 
 The installation includes AI customization guides. Tell your agent what you want to change, and the documents are organized so it can trace the relevant area quickly. Just give the instruction.

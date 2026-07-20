@@ -10,6 +10,7 @@ const { assertDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-pat
 const { resolveRenderSpec } = require("./render-spec.cjs");
 const { exporterText } = require("./strings.cjs");
 const { assertExportSpace } = require("./storage-policy.cjs");
+const { resolveTimelineInput } = require("./timeline-input.cjs");
 
 // One export runs at a time (guarded by `active`), so a module-level language is safe.
 let activeLanguage = "en";
@@ -147,9 +148,11 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     const spec = resolveRenderSpec(job.output);
     const fps = spec.fps;
     const bitrateMbps = spec.bitrateMbps;
-    const xmlPath = sourceFile(job.xml.relativePath, "Export XML");
+    const timelineInput=resolveTimelineInput(job);
+    if(!timelineInput)throw new Error(t("timeline_missing"));
+    const timelinePath=sourceFile(timelineInput.relativePath,"Export timeline");
     const videoPath = sourceFile(job.video.relativePath, "Export video");
-    const xmlText = fs.readFileSync(xmlPath, "utf8");
+    const timelineText=fs.readFileSync(timelinePath,"utf8");
     const renderWindow = new BrowserWindow({
       width: spec.width,
       height: spec.height,
@@ -193,7 +196,7 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
       await renderWindow.loadFile(path.join(appRoot, "src", "output-preview.html"), { query: { scale: "1" } });
       const videoUrl = pathToFileURL(videoPath).href;
       const parsed = await renderWindow.webContents.executeJavaScript(
-        `window.portablePreview.setLanguage(${JSON.stringify(language)}); window.portablePreview.setRenderSpec(${JSON.stringify(spec)}); window.portablePreview.loadXml(${JSON.stringify(xmlText)})`
+        `window.portablePreview.setLanguage(${JSON.stringify(language)}); window.portablePreview.setRenderSpec(${JSON.stringify(spec)}); window.portablePreview.loadTimeline(${JSON.stringify(timelineInput.format)},${JSON.stringify(timelineText)})`
       );
       await renderWindow.webContents.executeJavaScript(
         `window.portablePreview.setVideo(${JSON.stringify(videoUrl)}); window.portablePreview.waitForVideoReady()`
@@ -295,9 +298,10 @@ function createExportController({ BrowserWindow, appRoot, jobRoot, outputRoot, l
     const requestedLanguage = language === "ko" ? "ko" : "en";
     if(active) throw new Error(exporterText(requestedLanguage, "already_running"));
     activeLanguage = requestedLanguage;
-    if(!job.xml?.relativePath) throw new Error(t("xml_missing"));
+    const timelineInput=resolveTimelineInput(job);
+    if(!timelineInput?.relativePath)throw new Error(t("timeline_missing"));
     if(!job.video?.relativePath) throw new Error(t("video_missing"));
-    sourceFile(job.xml.relativePath, "Export XML");
+    sourceFile(timelineInput.relativePath,"Export timeline");
     sourceFile(job.video.relativePath, "Export video");
     assertDirectoryNoLink(outputRoot, "Export output");
     const ffmpegPath = resolveFfmpeg(appRoot);

@@ -1,0 +1,119 @@
+{
+  "version": 360000,
+  "new_version": "177.0.0",
+  "name": "synthetic-capcut-timeline",
+  "duration": 7750000,
+  "fps": 24,
+  "render_index_track_mode_on": true,
+  "platform": {
+    "os": "windows",
+    "app_version": "9.0.0",
+    "app_source": "cc"
+  },
+  "materials": {
+    "videos": [
+      {
+        "id": "material-a-1",
+        "unique_id": "fixture-a-1",
+        "type": "video",
+        "duration": 6000000,
+        "path": "media/clip-a.mp4",
+        "media_path": "media/clip-a.mp4",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "id": "material-b-1",
+        "unique_id": "fixture-b-1",
+        "type": "video",
+        "duration": 6000000,
+        "path": "media/clip-b.mp4",
+        "media_path": "media/clip-b.mp4",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "id": "material-a-2",
+        "unique_id": "fixture-a-2",
+        "type": "video",
+        "duration": 6000000,
+        "path": "media/clip-a.mp4",
+        "media_path": "media/clip-a.mp4",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "id": "material-c-1",
+        "unique_id": "fixture-c-1",
+        "type": "video",
+        "duration": 6000000,
+        "path": "media/clip-c.mp4",
+        "media_path": "media/clip-c.mp4",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  },
+  "tracks": [
+    {
+      "id": "track-base",
+      "type": "video",
+      "flag": 0,
+      "attribute": 0,
+      "segments": [
+        {
+          "id": "segment-a-1",
+          "material_id": "material-a-1",
+          "source_timerange": { "start": 0, "duration": 3375000 },
+          "target_timerange": { "start": 0, "duration": 3375000 },
+          "render_index": 0,
+          "track_render_index": 0,
+          "speed": 1,
+          "visible": true,
+          "is_placeholder": false
+        },
+        {
+          "id": "segment-b-1",
+          "material_id": "material-b-1",
+          "source_timerange": { "start": 0, "duration": 2750000 },
+          "target_timerange": { "start": 3375000, "duration": 2750000 },
+          "render_index": 0,
+          "track_render_index": 0,
+          "speed": 1,
+          "visible": true,
+          "is_placeholder": false
+        },
+        {
+          "id": "segment-a-2",
+          "material_id": "material-a-2",
+          "source_timerange": { "start": 0, "duration": 1625000 },
+          "target_timerange": { "start": 6125000, "duration": 1625000 },
+          "render_index": 0,
+          "track_render_index": 0,
+          "speed": 1,
+          "visible": true,
+          "is_placeholder": false
+        }
+      ]
+    },
+    {
+      "id": "track-upper",
+      "type": "video",
+      "flag": 2,
+      "attribute": 0,
+      "segments": [
+        {
+          "id": "segment-c-1",
+          "material_id": "material-c-1",
+          "source_timerange": { "start": 0, "duration": 2416666 },
+          "target_timerange": { "start": 2083333, "duration": 2416667 },
+          "render_index": 1,
+          "track_render_index": 1,
+          "speed": 1,
+          "visible": true,
+          "is_placeholder": false
+        }
+      ]
+    }
+  ]
+}

@@ -19,7 +19,7 @@
   let pendingSavePromise=Promise.resolve();
   const DEFAULT_CALLOUT={enabled:true,position:"left",style:"line",motion:"fade",startSeconds:.08,durationSeconds:3.5,subtitle:"WORKFLOW SHOWCASE · EDIT WORKFLOW"};
   const DEFAULT_REFERENCE_MOTION="classic";
-  const INPUT_EXTENSIONS={xml:new Set([".xml"]),video:new Set([".mp4"])};
+  const INPUT_EXTENSIONS={video:new Set([".mp4"])};
 
   function preview(){ return iframe.contentWindow?.portablePreview||null; }
   function applyLanguage(next){
@@ -58,10 +58,11 @@
     return [hh,mm,ss,ff].map(value=>String(value).padStart(2,"0")).join(":");
   }
   function setStatus(){
+    const input=job?.timelineInput||(job?.xml?{format:"xmeml",name:job.xml.name}:null);
     document.getElementById("jobName").textContent=job?.demo
-      ?"SAMPLE JOB / "+(job.xml?.name||"NO XML")
-      :(job?.xml?"CURRENT JOB / "+job.xml.name:"CURRENT JOB / NO XML");
-    document.getElementById("xmlStatus").textContent=timeline?"XML READY":"XML NEEDED";
+      ?"SAMPLE JOB / "+(input?.name||"NO TIMELINE")
+      :(input?"CURRENT JOB / "+input.name:"CURRENT JOB / NO TIMELINE");
+    document.getElementById("xmlStatus").textContent=timeline?"TIMELINE READY":"TIMELINE NEEDED";
     document.getElementById("fpsStatus").textContent=timeline?timeline.fps+" FPS":"-- FPS";
     document.getElementById("editCountStatus").textContent=(timeline?.edits||0)+" EDITS";
     document.getElementById("shotCountStatus").textContent=(timeline?.shots.length||0)+" SHOTS";
@@ -280,13 +281,15 @@
     applyProjectTitle();
     applyCalloutSettings();
   }
-  async function parseXml(text,{emitChange=false}={}){
+  async function parseTimelineInput(format,text,{emitChange=false}={}){
     const target=await waitForPreview();
     if(!target)throw new Error("Preview bridge is not ready");
-    mountTimeline(target.loadXml(text),{emitChange});
+    if(typeof target.loadTimeline==="function")mountTimeline(target.loadTimeline(format,text),{emitChange});
+    else if(format==="xmeml")mountTimeline(target.loadXml(text),{emitChange});
+    else throw new Error("Preview timeline dispatcher is not ready");
   }
   async function loadXmlText(text){
-    await parseXml(text,{emitChange:false});
+    await parseTimelineInput("xmeml",text,{emitChange:false});
     return {fps:timeline.fps,durationFrames:timeline.durationFrames,edits:timeline.edits,shots:timeline.shots.length};
   }
   async function saveMapping(){
@@ -317,13 +320,14 @@
   }
   function droppedPath(files,kind){
     const list=Array.from(files||[]);
-    if(list.length!==1)throw inputError((kind==="xml"?"XML":"VIDEO")+" · DROP ONE FILE");
+    if(list.length!==1)throw inputError((kind==="timeline"?"TIMELINE":"VIDEO")+" · DROP ONE ITEM");
     const file=list[0];
     const name=String(file.name||"");
     const dot=name.lastIndexOf(".");
     const extension=dot>=0?name.slice(dot).toLowerCase():"";
-    if(!INPUT_EXTENSIONS[kind].has(extension)){
-      throw inputError(kind==="xml"?"XML ONLY · .XML":"VIDEO · H.264 MP4 ONLY");
+    // A CapCut project is a directory and its display name may contain dots; Main owns timeline validation.
+    if(kind!=="timeline"&&!INPUT_EXTENSIONS[kind].has(extension)){
+      throw inputError(kind==="timeline"?"TIMELINE · XML OR CAPCUT PROJECT":"VIDEO · H.264 MP4 ONLY");
     }
     const sourcePath=bridge.getPathForFile(file);
     if(!sourcePath)throw inputError("DROP PATH UNAVAILABLE");
@@ -388,7 +392,7 @@
     ui.showToast(message);
     await safeRendererLog("job_runtime_blocked",{message:error?.message||String(error||message)});
   }
-  async function hydrateJobState(nextJob,{xmlText=null}={}){
+  async function hydrateJobState(nextJob,{timelineSource=null,xmlText=null}={}){
     job=nextJob;
     applyReferenceMotion(job.referenceMotion,{syncPreview:false});
     applyEditDisplaySettings(job.editNumberTicker);
@@ -396,8 +400,11 @@
     ui.replaceAssets(job.references||[],job.globalReferenceIds||[]);
     await target?.clearVideo?.();
     if(job.video?.url)target?.setVideo(job.video.url);
-    const text=xmlText??(job.xml?await bridge.readXml():null);
-    if(text)await parseXml(text,{emitChange:false});
+    const input=job.timelineInput||(job.xml?{format:"xmeml",name:job.xml.name}:null);
+    const loaded=timelineSource??(xmlText!==null?{format:"xmeml",text:xmlText}:(input?(await (bridge.readTimeline?.()||Promise.resolve(null))):null));
+    const fallbackLoaded=!loaded&&job.xml&&bridge.readXml?{format:"xmeml",text:await bridge.readXml()}:null;
+    const source=loaded||fallbackLoaded;
+    if(source?.text)await parseTimelineInput(source.format||input?.format||"xmeml",source.text,{emitChange:false});
     else{
       timeline=null;
       ui.replaceShots([],job.shotMappings||{},false);
@@ -428,7 +435,7 @@
     const titleInput=document.getElementById("overlayProjectTitle");
     if(titleInput)titleInput.value="";
   }
-  async function importXmlCandidate(prepareCandidate){
+  async function importTimelineCandidate(prepareCandidate){
     let prepared=null;
     let validationPassed=false;
     let viewReleased=false;
@@ -438,12 +445,15 @@
       prepared=await prepareCandidate();
       if(!prepared)return false;
       const target=await waitForPreview();
-      if(!target?.inspectXml)throw new Error("Preview XML inspector is not ready");
-      const candidateTimeline=target.inspectXml(prepared.text);
+      const inspect=typeof target?.inspectTimeline==="function"
+        ?()=>target.inspectTimeline(prepared.format||"xmeml",prepared.text)
+        :prepared.format==="xmeml"&&typeof target?.inspectXml==="function"?()=>target.inspectXml(prepared.text):null;
+      if(!inspect)throw new Error("Preview timeline inspector is not ready");
+      const candidateTimeline=inspect();
       validationPassed=true;
-      mode=await bridge.chooseXmlImportMode(prepared.token);
+      mode=await (bridge.chooseTimelineImportMode?.(prepared.token)||bridge.chooseXmlImportMode(prepared.token));
       if(!mode){
-        ui.showToast("XML LOAD CANCELLED");
+        ui.showToast("TIMELINE LOAD CANCELLED");
         return false;
       }
       const expectedJobId=job?.jobId;
@@ -457,7 +467,8 @@
         viewReleased=true;
         await releaseCurrentJobView();
       }
-      const result=await bridge.commitXmlImport({
+      const commit=bridge.commitTimelineImport||bridge.commitXmlImport;
+      const result=await commit({
         token:prepared.token,
         expectedJobId,
         expectedRevision,
@@ -468,18 +479,18 @@
       try{
         if(result.mode==="update"){
           job=result.job;
-          await parseXml(prepared.text,{emitChange:false});
+          await parseTimelineInput(prepared.format||"xmeml",prepared.text,{emitChange:false});
         }else{
-          await hydrateJobState(result.job,{xmlText:prepared.text});
+          await hydrateJobState(result.job,{timelineSource:{format:prepared.format||"xmeml",text:prepared.text}});
         }
       }catch(firstHydrateError){
         try{
           await restoreCurrentJobView();
           await safeRendererLog("job_view_recovered_after_commit",{jobId:result.job.jobId,mode:result.mode});
-          ui.showToast((result.mode==="update"?"XML UPDATED":"NEW JOB SAVED")+" · VIEW RECOVERED");
+           ui.showToast((result.mode==="update"?"TIMELINE UPDATED":"NEW JOB SAVED")+" · VIEW RECOVERED");
           return true;
         }catch(retryError){
-          firstHydrateError.toastMessage=(result.mode==="update"?"XML UPDATED":"NEW JOB SAVED")+" · RESTART APP";
+           firstHydrateError.toastMessage=(result.mode==="update"?"TIMELINE UPDATED":"NEW JOB SAVED")+" · RESTART APP";
           await blockRuntime(firstHydrateError.toastMessage,retryError);
           throw firstHydrateError;
         }
@@ -488,16 +499,19 @@
         const summary=result.summary||{};
         const reattached=Number(summary.reattached)||0;
         ui.showToast(
-          "XML UPDATED · "+(Number(summary.preserved)||0)+" KEPT · "+
+          "TIMELINE UPDATED · "+(Number(summary.preserved)||0)+" KEPT · "+
           (Number(summary.newShots)||0)+" NEW · "+(Number(summary.orphaned)||0)+" ORPHAN"+
           (reattached?" · "+reattached+" RESTORED":""),
         );
-        await safeRendererLog("renderer_xml_update_applied",summary);
+        await safeRendererLog("renderer_timeline_update_applied",{...summary,format:prepared.format||"xmeml"});
       }else ui.showToast("NEW JOB LOADED");
       return true;
     }catch(error){
       if(prepared&&!committed){
-        try{await bridge.discardPreparedXml(prepared.token,validationPassed?"commit-failed":"validation-failed")}catch(discardError){}
+        try{
+          const discard=bridge.discardPreparedTimeline||bridge.discardPreparedXml;
+          await discard(prepared.token,validationPassed?"commit-failed":"validation-failed");
+        }catch(discardError){}
       }
       const recoveryRequired=/JOB_RECOVERY_REQUIRED|rollback failed/i.test(error?.message||"");
       if(recoveryRequired){
@@ -511,8 +525,8 @@
         error.toastMessage=runtimeBlocked
           ?"JOB RECOVERY REQUIRED · RESTART APP"
           :(validationPassed
-            ?(mode==="new"?"NEW JOB FAILED · CURRENT JOB RESTORED":"XML UPDATE FAILED · CURRENT JOB KEPT")
-            :"XML REJECTED · CURRENT JOB KEPT");
+             ?(mode==="new"?"NEW JOB FAILED · CURRENT JOB RESTORED":"TIMELINE UPDATE FAILED · CURRENT JOB KEPT")
+             :"TIMELINE REJECTED · CURRENT JOB KEPT");
       }
       throw error;
     }finally{
@@ -522,25 +536,27 @@
       }
     }
   }
-  async function loadXml(){
-    if(!beginInputOperation("xml"))return true;
+  async function loadTimeline(){
+    if(!beginInputOperation("timeline"))return true;
     try{
       await flushPendingState();
-      await importXmlCandidate(()=>bridge.selectXml());
+      await importTimelineCandidate(()=>bridge.selectTimeline?.()||bridge.selectXml());
     }catch(error){await reportError(error)}
     finally{endInputOperation()}
     return true;
   }
-  async function loadDroppedXml(files){
-    if(!beginInputOperation("xml"))return true;
+  async function loadDroppedTimeline(files){
+    if(!beginInputOperation("timeline"))return true;
     try{
       await flushPendingState();
-      const sourcePath=droppedPath(files,"xml");
-      await importXmlCandidate(()=>bridge.prepareDroppedXml(sourcePath));
+      const sourcePath=droppedPath(files,"timeline");
+      await importTimelineCandidate(()=>bridge.prepareDroppedTimeline?.(sourcePath)||bridge.prepareDroppedXml(sourcePath));
     }catch(error){markInputInvalid("loadXml");await reportError(error)}
     finally{endInputOperation()}
     return true;
   }
+  const loadXml=loadTimeline;
+  const loadDroppedXml=loadDroppedTimeline;
   async function applyVideoImport(prepareVideo){
     if(!job)throw new Error("Current Job is not ready");
     let prepared=null;
@@ -757,7 +773,7 @@
       initialized=true;
       await safeRendererLog("renderer_ready",{
         jobId:job.jobId,
-        hasXml:Boolean(job.xml),
+        hasTimeline:Boolean(job.timelineInput||job.xml),
         hasVideo:Boolean(job.video),
         referenceCount:job.references.length,
         language,
@@ -766,7 +782,7 @@
   }
 
   window.portableMvp={
-    loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
+    loadTimeline,loadDroppedTimeline,loadXml,loadDroppedXml,loadVideo,loadDroppedVideo,
     addReferences,addDroppedReferences,deleteReference,backupCurrentJob,loadXmlText,syncActiveShot,exportVideo,openIntroBuilder,reloadCurrentJob,logPreviewEvent,
     getLanguage:()=>language,setLanguage,
   };

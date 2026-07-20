@@ -13,7 +13,7 @@
     <div id="videoZone">
       <video id="mainVideo" playsinline></video>
       <video id="thumbnailVideo" muted preload="metadata" playsinline aria-hidden="true"></video>
-      <div id="videoHint">상단 XML과 VIDEO에서 파일을 불러오세요</div>
+      <div id="videoHint">상단 TIMELINE과 VIDEO에서 파일을 불러오세요</div>
       <div id="durationDelta" hidden></div>
       <div id="videoCallout" data-position="left" data-style="line" data-motion="fade" aria-hidden="true">
         <span class="videoCalloutRule"></span>
@@ -131,6 +131,7 @@
 
 <script src="./core/xmeml-parser.js"></script>
 <script src="./adapters/xmeml-unsupported-layers.js"></script>
+<script src="./adapters/capcut-draft-parser.js"></script>
 <script src="./core/primary-timeline.js"></script>
 <script src="./core/shot-model.js"></script>
 <script src="./core/reference-mapping.js"></script>
@@ -175,8 +176,8 @@ const $ = id => document.getElementById(id);
 let LANG=(navigator.language||"").toLowerCase().startsWith("ko")?"ko":"en";
 const PREVIEW_STRINGS={
   en:{
-    videoHint:"Load files from XML and VIDEO at the top",
-    dropHint:"Drop an XML or video file here",
+    videoHint:"Load files from TIMELINE and VIDEO at the top",
+    dropHint:"Drop a timeline input or video file here",
     loadingWait:"Checking video frames. Please wait.",
     loadingRetry:"Frames could not be verified. Invalid images are not shown.",
     dropFailed:"Could not load the file: ",
@@ -192,8 +193,8 @@ const PREVIEW_STRINGS={
     thumbnailFailed:"Could not create timeline thumbnails.",
   },
   ko:{
-    videoHint:"상단 XML과 VIDEO에서 파일을 불러오세요",
-    dropHint:"여기에 XML 또는 영상 파일을 놓으세요",
+    videoHint:"상단 TIMELINE과 VIDEO에서 파일을 불러오세요",
+    dropHint:"여기에 타임라인 입력 또는 영상 파일을 놓으세요",
     loadingWait:"영상 프레임을 확인하는 중입니다. 잠시 기다려 주세요.",
     loadingRetry:"프레임을 확인하지 못했습니다. 잘못된 이미지는 표시하지 않습니다.",
     dropFailed:"파일 불러오기 실패: ",
@@ -235,6 +236,7 @@ let lastReferenceFrame=-1;
 let phase="idle";       // idle | slate | show | end
 let t0=0, tPause=0, rafId=0;
 let debugOn=false, fullMode=true;
+let timelineInputFormat="xmeml";
 let syncClock="virtual", videoObjectUrl=null;
 let thumbnailGeneration=0, thumbnailSeekToken=0, thumbnailRetryTimer=0, timelineFrame=0, timelinePage=-1, timelineRevealFrame=-1;
 let lastTimelinePositionFrame=-1;
@@ -249,11 +251,17 @@ let typeScheduleKey="",typeSchedule=[];
 /* ============ 안정 코어 bridge ============ */
 const parseFCPXML=window.PortableXmeml.parseXmeml;
 const excludeUnsupportedXmemlLayers=window.PortableUnsupportedXmeml.excludeUnsupportedLayers;
+const parseCapCutSnapshot=window.PortableCapCutDraft.parseCapCutSnapshot;
 const buildFocusSegments=window.PortablePrimaryTimeline.buildPrimarySegments;
 const inspectParsedXml=window.PortableShotModel.inspectTimeline;
 const resolveVisibleReferenceIds=window.PortableReferenceMapping.resolveVisibleReferenceIds;
 function parseSupportedFCPXML(text){
   return excludeUnsupportedXmemlLayers(text,parseFCPXML(text));
+}
+function parseTimelineInput(format,text){
+  if(format==="capcut-draft")return parseCapCutSnapshot(text);
+  if(format==="xmeml")return parseSupportedFCPXML(text);
+  throw new Error("Unsupported timeline input format: "+String(format||""));
 }
 /* ============ 구간(range) 적용 : 잘라서 0프레임 기준으로 재정렬 ============ */
 function parseRangePoint(v,fps){
@@ -1417,7 +1425,7 @@ function hasSyncVideo(){
 }
 function formatSeconds(seconds){ return Number.isFinite(seconds)?seconds.toFixed(3)+"s":"--"; }
 function updateDurationDelta(){
-  // Help contract: when XML and video lengths differ by 1+ frame, show DURATION Δ at the video's top-left.
+  // Help contract: when timeline and video lengths differ by 1+ frame, show DURATION Δ at the video's top-left.
   // Visible only while not running, so the offscreen Export capture (body.running) never bakes it into output.
   const badge=$("durationDelta");
   if(!badge)return;
@@ -1428,8 +1436,9 @@ function updateDurationDelta(){
   }):null;
   if(!result||!result.visible){ badge.hidden=true; return; }
   const {xmlSeconds,deltaSeconds}=result;
+  const sourceLabel=timelineInputFormat==="capcut-draft"?"CAPCUT":"XML";
   badge.textContent="DURATION Δ "+(deltaSeconds>0?"+":"-")+Math.abs(deltaSeconds).toFixed(2)
-    +"s · XML "+xmlSeconds.toFixed(2)+"s / VIDEO "+mainVideo.duration.toFixed(2)+"s";
+    +"s · "+sourceLabel+" "+xmlSeconds.toFixed(2)+"s / VIDEO "+mainVideo.duration.toFixed(2)+"s";
   badge.hidden=false;
 }
 function play(){
@@ -1788,11 +1797,20 @@ if(CONFIG.sourceVideo) setVideoSource(CONFIG.sourceVideo);
 /* RED ZONE: 기존 FCP XML 파서와 쇼 엔진은 유지하고 Electron에서는 이 브리지만 호출한다. */
 window.portablePreview={
   setRenderSpec,
+  inspectTimeline(format,text){ return inspectParsedXml(parseTimelineInput(format,text)); },
+  loadTimeline(format,text){
+    const parsed=parseTimelineInput(format,text);
+    timelineInputFormat=format;
+    const inspected=inspectParsedXml(parsed);
+    build(parsed);
+    return inspected;
+  },
   inspectXml(text){ return inspectParsedXml(parseSupportedFCPXML(text)); },
   validateXml(text){
     return inspectParsedXml(parseSupportedFCPXML(text));
   },
   loadXml(text){
+    timelineInputFormat="xmeml";
     const parsed=parseSupportedFCPXML(text);
     const inspected=inspectParsedXml(parsed);
     build(parsed);

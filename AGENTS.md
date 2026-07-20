@@ -33,7 +33,8 @@ This repository is meant to be customized by non-coders through LLM agents. Befo
 
 - Never rewrite the legacy FCP XML parser or the pure logic in `src/core/*`.
 - Add new features as options that extend the existing output preview and Electron bridge; do not replace existing behavior without reporting first.
-- Never put absolute user paths or email addresses in code or Job data. Stored Job paths are relative to the `current-job` root: use `source/timeline.xml`, not an absolute path and not `current-job/source/timeline.xml`.
+- Never put absolute user paths or email addresses in code or Job data. Stored Job paths are relative to the `current-job` root: use `source/timeline.xml` or `source/timeline.capcut.json`, never an absolute path or a `current-job/...`-prefixed path.
+- Treat direct CapCut input as an experimental, user-selected snapshot boundary. Do not background-scan CapCut projects, persist raw `draft_content.json`, expose media paths to a renderer, or broaden the verified Windows Desktop 9.x scope without a real fixture and regression check.
 - Current Job reads/writes and persistent renderer file access go only through `preload.cjs` IPC. The standalone preview may inspect a user-provided browser `File`, but do not enable Node APIs in any renderer.
 - Reference inspection, streamed import, final revision commit, mapping cleanup, and owned-file deletion belong to `reference-lifecycle.cjs`. Keep `main.cjs` limited to the picker and IPC wiring; do not duplicate this lifecycle in a renderer.
 - INTRO scene styling belongs to the shared `src/intro-preroll.html`. Source paths, app-owned assets, FFmpeg, concat, verification, cancel, and finalization belong to `intro-demo-controller.cjs`; do not move them into a renderer or merge them into the normal `exporter.cjs` path.

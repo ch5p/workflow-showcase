@@ -15,11 +15,19 @@ const { createJobBackup } = require("./job-backup.cjs");
 const {
   inspectInputFile,
   prepareXmlCandidate,
+  prepareCapCutCandidate,
   discardPreparedCandidate,
-  commitPreparedXml,
-  commitPreparedXmlUpdate,
-  recoverXmlTransactions,
+  commitPreparedTimeline,
+  commitPreparedTimelineUpdate,
+  recoverTimelineTransactions,
 } = require("./job-lifecycle.cjs");
+const { createCapCutSnapshot } = require("./src/adapters/capcut-draft-parser.js");
+const {
+  timelineSpec,
+  resolveTimelineInput,
+  createTimelineRecord,
+  timelineJobFields,
+} = require("./timeline-input.cjs");
 const { reconcileTimelineMappings } = require("./timeline-reconcile.cjs");
 const { validatePersistedTimelineState } = require("./persisted-timeline-state.cjs");
 const {
@@ -125,6 +133,7 @@ function emptyJob(){
     revision: 0,
     createdAt: now,
     updatedAt: now,
+    timelineInput: null,
     xml: null,
     video: null,
     references: [],
@@ -167,7 +176,7 @@ function createBundledDemoJob(){
   const next = writeJob({
     ...emptyJob(),
     demo: true,
-    xml: { name: xml.name, relativePath: "source/timeline.xml" },
+    ...timelineJobFields(createTimelineRecord("xmeml", xml.name)),
     video: { name: video.name, relativePath: "source/video.mp4" },
     projectTitle: "SYNTHETIC TIMELINE",
   }, { preserveDemo: true });
@@ -185,6 +194,19 @@ function validateStoredRelativePath(relativePath, ownedRoot, label){
 
 function validateJobShape(job){
   if(!isPlainObject(job) || job.version !== 1) throw new Error("Unsupported or invalid Job schema version");
+  if(job.timelineInput !== undefined && job.timelineInput !== null){
+    if(!isPlainObject(job.timelineInput) || typeof job.timelineInput.name !== "string"){
+      throw new Error("timelineInput record is invalid");
+    }
+    const spec=timelineSpec(job.timelineInput.format);
+    if(job.timelineInput.relativePath!==spec.relativePath)throw new Error("timelineInput path does not match its format");
+    validateStoredRelativePath(job.timelineInput.relativePath,SOURCE_ROOT,"timelineInput");
+    if(spec.format==="xmeml"&&job.xml &&
+        (job.xml.relativePath!==job.timelineInput.relativePath||job.xml.name!==job.timelineInput.name)){
+      throw new Error("xml compatibility record does not match timelineInput");
+    }
+    if(spec.format!=="xmeml"&&job.xml!==null)throw new Error("Non-XML timelineInput cannot use the xml record");
+  }
   for(const [label, value, ownedRoot] of [
     ["xml", job.xml, SOURCE_ROOT],
     ["video", job.video, SOURCE_ROOT],
@@ -404,19 +426,21 @@ function requireExpectedJob(expectedJobId, expectedRevision, operation){
   throw staleJobError(operation);
 }
 
-function discardPreparedXmlEntry(entry, reason){
+function discardPreparedTimelineEntry(entry, reason){
   if(!entry) return false;
   preparedXmlImports.delete(entry.token);
   try{
     const discarded = discardPreparedCandidate(entry.preparation);
-    logEvent(reason === "validation-failed" ? "job_xml_validation_failed" : "job_xml_discarded", {
+    const eventPrefix=entry.format==="xmeml"?"job_xml":"timeline_import";
+    logEvent(reason === "validation-failed" ? eventPrefix+"_validation_failed" : eventPrefix+"_discarded", {
       transactionId: entry.token,
-      xmlName: entry.name,
+      timelineName: entry.name,
+      format: entry.format,
       reason: String(reason || "discarded").slice(0, 60),
     });
     return discarded;
   }catch(error){
-    logEvent("job_xml_cleanup_deferred", {
+    logEvent((entry.format==="xmeml"?"job_xml":"timeline_import")+"_cleanup_deferred", {
       transactionId: entry.token,
       code: error.code || "DISCARD_FAILED",
     });
@@ -424,25 +448,80 @@ function discardPreparedXmlEntry(entry, reason){
   }
 }
 
-function prunePreparedXmlImports(){
+function prunePreparedTimelineImports(){
   const now = Date.now();
   for(const entry of preparedXmlImports.values()){
-    if(entry.expiresAt <= now) discardPreparedXmlEntry(entry, "expired");
+    if(entry.expiresAt <= now) discardPreparedTimelineEntry(entry, "expired");
   }
 }
 
-function discardPreparedXmlForOwner(ownerId){
+function discardPreparedTimelineForOwner(ownerId){
   for(const entry of [...preparedXmlImports.values()]){
-    if(entry.ownerId === ownerId) discardPreparedXmlEntry(entry, "superseded");
+    if(entry.ownerId === ownerId) discardPreparedTimelineEntry(entry, "superseded");
   }
 }
 
-function prepareXmlImport(event, sourcePath, inputMethod){
-  requireRuntimeReady("xml_prepare");
-  if(exportController.isRunning()) throw new Error(T("export_block_xml"));
-  prunePreparedXmlImports();
-  discardPreparedXmlForOwner(event.sender.id);
-  const preparation = prepareXmlCandidate({ sourcePath, logRoot: LOG_ROOT, inputMethod });
+function stableTextFile(filePath,label){
+  const before=fs.lstatSync(filePath);
+  if(before.isSymbolicLink()||!before.isFile())throw new Error(label+" must be a regular file");
+  const text=fs.readFileSync(filePath,"utf8");
+  const after=fs.lstatSync(filePath);
+  if(before.size!==after.size||before.mtimeMs!==after.mtimeMs){
+    throw new Error(label==="CapCut draft_content.json"?T("capcut_changed_during_read"):label+" changed while it was being read.");
+  }
+  return text;
+}
+
+function resolveTimelineSource(sourcePath,requestedFormat){
+  if(typeof sourcePath!=="string"||!sourcePath.trim())throw new Error("Timeline input path is required");
+  const absolutePath=path.resolve(sourcePath);
+  const stat=fs.lstatSync(absolutePath);
+  if(stat.isSymbolicLink())throw new Error("Timeline input cannot be a symbolic link");
+  if(stat.isDirectory()){
+    if(requestedFormat&&requestedFormat!=="capcut-draft")throw new Error("A folder can only be used as a CapCut project");
+    const draftPath=path.join(absolutePath,"draft_content.json");
+    if(!fs.existsSync(draftPath))throw new Error(T("capcut_draft_missing"));
+    return {
+      format:"capcut-draft",
+      sourcePath:draftPath,
+      projectName:path.basename(absolutePath),
+    };
+  }
+  if(!stat.isFile())throw new Error("Timeline input must be a file or CapCut project folder");
+  const extension=path.extname(absolutePath).toLowerCase();
+  if(extension===".xml"&&(!requestedFormat||requestedFormat==="xmeml")){
+    return {format:"xmeml",sourcePath:absolutePath,projectName:path.basename(absolutePath)};
+  }
+  if(extension===".json"&&path.basename(absolutePath).toLowerCase()==="draft_content.json"&&
+      (!requestedFormat||requestedFormat==="capcut-draft")){
+    return {format:"capcut-draft",sourcePath:absolutePath,projectName:path.basename(path.dirname(absolutePath))};
+  }
+  throw new Error("Use one .xml file or a CapCut project containing draft_content.json");
+}
+
+function prepareTimelineImport(event, sourcePath, inputMethod, requestedFormat){
+  requireRuntimeReady("timeline_prepare");
+  if(exportController.isRunning()) throw new Error(T("export_block_timeline"));
+  prunePreparedTimelineImports();
+  discardPreparedTimelineForOwner(event.sender.id);
+  const source=resolveTimelineSource(sourcePath,requestedFormat);
+  let preparation;
+  let editorVersion;
+  if(source.format==="capcut-draft"){
+    inspectInputFile(source.sourcePath,[".json"],timelineSpec("capcut-draft").maxBytes);
+    const rawText=stableTextFile(source.sourcePath,"CapCut draft_content.json");
+    const snapshot=createCapCutSnapshot(rawText,{projectName:source.projectName,sourceName:"draft_content.json"});
+    editorVersion=snapshot.editorVersion;
+    preparation=prepareCapCutCandidate({
+      sourcePath:source.sourcePath,
+      logRoot:LOG_ROOT,
+      inputMethod,
+      candidateText:JSON.stringify(snapshot,null,2)+"\n",
+      displayName:source.projectName,
+    });
+  }else{
+    preparation=prepareXmlCandidate({sourcePath:source.sourcePath,logRoot:LOG_ROOT,inputMethod});
+  }
   const text = fs.readFileSync(preparation.candidatePath, "utf8");
   const entry = {
     token: preparation.transactionId,
@@ -450,33 +529,44 @@ function prepareXmlImport(event, sourcePath, inputMethod){
     ownerId: event.sender.id,
     name: preparation.inputName,
     text,
+    format: source.format,
+    editorVersion,
     mode: null,
     expiresAt: Date.now() + PREPARED_XML_TTL_MS,
   };
   preparedXmlImports.set(entry.token, entry);
-  logEvent("job_xml_prepared", {
+  const preparedDetail={
     transactionId: entry.token,
-    xmlName: entry.name,
+    timelineName: entry.name,
+    xmlName:source.format==="xmeml"?entry.name:undefined,
+    format:entry.format,
+    editorVersion:entry.editorVersion||null,
     inputMethod,
     size: preparation.inputSize,
-  });
-  return { token: entry.token, name: entry.name, text: entry.text };
+  };
+  logEvent("timeline_import_prepared",preparedDetail);
+  if(source.format==="xmeml")logEvent("job_xml_prepared",preparedDetail);
+  return { token: entry.token, name: entry.name, text: entry.text, format:entry.format, editorVersion:entry.editorVersion||null };
 }
 
-function preparedXmlEntry(event, token){
-  prunePreparedXmlImports();
-  if(typeof token !== "string" || !token) throw new Error("Prepared XML token is required.");
+function prepareXmlImport(event,sourcePath,inputMethod){
+  return prepareTimelineImport(event,sourcePath,inputMethod,"xmeml");
+}
+
+function preparedTimelineEntry(event, token){
+  prunePreparedTimelineImports();
+  if(typeof token !== "string" || !token) throw new Error("Prepared timeline token is required.");
   const entry = preparedXmlImports.get(token);
-  if(!entry || entry.ownerId !== event.sender.id) throw new Error("Prepared XML is unavailable or expired.");
+  if(!entry || entry.ownerId !== event.sender.id) throw new Error("Prepared timeline is unavailable or expired.");
   return entry;
 }
 
-function newJobForXml(current, xmlName, timelineShots=[]){
+function newJobForTimeline(current, record, timelineShots=[]){
   const base = emptyJob();
   return {
     ...base,
     revision: 1,
-    xml: { name: xmlName, relativePath: "source/timeline.xml" },
+    ...timelineJobFields(record),
     video: null,
     references: [],
     globalReferenceIds: [],
@@ -524,12 +614,12 @@ function normalizeTimelineShots(value){
   });
 }
 
-function updatedJobForXml(current, xmlName, timelineShots, reconciliation){
+function updatedJobForTimeline(current, record, timelineShots, reconciliation){
   return {
     ...current,
     revision: current.revision + 1,
     updatedAt: new Date().toISOString(),
-    xml: { name: xmlName, relativePath: "source/timeline.xml" },
+    ...timelineJobFields(record),
     shotMappings: reconciliation.shotMappings,
     timelineShots,
     orphanedShotMappings: reconciliation.orphanedShotMappings,
@@ -652,6 +742,7 @@ function publicFile(relativePath, ownedRoot, label){
 }
 
 function hydrateJob(job){
+  const timelineInput=resolveTimelineInput(job);
   return {
     ...job,
     projectTitle: normalizeProjectTitle(job.projectTitle),
@@ -659,6 +750,7 @@ function hydrateJob(job){
     referenceMotion: normalizeReferenceMotion(job.referenceMotion),
     editNumberTicker: Boolean(job.editNumberTicker),
     introPreroll: normalizeIntroPreroll(job.introPreroll),
+    timelineInput: timelineInput ? { ...timelineInput, ...publicFile(timelineInput.relativePath, SOURCE_ROOT, "timelineInput") } : null,
     xml: job.xml ? { ...job.xml, ...publicFile(job.xml.relativePath, SOURCE_ROOT, "xml") } : null,
     video: job.video ? { ...job.video, ...publicFile(job.video.relativePath, SOURCE_ROOT, "video") } : null,
     references: normalizeReferenceLabels(job.references).map(reference => ({
@@ -782,7 +874,7 @@ function exportReadiness(job){
     return { ready: false, message: T("ready_recovery") };
   }
   const requiredSources = [
-    { entry: job.xml, label: "Export XML", message: T("ready_xml_missing") },
+    { entry: resolveTimelineInput(job), label: "Export timeline", message: T("ready_timeline_missing") },
     { entry: job.video, label: "Export video", message: T("ready_video_missing") },
   ];
   for(const item of requiredSources){
@@ -820,6 +912,7 @@ function exportReadiness(job){
 
 function exportSummary(){
   const job = loadJob();
+  const timelineInput=resolveTimelineInput(job);
   const readiness = exportReadiness(job);
   const durationSeconds = Math.max(0, Number(exportDialogContext.durationSeconds) || 0);
   const spec = resolveRenderSpec(job.output);
@@ -839,7 +932,7 @@ function exportSummary(){
     editCount: Math.max(0, Number(exportDialogContext.editCount) || 0),
     outputFolder: OUTPUT_ROOT,
     videoName: job.video?.name || "NO VIDEO",
-    xmlName: job.xml?.name || "NO XML",
+    xmlName: timelineInput?.name || "NO TIMELINE",
     ready: readiness.ready,
     readyMessage: readiness.message,
   };
@@ -921,7 +1014,7 @@ function createWindow(){
   uiCaptureController.registerShortcut(window);
   const ownerId = window.webContents.id;
   window.webContents.once("destroyed", () => {
-    discardPreparedXmlForOwner(ownerId);
+    discardPreparedTimelineForOwner(ownerId);
     discardPreparedVideoForOwner(ownerId);
   });
   attachSmokeHarness({
@@ -957,7 +1050,7 @@ if(SINGLE_INSTANCE_LOCK){
   }
   let recovery = null;
   try{
-    recovery = recoverXmlTransactions({
+    recovery = recoverTimelineTransactions({
       logRoot: LOG_ROOT,
       sourceRoot: SOURCE_ROOT,
       referencesRoot: REFERENCES_ROOT,
@@ -966,7 +1059,7 @@ if(SINGLE_INSTANCE_LOCK){
     });
   }catch(error){
     try{logEvent("job_xml_recovery_boot_failed", { code: error.code || "RECOVERY_BOOT_FAILED" })}catch{}
-    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_xml_check"));
+    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_timeline_check"));
     app.quit();
     return;
   }
@@ -974,7 +1067,7 @@ if(SINGLE_INSTANCE_LOCK){
     logEvent("job_xml_recovery_summary", recovery);
   }
   if(recovery.failed){
-    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_xml"));
+    dialog.showErrorBox(T("boot_recovery_title"), T("boot_recovery_timeline"));
     app.quit();
     return;
   }
@@ -1039,7 +1132,7 @@ ipcMain.handle("app:get-language", () => currentLanguage());
 ipcMain.handle("app:reload-current-job", event => {
   if(exportController.isRunning()) throw new Error(T("export_block_reload"));
   const ownerId = event.sender.id;
-  discardPreparedXmlForOwner(ownerId);
+  discardPreparedTimelineForOwner(ownerId);
   discardPreparedVideoForOwner(ownerId);
   logEvent("current_job_reload_requested");
   setImmediate(() => {
@@ -1099,64 +1192,109 @@ ipcMain.handle("job:save", (_event, payload) => {
   return hydrateJob(next);
 });
 
-ipcMain.handle("job:select-xml", async event => {
+async function selectTimelinePath(event,requestedFormat){
   const owner = BrowserWindow.fromWebContents(event.sender);
-  const options = {
-    title: "Load timeline XML",
-    properties: ["openFile"],
-    filters: [{ name: "Timeline XML", extensions: ["xml"] }],
+  let format=requestedFormat;
+  if(!format){
+    const choiceOptions={
+      type:"question",
+      title:T("timeline_picker_title"),
+      message:T("timeline_picker_message"),
+      detail:T("timeline_picker_detail"),
+      buttons:["XML","CAPCUT PROJECT · EXPERIMENTAL","CANCEL"],
+      defaultId:0,
+      cancelId:2,
+      noLink:true,
+    };
+    const choice=owner?await dialog.showMessageBox(owner,choiceOptions):await dialog.showMessageBox(choiceOptions);
+    if(choice.response===2)return null;
+    format=choice.response===1?"capcut-draft":"xmeml";
+  }
+  const capcutProjectRoot=process.env.LOCALAPPDATA
+    ?path.join(process.env.LOCALAPPDATA,"CapCut","User Data","Projects","com.lveditor.draft")
+    :null;
+  const options = format==="capcut-draft"?{
+    title:T("capcut_picker_title"),
+    properties:["openDirectory"],
+    defaultPath:capcutProjectRoot&&fs.existsSync(capcutProjectRoot)?capcutProjectRoot:undefined,
+  }:{
+    title:"Load timeline XML",
+    properties:["openFile"],
+    filters:[{name:"Timeline XML",extensions:["xml"]}],
   };
   const result = owner
     ? await dialog.showOpenDialog(owner, options)
     : await dialog.showOpenDialog(options);
   if(result.canceled || !result.filePaths[0]) return null;
-  return prepareXmlImport(event, result.filePaths[0], "picker");
-});
+  return prepareTimelineImport(event,result.filePaths[0],"picker",format);
+}
 
-ipcMain.handle("job:prepare-xml-path", (event, sourcePath) => prepareXmlImport(event, sourcePath, "drop"));
-
-ipcMain.handle("job:choose-xml-mode", async (event, token) => {
-  requireRuntimeReady("xml_choose_mode");
-  const entry = preparedXmlEntry(event, token);
-  if(exportController.isRunning()) throw new Error(T("export_block_xml"));
-  const current = loadJob();
-  if(current.demo === true){
-    entry.mode = "new";
-    entry.expiresAt = Date.now() + PREPARED_XML_TTL_MS;
-    logEvent("starter_demo_replacement_selected", { transactionId: entry.token, xmlName: entry.name });
-    logEvent("job_xml_mode_selected", { transactionId: entry.token, mode: entry.mode, replacedDemo: true });
+async function chooseTimelineImportMode(event,token){
+  requireRuntimeReady("timeline_choose_mode");
+  const entry=preparedTimelineEntry(event,token);
+  if(exportController.isRunning())throw new Error(T("export_block_timeline"));
+  const current=loadJob();
+  const currentInput=resolveTimelineInput(current);
+  if(current.demo===true||!currentInput){
+    entry.mode="new";
+    entry.expiresAt=Date.now()+PREPARED_XML_TTL_MS;
+    if(current.demo===true)logEvent("starter_demo_replacement_selected",{transactionId:entry.token,timelineName:entry.name,format:entry.format});
+    logEvent("timeline_import_mode_selected",{transactionId:entry.token,mode:entry.mode,format:entry.format,replacedDemo:current.demo===true});
+    if(entry.format==="xmeml")logEvent("job_xml_mode_selected",{transactionId:entry.token,mode:entry.mode,replacedDemo:current.demo===true});
     return entry.mode;
   }
-  const owner = BrowserWindow.fromWebContents(event.sender);
-  const options = {
-    type: "warning",
-    title: "Load timeline XML",
-    message: T("xml_dialog_message"),
-    detail: T("xml_dialog_detail"),
-    buttons: ["UPDATE XML", "NEW JOB", "CANCEL"],
-    defaultId: 0,
-    cancelId: 2,
-    noLink: true,
-  };
-  const result = owner
-    ? await dialog.showMessageBox(owner, options)
-    : await dialog.showMessageBox(options);
-  if(result.response === 2){
-    logEvent("job_xml_cancelled", { transactionId: entry.token, xmlName: entry.name });
-    discardPreparedXmlEntry(entry, "cancelled");
-    return null;
+  const owner=BrowserWindow.fromWebContents(event.sender);
+  if(currentInput.format!==entry.format){
+    const switchOptions={
+      type:"warning",
+      title:T("timeline_switch_title"),
+      message:T("timeline_switch_message"),
+      detail:T("timeline_switch_detail"),
+      buttons:["NEW JOB","CANCEL"],
+      defaultId:1,
+      cancelId:1,
+      noLink:true,
+    };
+    const switched=owner?await dialog.showMessageBox(owner,switchOptions):await dialog.showMessageBox(switchOptions);
+    if(switched.response===1){
+      logEvent("timeline_import_cancelled",{transactionId:entry.token,timelineName:entry.name,format:entry.format,reason:"format-switch"});
+      discardPreparedTimelineEntry(entry,"cancelled");
+      return null;
+    }
+    entry.mode="new";
+  }else{
+    const options={
+      type:"warning",
+      title:entry.format==="xmeml"?T("xml_dialog_title"):T("capcut_dialog_title"),
+      message:entry.format==="xmeml"?T("xml_dialog_message"):T("capcut_dialog_message"),
+      detail:entry.format==="xmeml"?T("xml_dialog_detail"):T("capcut_dialog_detail"),
+      buttons:[entry.format==="xmeml"?"UPDATE XML":"UPDATE TIMELINE","NEW JOB","CANCEL"],
+      defaultId:0,
+      cancelId:2,
+      noLink:true,
+    };
+    const result=owner?await dialog.showMessageBox(owner,options):await dialog.showMessageBox(options);
+    if(result.response===2){
+      logEvent("timeline_import_cancelled",{transactionId:entry.token,timelineName:entry.name,format:entry.format});
+      if(entry.format==="xmeml")logEvent("job_xml_cancelled",{transactionId:entry.token,xmlName:entry.name});
+      discardPreparedTimelineEntry(entry,"cancelled");
+      return null;
+    }
+    entry.mode=result.response===1?"new":"update";
   }
-  entry.mode = result.response === 1 ? "new" : "update";
-  entry.expiresAt = Date.now() + PREPARED_XML_TTL_MS;
-  logEvent("job_xml_mode_selected", { transactionId: entry.token, mode: entry.mode });
+  entry.expiresAt=Date.now()+PREPARED_XML_TTL_MS;
+  logEvent("timeline_import_mode_selected",{transactionId:entry.token,mode:entry.mode,format:entry.format});
+  if(entry.format==="xmeml")logEvent("job_xml_mode_selected",{transactionId:entry.token,mode:entry.mode});
   return entry.mode;
-});
+}
 
-ipcMain.handle("job:commit-xml", (event, payload) => {
-  const entry = preparedXmlEntry(event, payload?.token);
-  if(!["update", "new"].includes(entry.mode)) throw new Error(T("xml_mode_required"));
-  if(exportController.isRunning()) throw new Error(T("export_block_xml"));
-  const current = requireExpectedJob(payload?.expectedJobId, payload?.expectedRevision, "job_xml_commit");
+function commitTimelineImport(event,payload){
+  const entry=preparedTimelineEntry(event,payload?.token);
+  if(!["update", "new"].includes(entry.mode)) throw new Error(T("timeline_mode_required"));
+  if(exportController.isRunning()) throw new Error(T("export_block_timeline"));
+  const current=requireExpectedJob(payload?.expectedJobId,payload?.expectedRevision,"job_timeline_commit");
+  const currentInput=resolveTimelineInput(current);
+  if(entry.mode==="update"&&currentInput?.format!==entry.format)throw new Error("UPDATE requires the same timeline format");
   const nextTimelineShots = normalizeTimelineShots(payload?.nextTimelineShots);
   let reconciliation = {
     shotMappings: {},
@@ -1164,7 +1302,8 @@ ipcMain.handle("job:commit-xml", (event, payload) => {
     summary: { preserved: 0, newShots: nextTimelineShots.length, orphaned: 0, ambiguous: 0, reattached: 0 },
   };
   let nextJob = null;
-  let commitXml = commitPreparedXml;
+  const record=createTimelineRecord(entry.format,entry.name,{editorVersion:entry.editorVersion});
+  let commitTimeline=commitPreparedTimeline;
   if(entry.mode === "update"){
     const storedTimelineShots = Array.isArray(current.timelineShots) && current.timelineShots.length
       ? current.timelineShots
@@ -1176,13 +1315,14 @@ ipcMain.handle("job:commit-xml", (event, payload) => {
       shotMappings: current.shotMappings || {},
       orphanedShotMappings: current.orphanedShotMappings || [],
     });
-    nextJob = updatedJobForXml(current, entry.name, nextTimelineShots, reconciliation);
-    commitXml = commitPreparedXmlUpdate;
+    nextJob=updatedJobForTimeline(current,record,nextTimelineShots,reconciliation);
+    commitTimeline=commitPreparedTimelineUpdate;
   }else{
-    nextJob = newJobForXml(current, entry.name, nextTimelineShots);
+    nextJob=newJobForTimeline(current,record,nextTimelineShots);
   }
-  logEvent(entry.mode === "update" ? "job_xml_update_started" : "job_reset_started", {
+  logEvent("timeline_import_commit_started",{
     transactionId: entry.token,
+    format:entry.format,
     mode: entry.mode,
     previousJobId: current.jobId,
     nextJobId: nextJob.jobId,
@@ -1190,8 +1330,9 @@ ipcMain.handle("job:commit-xml", (event, payload) => {
     previousMappingCount: Object.keys(current.shotMappings || {}).length,
     ...reconciliation.summary,
   });
+  if(entry.format==="xmeml")logEvent(entry.mode==="update"?"job_xml_update_started":"job_reset_started",{transactionId:entry.token,mode:entry.mode,previousJobId:current.jobId,nextJobId:nextJob.jobId,...reconciliation.summary});
   try{
-    const committed = commitXml({
+    const committed=commitTimeline({
       preparation: entry.preparation,
       sourceRoot: SOURCE_ROOT,
       referencesRoot: REFERENCES_ROOT,
@@ -1201,37 +1342,45 @@ ipcMain.handle("job:commit-xml", (event, payload) => {
     });
     preparedXmlImports.delete(entry.token);
     try{
-      logEvent(entry.mode === "update" ? "job_xml_update_committed" : "job_reset_committed", {
+      logEvent("timeline_import_committed", {
         transactionId: entry.token,
+        format:entry.format,
         mode: entry.mode,
         previousJobId: current.jobId,
         nextJobId: committed.job.jobId,
-        xmlName: entry.name,
+        timelineName: entry.name,
         removedSourceCount: committed.removedSourceCount,
         removedReferenceCount: committed.removedReferenceCount,
         ...reconciliation.summary,
       });
+      if(entry.format==="xmeml")logEvent(entry.mode==="update"?"job_xml_update_committed":"job_reset_committed",{transactionId:entry.token,mode:entry.mode,previousJobId:current.jobId,nextJobId:committed.job.jobId,xmlName:entry.name,...reconciliation.summary});
     }catch{}
     return { job: hydrateJob(committed.job), mode: entry.mode, summary: reconciliation.summary };
   }catch(error){
     preparedXmlImports.delete(entry.token);
-    try{logEvent("job_xml_commit_failed", { transactionId: entry.token, mode: entry.mode, code: error.code || "COMMIT_FAILED" })}catch{}
+    try{logEvent("timeline_import_failed",{transactionId:entry.token,format:entry.format,mode:entry.mode,code:error.code||"COMMIT_FAILED"});if(entry.format==="xmeml")logEvent("job_xml_commit_failed",{transactionId:entry.token,mode:entry.mode,code:error.code||"COMMIT_FAILED"})}catch{}
     if(error.rollbackError){
       recoveryRequired = true;
       logEvent("job_runtime_recovery_required", { transactionId: entry.token, code: "ROLLBACK_FAILED" });
-      dialog.showErrorBox(T("rollback_block_title"), T("rollback_block_xml"));
-      const fatal = new Error("JOB_RECOVERY_REQUIRED: XML commit rollback failed.");
+      dialog.showErrorBox(T("rollback_block_title"), T("rollback_block_timeline"));
+      const fatal = new Error("JOB_RECOVERY_REQUIRED: timeline commit rollback failed.");
       fatal.code = "JOB_RECOVERY_REQUIRED";
       throw fatal;
     }
     throw error;
   }
-});
+}
 
-ipcMain.handle("job:discard-prepared-xml", (event, payload) => {
-  const entry = preparedXmlEntry(event, payload?.token);
-  return discardPreparedXmlEntry(entry, payload?.reason);
-});
+ipcMain.handle("job:select-timeline",event=>selectTimelinePath(event));
+ipcMain.handle("job:select-xml",event=>selectTimelinePath(event,"xmeml"));
+ipcMain.handle("job:prepare-timeline-path",(event,payload)=>prepareTimelineImport(event,payload?.sourcePath,"drop",payload?.format));
+ipcMain.handle("job:prepare-xml-path",(event,sourcePath)=>prepareTimelineImport(event,sourcePath,"drop","xmeml"));
+ipcMain.handle("job:choose-timeline-mode",chooseTimelineImportMode);
+ipcMain.handle("job:choose-xml-mode",chooseTimelineImportMode);
+ipcMain.handle("job:commit-timeline",commitTimelineImport);
+ipcMain.handle("job:commit-xml",commitTimelineImport);
+ipcMain.handle("job:discard-prepared-timeline",(event,payload)=>discardPreparedTimelineEntry(preparedTimelineEntry(event,payload?.token),payload?.reason));
+ipcMain.handle("job:discard-prepared-xml",(event,payload)=>discardPreparedTimelineEntry(preparedTimelineEntry(event,payload?.token),payload?.reason));
 
 ipcMain.handle("job:select-video", async event => {
   const owner = BrowserWindow.fromWebContents(event.sender);
@@ -1332,25 +1481,29 @@ ipcMain.handle("job:add-reference-paths", (event, payload) => (
 
 ipcMain.handle("job:delete-reference", (_event, payload) => referenceLifecycle.deleteReference(payload));
 
-ipcMain.handle("job:read-xml", () => {
+function readCurrentTimeline(){
   const job = loadJob();
-  if(!job.xml?.relativePath) return null;
-  const xmlPath = resolveOwnedRelativeFile({
+  const timelineInput=resolveTimelineInput(job);
+  if(!timelineInput?.relativePath)return null;
+  const timelinePath=resolveOwnedRelativeFile({
     jobRoot: JOB_ROOT,
     ownedRoot: SOURCE_ROOT,
-    relativePath: job.xml.relativePath,
-    label: "xml",
+    relativePath:timelineInput.relativePath,
+    label:"timelineInput",
   });
-  if(!fs.existsSync(xmlPath)) return null;
+  if(!fs.existsSync(timelinePath))return null;
   resolveOwnedRelativeFile({
     jobRoot: JOB_ROOT,
     ownedRoot: SOURCE_ROOT,
-    relativePath: job.xml.relativePath,
-    label: "xml",
-    mustExist: true,
+    relativePath:timelineInput.relativePath,
+    label:"timelineInput",
+    mustExist:true,
   });
-  return fs.readFileSync(xmlPath, "utf8");
-});
+  return {format:timelineInput.format,name:timelineInput.name,text:fs.readFileSync(timelinePath,"utf8")};
+}
+
+ipcMain.handle("job:read-timeline",readCurrentTimeline);
+ipcMain.handle("job:read-xml",()=>readCurrentTimeline()?.text||null);
 
 ipcMain.handle("job:backup-current", (_event, payload) => {
   try{

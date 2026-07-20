@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { fsyncExistingFile } = require("./durable-file.cjs");
 const { assertDirectoryNoLink, ensureDirectoryNoLink, resolveOwnedRelativeFile } = require("./owned-path.cjs");
+const { resolveTimelineInput } = require("./timeline-input.cjs");
 
 function inside(rootPath, candidatePath){
   const relative=path.relative(path.resolve(rootPath),path.resolve(candidatePath));
@@ -81,7 +82,8 @@ function storedJobFiles(job,{jobRoot,sourceRoot,referencesRoot}){
       absolutePath:resolveOwnedRelativeFile({jobRoot,ownedRoot,relativePath,label,mustExist:true}),
     });
   };
-  if(job.xml?.relativePath)add(job.xml.relativePath,sourceRoot,"backup xml");
+  const timelineInput=resolveTimelineInput(job);
+  if(timelineInput?.relativePath)add(timelineInput.relativePath,sourceRoot,"backup timeline");
   for(const reference of Array.isArray(job.references)?job.references:[]){
     if(!reference?.relativePath)throw new Error("Backup reference relativePath is missing");
     add(reference.relativePath,referencesRoot,"backup reference");

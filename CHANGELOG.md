@@ -36,6 +36,8 @@
 - Split reference import/delete ownership from `main.cjs` into a focused lifecycle module with an isolated regression check
 - Refreshed the public Premiere fixture to 13 seconds with a real blended upper-track clip, excluded Adjustment Layer, final Color Matte, and matching README/landing demo animation
 - Added an optional rolling EDIT number ticker and grouped it with the persistent project-wide `REFERENCE 3D POP` option under `EDIT DISPLAY`; the static number and original flat stagger remain defaults, and both reference motions share the same LEAD-IN and SHOT-transition timing
+- Added an experimental Windows CapCut Desktop 9.x local-project adapter with a shared `TIMELINE` picker, anonymous app-owned snapshots, same-format UPDATE, cross-format NEW JOB protection, and fixture-backed parser/lifecycle/privacy checks
+- Validated DaVinci Resolve 21.0.2 Final Cut Pro 7 XML through the existing xmeml path, documented VEGAS Pro XML as plausible but unverified, clarified Windows-only runtime support, and shortened the picker label from `PREMIERE XML` to `XML`
 
 ## 0.1.0-beta.1
 
